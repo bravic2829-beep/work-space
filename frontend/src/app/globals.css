@@ -1,0 +1,270 @@
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  color: var(--foreground);
+  background: var(--background);
+  font-family: Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.container {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
+}
+
+button {
+  font: inherit;
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+}
+
+.container.wide {
+  max-width: 60rem;
+}
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 1.5rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 20%, transparent);
+}
+
+.app-header nav {
+  display: flex;
+  gap: 1rem;
+}
+
+.form {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 24rem;
+  margin: 1rem 0;
+}
+
+.form label {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.form label.inline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem;
+  max-width: none;
+}
+
+input,
+select {
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 15%, transparent);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* --- tables, records, workspaces --- */
+
+.container.wide {
+  max-width: 90rem;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+ul.plain {
+  list-style: none;
+  padding: 0;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.inline-form,
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  list-style: none;
+  padding: 0;
+  margin: 0.25rem 0;
+}
+
+.chips li {
+  border: 1px solid color-mix(in srgb, var(--foreground) 30%, transparent);
+  border-radius: 1rem;
+  padding: 0.1rem 0.6rem;
+}
+
+.chips button {
+  border: none;
+  background: none;
+  padding: 0 0 0 0.4rem;
+}
+
+.grid-wrap {
+  overflow-x: auto;
+}
+
+table.grid {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+table.grid th,
+table.grid td {
+  border: 1px solid color-mix(in srgb, var(--foreground) 20%, transparent);
+  padding: 0.35rem 0.6rem;
+  text-align: left;
+  vertical-align: top;
+  max-width: 20rem;
+  overflow-wrap: anywhere;
+}
+
+table.grid tr.selected td {
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.with-sidebar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24rem;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 60rem) {
+  .with-sidebar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.sidebar {
+  border: 1px solid color-mix(in srgb, var(--foreground) 25%, transparent);
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+
+.sidebar header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cell-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.cell-editor .label,
+.cell-editor label {
+  font-weight: 600;
+}
+
+.cell-editor input[type="text"],
+.cell-editor input[type="url"],
+.cell-editor input[type="number"],
+.cell-editor input[type="date"],
+.cell-editor input[type="datetime-local"],
+.cell-editor input[type="search"],
+.cell-editor select,
+.cell-editor textarea {
+  width: 100%;
+}
+
+.field-error {
+  color: #b00020;
+  margin: 0;
+}
+
+fieldset.options,
+fieldset.link-picker {
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.base {
+  margin: 1.5rem 0;
+}

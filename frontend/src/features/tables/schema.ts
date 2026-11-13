@@ -1,0 +1,197 @@
+/** Shapes of what the tables API returns, with guards (data from the network is never trusted). */
+
+export type Role = "viewer" | "commenter" | "editor" | "admin";
+
+export const FIELD_TYPES = [
+  "text",
+  "long_text",
+  "number",
+  "date",
+  "checkbox",
+  "single_select",
+  "multi_select",
+  "status",
+  "user",
+  "url",
+  "link_record",
+  "created_by",
+  "created_time",
+  "auto_number",
+] as const;
+export type FieldType = (typeof FIELD_TYPES)[number];
+
+export type FieldAccess = "hidden" | "read" | "edit";
+
+export type SelectOption = { id: string; name: string; color?: string; kind?: string };
+
+export type FieldItem = {
+  id: string;
+  table_id: string;
+  name: string;
+  type: FieldType;
+  config: Record<string, unknown>;
+  semantic: string | null;
+  grants_view: boolean;
+  is_required: boolean;
+  position: number;
+  access: FieldAccess;
+};
+
+export type WorkspaceItem = {
+  id: string;
+  name: string;
+  kind: "shared" | "personal";
+  owner_user_id: string | null;
+  my_role: Role;
+};
+
+export type BaseItem = { id: string; workspace_id: string; name: string };
+export type TableSummary = { id: string; base_id: string; name: string };
+export type TableDetail = TableSummary & { fields: FieldItem[]; my_role: Role | null };
+
+export type RecordItem = {
+  id: string;
+  table_id: string;
+  data: Record<string, unknown>;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  version: number;
+};
+export type RecordPage = { items: RecordItem[]; next_cursor: string | null };
+
+export type Condition = { field: string; op: string; value?: unknown };
+export type SortColumn = { field: string; direction: "asc" | "desc" };
+export type ViewConfig = { filter: Condition[]; sort: SortColumn[]; hidden_fields: string[] };
+export type ViewItem = { id: string; table_id: string; name: string; config: ViewConfig };
+
+export type DirectoryUser = { id: string; employee_code: string; full_name: string };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isRole(value: unknown): value is Role {
+  return value === "viewer" || value === "commenter" || value === "editor" || value === "admin";
+}
+
+function isArrayOf<T>(guard: (value: unknown) => value is T) {
+  return (value: unknown): value is T[] => Array.isArray(value) && value.every(guard);
+}
+
+export function isFieldItem(value: unknown): value is FieldItem {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.table_id === "string" &&
+    typeof value.name === "string" &&
+    FIELD_TYPES.includes(value.type as FieldType) &&
+    isRecord(value.config) &&
+    (value.semantic === null || typeof value.semantic === "string") &&
+    typeof value.grants_view === "boolean" &&
+    typeof value.is_required === "boolean" &&
+    typeof value.position === "number" &&
+    (value.access === "hidden" || value.access === "read" || value.access === "edit")
+  );
+}
+
+export function isWorkspaceItem(value: unknown): value is WorkspaceItem {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.name === "string" &&
+    (value.kind === "shared" || value.kind === "personal") &&
+    (value.owner_user_id === null || typeof value.owner_user_id === "string") &&
+    isRole(value.my_role)
+  );
+}
+export const isWorkspaceList = isArrayOf(isWorkspaceItem);
+
+export function isBaseItem(value: unknown): value is BaseItem {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.workspace_id === "string" &&
+    typeof value.name === "string"
+  );
+}
+export const isBaseList = isArrayOf(isBaseItem);
+
+export function isTableSummary(value: unknown): value is TableSummary {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.base_id === "string" &&
+    typeof value.name === "string"
+  );
+}
+export const isTableList = isArrayOf(isTableSummary);
+
+export function isTableDetail(value: unknown): value is TableDetail {
+  return (
+    isTableSummary(value) &&
+    isArrayOf(isFieldItem)((value as Record<string, unknown>).fields) &&
+    ((value as Record<string, unknown>).my_role === null ||
+      isRole((value as Record<string, unknown>).my_role))
+  );
+}
+
+export const isFieldList = isArrayOf(isFieldItem);
+
+export function isRecordItem(value: unknown): value is RecordItem {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.table_id === "string" &&
+    isRecord(value.data) &&
+    typeof value.created_by === "string" &&
+    typeof value.created_at === "string" &&
+    typeof value.updated_at === "string" &&
+    typeof value.version === "number"
+  );
+}
+
+export function isRecordPage(value: unknown): value is RecordPage {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.items) &&
+    value.items.every(isRecordItem) &&
+    (value.next_cursor === null || typeof value.next_cursor === "string")
+  );
+}
+
+function isCondition(value: unknown): value is Condition {
+  return isRecord(value) && typeof value.field === "string" && typeof value.op === "string";
+}
+
+function isSortColumn(value: unknown): value is SortColumn {
+  return (
+    isRecord(value) &&
+    typeof value.field === "string" &&
+    (value.direction === "asc" || value.direction === "desc")
+  );
+}
+
+export function isViewItem(value: unknown): value is ViewItem {
+  if (!isRecord(value) || !isRecord(value.config)) return false;
+  const config = value.config;
+  return (
+    typeof value.id === "string" &&
+    typeof value.table_id === "string" &&
+    typeof value.name === "string" &&
+    isArrayOf(isCondition)(config.filter) &&
+    isArrayOf(isSortColumn)(config.sort) &&
+    isArrayOf((v): v is string => typeof v === "string")(config.hidden_fields)
+  );
+}
+export const isViewList = isArrayOf(isViewItem);
+
+export function isDirectoryUser(value: unknown): value is DirectoryUser {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.employee_code === "string" &&
+    typeof value.full_name === "string"
+  );
+}
+export const isDirectoryList = isArrayOf(isDirectoryUser);
