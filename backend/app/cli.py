@@ -2,6 +2,7 @@
 
     uv run python -m app.cli seed-superadmin --employee-code ADMIN001 --full-name "Admin"
     uv run python -m app.cli rebuild-record-viewers [--table-id <uuid>]
+    uv run python -m app.cli purge-trash
 
 The password is read from the SEED_ADMIN_PASSWORD environment variable, or asked on the
 terminal. It is never accepted as an argument (it would end up in the shell history).
@@ -20,7 +21,7 @@ from app.core.config import get_settings
 from app.core.db import create_engine, create_sessionmaker
 from app.modules.bases.models import Table
 from app.modules.fields import repository as fields_repository
-from app.modules.records import visibility
+from app.modules.records import trash, visibility
 from app.modules.users.service import (
     InvalidSuperAdminInputError,
     OwnerAlreadyExistsError,
@@ -107,6 +108,22 @@ async def _rebuild_viewers(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+async def _purge_trash(args: argparse.Namespace) -> int:
+    """Remove records that have been in the trash for more than 30 days. Schedule it daily."""
+    database_url = get_settings().database_url
+    if not database_url:
+        print("DATABASE_URL is not set. Copy .env.example to .env first.", file=sys.stderr)
+        return EXIT_REFUSED
+    engine = create_engine(database_url)
+    try:
+        async with create_sessionmaker(engine)() as session, session.begin():
+            removed = await trash.purge_expired(session)
+    finally:
+        await engine.dispose()
+    print(f"Removed {removed} record(s) from the trash for good.")
+    return EXIT_OK
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -122,6 +139,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     rebuild.add_argument("--table-id", type=uuid.UUID, default=None)
     rebuild.set_defaults(run=_rebuild_viewers)
+
+    purge = commands.add_parser(
+        "purge-trash", help="Delete records that have been in the trash for over 30 days"
+    )
+    purge.set_defaults(run=_purge_trash)
 
     args = parser.parse_args(argv)
     exit_code: int = asyncio.run(args.run(args))

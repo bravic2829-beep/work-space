@@ -3,8 +3,12 @@ import { apiRequest } from "@/lib/api/client";
 import {
   isBaseItem,
   isBaseList,
+  isCommentItem,
+  isCommentPage,
   isDirectoryList,
   isFieldItem,
+  isMemberItem,
+  isMemberList,
   isRecordItem,
   isRecordPage,
   isTableDetail,
@@ -14,12 +18,16 @@ import {
   isWorkspaceItem,
   isWorkspaceList,
   type BaseItem,
+  type CommentItem,
+  type CommentPage,
   type Condition,
   type DirectoryUser,
   type FieldItem,
   type FieldType,
+  type MemberItem,
   type RecordItem,
   type RecordPage,
+  type Role,
   type SortColumn,
   type TableDetail,
   type TableSummary,
@@ -93,8 +101,51 @@ export function createField(tableId: string, field: NewField): Promise<FieldItem
   });
 }
 
+export type FieldPatch = {
+  name?: string;
+  type?: FieldType;
+  config?: Record<string, unknown>;
+  is_required?: boolean;
+};
+
+/** Renames a column, changes its options, makes it required, or converts its type. */
+export function updateField(id: string, patch: FieldPatch): Promise<FieldItem> {
+  return apiRequest("PATCH", `${API}/fields/${id}`, { body: patch, guard: isFieldItem });
+}
+
 export function deleteField(id: string): Promise<void> {
   return apiRequest("DELETE", `${API}/fields/${id}`);
+}
+
+// --- workspace members ---
+
+export function listMembers(workspaceId: string, signal?: AbortSignal): Promise<MemberItem[]> {
+  return apiRequest("GET", `${API}/workspaces/${workspaceId}/members`, {
+    guard: isMemberList,
+    signal,
+  });
+}
+
+export function addMember(workspaceId: string, userId: string, role: Role): Promise<MemberItem> {
+  return apiRequest("POST", `${API}/workspaces/${workspaceId}/members`, {
+    body: { user_id: userId, role },
+    guard: isMemberItem,
+  });
+}
+
+export function changeMemberRole(
+  workspaceId: string,
+  userId: string,
+  role: Role,
+): Promise<MemberItem> {
+  return apiRequest("PATCH", `${API}/workspaces/${workspaceId}/members/${userId}`, {
+    body: { role },
+    guard: isMemberItem,
+  });
+}
+
+export function removeMember(workspaceId: string, userId: string): Promise<void> {
+  return apiRequest("DELETE", `${API}/workspaces/${workspaceId}/members/${userId}`);
 }
 
 // --- records ---
@@ -151,6 +202,47 @@ export function updateRecord(
 
 export function deleteRecord(id: string): Promise<void> {
   return apiRequest("DELETE", `${API}/records/${id}`);
+}
+
+export type ReviewAction = "submit" | "approve" | "reject";
+
+/** Report a task as done (submit), approve it or send it back (the version is sent as If-Match). */
+export function reviewRecord(
+  id: string,
+  version: number,
+  action: ReviewAction,
+): Promise<RecordItem> {
+  return apiRequest("POST", `${API}/records/${id}/review`, {
+    body: { action },
+    guard: isRecordItem,
+    headers: { "If-Match": `"${version}"` },
+  });
+}
+
+// --- comments ---
+
+export function listComments(
+  recordId: string,
+  cursor: string | null,
+  signal?: AbortSignal,
+): Promise<CommentPage> {
+  const params = new URLSearchParams({ limit: "50" });
+  if (cursor) params.set("cursor", cursor);
+  return apiRequest("GET", `${API}/records/${recordId}/comments?${params.toString()}`, {
+    guard: isCommentPage,
+    signal,
+  });
+}
+
+export function createComment(recordId: string, body: string): Promise<CommentItem> {
+  return apiRequest("POST", `${API}/records/${recordId}/comments`, {
+    body: { body },
+    guard: isCommentItem,
+  });
+}
+
+export function deleteComment(id: string): Promise<void> {
+  return apiRequest("DELETE", `${API}/comments/${id}`);
 }
 
 // --- views ---

@@ -70,6 +70,14 @@ export function createDepartment(payload: {
   });
 }
 
+/** Sets (or clears, with null) the head of a department. */
+export function setDepartmentHead(id: string, headUserId: string | null): Promise<Department> {
+  return apiRequest<Department>("PATCH", `/api/v1/departments/${id}`, {
+    body: { head_user_id: headUserId },
+    guard: isDepartment,
+  });
+}
+
 export function deleteDepartment(id: string): Promise<void> {
   return apiRequest("DELETE", `/api/v1/departments/${id}`);
 }

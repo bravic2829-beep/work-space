@@ -9,6 +9,7 @@ import { ApiError } from "@/lib/api/client";
 import { AddFieldForm } from "./AddFieldForm";
 import { createView, deleteView, getTable, listRecords, listViews } from "./api";
 import { FilterBar } from "./FilterBar";
+import { ManageFieldsPanel } from "./ManageFieldsPanel";
 import { RecordGrid } from "./RecordGrid";
 import { RecordSidebar } from "./RecordSidebar";
 import type {
@@ -41,6 +42,11 @@ function describe(error: unknown): string {
   return "Something went wrong.";
 }
 
+function keepKnown<T>(items: T[], known: Set<string> | null, idOf: (item: T) => string): T[] {
+  if (!known || items.every((item) => known.has(idOf(item)))) return items;
+  return items.filter((item) => known.has(idOf(item)));
+}
+
 /** The table view: columns, rows, filter, sort, saved views, and the record panel. */
 export function TableScreen({ tableId }: { tableId: string }) {
   const { state: auth } = useAuth();
@@ -50,17 +56,32 @@ export function TableScreen({ tableId }: { tableId: string }) {
   const [tableKey, setTableKey] = useState(0);
   const [views, setViews] = useState<ViewItem[]>([]);
   const [activeView, setActiveView] = useState("");
-  const [filter, setFilter] = useState<Condition[]>([]);
-  const [sort, setSort] = useState<SortColumn[]>([]);
-  const [hidden, setHidden] = useState<string[]>([]);
+  const [rawFilter, setFilter] = useState<Condition[]>([]);
+  const [rawSort, setSort] = useState<SortColumn[]>([]);
+  const [rawHidden, setHidden] = useState<string[]>([]);
   const [records, setRecords] = useState<RecordsState>({ kind: "loading" });
   const [recordsKey, setRecordsKey] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [selected, setSelected] = useState<string | "new" | null>(null);
   const [showAddField, setShowAddField] = useState(false);
+  const [showManage, setShowManage] = useState(false);
   const [savingView, setSavingView] = useState(false);
   const [viewName, setViewName] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
+
+  // A column deleted (here or by someone else) must not stay in the filter, sort or hidden list:
+  // the server would answer 422 for a column it no longer knows. So these are derived, not stored.
+  const knownIds = useMemo(
+    () => (tableState.kind === "ready" ? new Set(tableState.table.fields.map((f) => f.id)) : null),
+    [tableState],
+  );
+  // Same array back when nothing was dropped: a new one would make the records load again.
+  const filter = useMemo(
+    () => keepKnown(rawFilter, knownIds, (c) => c.field),
+    [rawFilter, knownIds],
+  );
+  const sort = useMemo(() => keepKnown(rawSort, knownIds, (c) => c.field), [rawSort, knownIds]);
+  const hidden = useMemo(() => keepKnown(rawHidden, knownIds, (id) => id), [rawHidden, knownIds]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -97,6 +118,7 @@ export function TableScreen({ tableId }: { tableId: string }) {
   }, [tableId, filter, sort, recordsKey]);
 
   const table = tableState.kind === "ready" ? tableState.table : null;
+
   const items = records.kind === "ready" ? records.items : [];
   const shownFields = useMemo<FieldItem[]>(() => {
     if (!table) return [];
@@ -278,9 +300,22 @@ export function TableScreen({ tableId }: { tableId: string }) {
             <button type="button" onClick={() => setShowAddField((value) => !value)}>
               {showAddField ? "Hide column form" : "Add a column"}
             </button>
+            <button type="button" onClick={() => setShowManage((value) => !value)}>
+              {showManage ? "Hide column settings" : "Manage columns"}
+            </button>
           </>
         )}
       </div>
+
+      {showManage && canEdit && (
+        <ManageFieldsPanel
+          fields={table.fields}
+          onChanged={() => {
+            setTableKey((n) => n + 1);
+            reloadRecords();
+          }}
+        />
+      )}
 
       {showAddField && canEdit && (
         <AddFieldForm
@@ -379,6 +414,7 @@ export function TableScreen({ tableId }: { tableId: string }) {
             }}
             onReload={reloadRecords}
             onClose={() => setSelected(null)}
+            onSubtaskCreated={reloadRecords}
           />
         )}
       </div>

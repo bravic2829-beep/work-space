@@ -1,12 +1,17 @@
 "use client";
 
+import { Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
+import { Alert, Button } from "@/components/ui";
 import { ApiError } from "@/lib/api/client";
 
 import { createRecord, deleteRecord, updateRecord } from "./api";
+import { CommentsPanel } from "./CommentsPanel";
 import { FieldEditor } from "./FieldEditor";
+import { ReviewActions } from "./ReviewActions";
 import type { FieldItem, RecordItem } from "./schema";
+import { SubtaskForm } from "./SubtaskForm";
 import { useUserNames } from "./useUserNames";
 import {
   canEditField,
@@ -28,6 +33,8 @@ type Props = {
   onDeleted: (id: string) => void;
   onReload: () => void;
   onClose: () => void;
+  /** A subtask was added under this record (the list may want to reload). */
+  onSubtaskCreated?: (subtask: RecordItem) => void;
 };
 
 function initialDrafts(fields: FieldItem[], record: RecordItem | null): Record<string, Draft> {
@@ -47,6 +54,7 @@ export function RecordSidebar({
   onDeleted,
   onReload,
   onClose,
+  onSubtaskCreated,
 }: Props) {
   // The parent gives this component a new key per record and version, so the drafts start fresh.
   const [drafts, setDrafts] = useState(() => initialDrafts(fields, record));
@@ -111,10 +119,10 @@ export function RecordSidebar({
   if (isNew && !canCreate) {
     return (
       <aside className="sidebar" aria-label="Record">
-        <p role="alert">You do not have permission to add records to this table.</p>
-        <button type="button" onClick={onClose}>
+        <Alert>You do not have permission to add records to this table.</Alert>
+        <Button className="mt-3" onClick={onClose}>
           Close
-        </button>
+        </Button>
       </aside>
     );
   }
@@ -123,9 +131,9 @@ export function RecordSidebar({
     <aside className="sidebar" aria-label="Record">
       <header>
         <h2>{isNew ? "New record" : "Record"}</h2>
-        <button type="button" onClick={onClose} aria-label="Close the record">
-          ×
-        </button>
+        <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close the record">
+          <X className="size-4" aria-hidden />
+        </Button>
       </header>
       <form onSubmit={(event) => void save(event)} className="stack">
         {shown.map((field) => (
@@ -140,24 +148,51 @@ export function RecordSidebar({
             onChange={(draft) => setDrafts((current) => ({ ...current, [field.id]: draft }))}
           />
         ))}
-        {message && <p role="alert">{message}</p>}
+        {message && <Alert>{message}</Alert>}
         {conflict && (
-          <button type="button" onClick={onReload}>
+          <Button icon={RefreshCw} onClick={onReload}>
             Reload the latest version
-          </button>
+          </Button>
         )}
         {editable && !conflict && (
-          <button type="submit" disabled={busy || (!isNew && !dirty)}>
+          <Button
+            type="submit"
+            variant="primary"
+            icon={isNew ? Plus : Save}
+            disabled={busy || (!isNew && !dirty)}
+          >
             {busy ? "Saving…" : isNew ? "Create record" : "Save changes"}
-          </button>
+          </Button>
         )}
-        {!editable && !isNew && <p>You can read this record but not change it.</p>}
+        {!editable && !isNew && (
+          <p className="text-sm text-muted">You can read this record but not change it.</p>
+        )}
         {record && isCreator && (
-          <button type="button" onClick={() => void remove()} disabled={busy}>
+          <Button variant="ghost" icon={Trash2} onClick={() => void remove()} disabled={busy}>
             Delete record
-          </button>
+          </Button>
         )}
       </form>
+      {record && (
+        <div className="mt-5 grid gap-5 border-t border-line pt-5">
+          <ReviewActions
+            fields={fields}
+            record={record}
+            currentUserId={currentUserId}
+            onChanged={(updated) => onSaved(updated, false)}
+            onReload={onReload}
+          />
+          <SubtaskForm
+            tableId={tableId}
+            fields={fields}
+            parent={record}
+            currentUserId={currentUserId}
+            canCreate={canCreate}
+            onCreated={(subtask) => onSubtaskCreated?.(subtask)}
+          />
+          <CommentsPanel recordId={record.id} currentUserId={currentUserId} />
+        </div>
+      )}
     </aside>
   );
 }

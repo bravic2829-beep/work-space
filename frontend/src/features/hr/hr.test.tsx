@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchMe } from "@/features/auth/api";
 import { AuthProvider } from "@/features/auth/AuthProvider";
 import { ApiError } from "@/lib/api/client";
+import { lookupUsers, searchDirectory } from "@/features/tables/api";
+import { resetUserNames } from "@/features/tables/useUserNames";
 import { adminUser, sampleUser } from "@/test/fixtures";
 
 import {
@@ -13,6 +15,7 @@ import {
   deleteDepartment,
   listDepartments,
   listUsers,
+  setDepartmentHead,
   updateUser,
 } from "./api";
 import { DepartmentsPanel } from "./DepartmentsPanel";
@@ -20,7 +23,11 @@ import { HrScreen } from "./HrScreen";
 import type { Department } from "./schema";
 import { UsersPanel } from "./UsersPanel";
 
-vi.mock("@/features/auth/api", () => ({ fetchMe: vi.fn(), login: vi.fn(), logout: vi.fn() }));
+vi.mock("@/features/auth/api", () => ({
+  fetchMe: vi.fn(),
+  login: vi.fn(),
+  logout: vi.fn(),
+}));
 vi.mock("./api", () => ({
   listUsers: vi.fn(),
   createUser: vi.fn(),
@@ -28,6 +35,11 @@ vi.mock("./api", () => ({
   listDepartments: vi.fn(),
   createDepartment: vi.fn(),
   deleteDepartment: vi.fn(),
+  setDepartmentHead: vi.fn(),
+}));
+vi.mock("@/features/tables/api", () => ({
+  searchDirectory: vi.fn(),
+  lookupUsers: vi.fn(),
 }));
 
 const fetchMeMock = vi.mocked(fetchMe);
@@ -37,9 +49,25 @@ const updateUserMock = vi.mocked(updateUser);
 const listDepartmentsMock = vi.mocked(listDepartments);
 const createDepartmentMock = vi.mocked(createDepartment);
 const deleteDepartmentMock = vi.mocked(deleteDepartment);
+const setHeadMock = vi.mocked(setDepartmentHead);
+const searchMock = vi.mocked(searchDirectory);
+const lookupMock = vi.mocked(lookupUsers);
+const ann = { id: "u-ann", employee_code: "A1", full_name: "Ann" };
 
-const sales: Department = { id: "d-1", name: "Sales", kind: "division", parent_id: null };
-const teamA: Department = { id: "d-2", name: "Team A", kind: "department", parent_id: "d-1" };
+const sales: Department = {
+  id: "d-1",
+  name: "Sales",
+  kind: "division",
+  parent_id: null,
+  head_user_id: null,
+};
+const teamA: Department = {
+  id: "d-2",
+  name: "Team A",
+  kind: "department",
+  parent_id: "d-1",
+  head_user_id: null,
+};
 const departments = [sales, teamA];
 
 const employee = sampleUser({
@@ -58,6 +86,9 @@ const owner = sampleUser({
 
 beforeEach(() => {
   vi.resetAllMocks();
+  resetUserNames();
+  lookupMock.mockResolvedValue([ann]);
+  searchMock.mockResolvedValue([ann]);
   fetchMeMock.mockResolvedValue(adminUser);
 });
 
@@ -122,7 +153,10 @@ describe("UsersPanel: listing", () => {
   });
 
   it("loads the next page with the cursor and appends it", async () => {
-    listUsersMock.mockResolvedValueOnce({ items: [employee], next_cursor: "CURSOR1" });
+    listUsersMock.mockResolvedValueOnce({
+      items: [employee],
+      next_cursor: "CURSOR1",
+    });
     renderUsers();
     await screen.findByText("Tran Thi B");
 
@@ -139,7 +173,10 @@ describe("UsersPanel: listing", () => {
   });
 
   it("shows an error when the next page fails and keeps what is already there", async () => {
-    listUsersMock.mockResolvedValueOnce({ items: [employee], next_cursor: "CURSOR1" });
+    listUsersMock.mockResolvedValueOnce({
+      items: [employee],
+      next_cursor: "CURSOR1",
+    });
     renderUsers();
     await screen.findByText("Tran Thi B");
 
@@ -181,9 +218,15 @@ describe("UsersPanel: row actions", () => {
     });
     await userEvent.click(within(row("E002")).getByRole("button", { name: "Disable" }));
 
-    await waitFor(() => expect(updateUserMock).toHaveBeenCalledWith("u-2", { status: "disabled" }));
+    await waitFor(() =>
+      expect(updateUserMock).toHaveBeenCalledWith("u-2", {
+        status: "disabled",
+      }),
+    );
     // "Disabled" is also an option of the status filter, so look inside the employee's row.
-    expect(await within(await screen.findByRole("row", { name: /E002/ })).findByText("Disabled")).toBeInTheDocument();
+    expect(
+      await within(await screen.findByRole("row", { name: /E002/ })).findByText("Disabled"),
+    ).toBeInTheDocument();
     expect(within(row("E002")).getByRole("button", { name: "Enable" })).toBeInTheDocument();
   });
 
@@ -323,7 +366,11 @@ describe("Add employee form", () => {
 
     await waitFor(() =>
       expect(createUserMock).toHaveBeenCalledWith(
-        expect.objectContaining({ level: "admin", org_role: "admin", department_id: null }),
+        expect.objectContaining({
+          level: "admin",
+          org_role: "admin",
+          department_id: null,
+        }),
       ),
     );
   });
@@ -355,7 +402,9 @@ describe("Add employee form", () => {
     await userEvent.type(within(form).getByLabelText("Initial password"), "Initial-Pass-1");
     await userEvent.click(within(form).getByRole("button", { name: "Add employee" }));
 
-    expect(await within(form).findByText(/department_id: The department does not exist/)).toBeInTheDocument();
+    expect(
+      await within(form).findByText(/department_id: The department does not exist/),
+    ).toBeInTheDocument();
   });
 });
 
@@ -374,7 +423,49 @@ describe("DepartmentsPanel", () => {
       "Department",
       "Sales",
       expect.any(String),
+      expect.any(String),
     ]);
+  });
+
+  it("shows the head of a department and lets an admin clear them", async () => {
+    setHeadMock.mockResolvedValue({ ...teamA, head_user_id: null });
+    const onChanged = renderDepartments([sales, { ...teamA, head_user_id: "u-ann" }]);
+    const user = userEvent.setup();
+
+    await user.click(
+      await within(row("Team A")).findByRole("button", {
+        name: "Remove Ann (A1)",
+      }),
+    );
+
+    expect(setHeadMock).toHaveBeenCalledWith("d-2", null);
+    await waitFor(() => expect(onChanged).toHaveBeenCalled());
+  });
+
+  it("sets the head by searching for an employee", async () => {
+    setHeadMock.mockResolvedValue({ ...teamA, head_user_id: "u-ann" });
+    const onChanged = renderDepartments();
+    const user = userEvent.setup();
+
+    await user.type(screen.getByLabelText("Find an employee for Head of Team A"), "an");
+    await user.click(await screen.findByRole("button", { name: "Add Ann (A1)" }));
+
+    expect(setHeadMock).toHaveBeenCalledWith("d-2", "u-ann");
+    await waitFor(() => expect(onChanged).toHaveBeenCalled());
+  });
+
+  it("shows the error when the head cannot be set", async () => {
+    setHeadMock.mockRejectedValue(new ApiError("The head does not exist or is disabled.", 422));
+    const onChanged = renderDepartments();
+    const user = userEvent.setup();
+
+    await user.type(screen.getByLabelText("Find an employee for Head of Team A"), "an");
+    await user.click(await screen.findByRole("button", { name: "Add Ann (A1)" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The head does not exist or is disabled.",
+    );
+    expect(onChanged).not.toHaveBeenCalled();
   });
 
   it("says so when there are none", () => {
@@ -408,7 +499,11 @@ describe("DepartmentsPanel", () => {
     const form = screen.getByRole("form", { name: "Add department" });
     await userEvent.selectOptions(within(form).getByLabelText("Type"), "department");
     const parent = within(form).getByLabelText("Under division");
-    expect(within(parent).getAllByRole("option").map((o) => o.textContent)).toEqual(["None", "Sales"]);
+    expect(
+      within(parent)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["None", "Sales"]);
     await userEvent.selectOptions(parent, "d-1");
     await userEvent.type(within(form).getByLabelText("Name"), "Team B");
     await userEvent.click(within(form).getByRole("button", { name: "Add department" }));
@@ -481,7 +576,9 @@ describe("HrScreen", () => {
   });
 
   it("shows an error, and no employee data, when departments cannot be loaded", async () => {
-    listDepartmentsMock.mockRejectedValue(new ApiError("You do not have permission to do this.", 403));
+    listDepartmentsMock.mockRejectedValue(
+      new ApiError("You do not have permission to do this.", 403),
+    );
     render(
       <AuthProvider>
         <HrScreen />

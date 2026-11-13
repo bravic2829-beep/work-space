@@ -5,12 +5,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/api/client";
 import { fetchMe, logout } from "@/features/auth/api";
 import { AuthProvider } from "@/features/auth/AuthProvider";
+import { getUnreadCount } from "@/features/notifications/api";
 import { adminUser, sampleUser } from "@/test/fixtures";
 
 import { AppShell } from "./AppShell";
 
 const router = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => router }));
+vi.mock("next/navigation", () => ({ useRouter: () => router, usePathname: () => "/my-tasks" }));
 vi.mock("next/link", () => ({
   default: ({ href, children }: { href: string; children: React.ReactNode }) => (
     <a href={href}>{children}</a>
@@ -18,11 +19,25 @@ vi.mock("next/link", () => ({
 }));
 vi.mock("@/features/auth/api", () => ({ fetchMe: vi.fn(), login: vi.fn(), logout: vi.fn() }));
 
+vi.mock("@/features/notifications/api", () => ({
+  getUnreadCount: vi.fn(),
+  listNotifications: vi.fn(),
+  setNotificationRead: vi.fn(),
+}));
+
 const fetchMeMock = vi.mocked(fetchMe);
 const logoutMock = vi.mocked(logout);
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(getUnreadCount).mockResolvedValue(0);
+  // The bell opens a WebSocket; in these tests nobody is listening on the other end.
+  vi.stubGlobal(
+    "WebSocket",
+    class {
+      close() {}
+    },
+  );
 });
 
 function renderShell() {

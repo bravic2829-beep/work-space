@@ -4,7 +4,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-from app.modules.users.models import OrgRole, UserLevel
+from app.modules.users.models import OrgRole, UserLevel, UserStatus
 from tests.api_helpers import assert_problem, login_as
 from tests.factories import create_other_organization, create_user
 
@@ -185,3 +185,67 @@ async def test_unknown_fields_are_refused(
         headers=admin_headers,
     )
     assert_problem(response, 422)
+
+
+async def test_a_department_head_is_set_changed_and_cleared(
+    client: AsyncClient, admin_headers: dict[str, str], migrated_database_url: str
+) -> None:
+    first = await create_user(migrated_database_url, employee_code="HEAD1")
+    second = await create_user(migrated_database_url, employee_code="HEAD2")
+
+    created = await client.post(
+        "/api/v1/departments",
+        json={"name": "Sales", "kind": "division", "head_user_id": str(first)},
+        headers=admin_headers,
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["head_user_id"] == str(first)
+
+    def patch(body: dict[str, Any]) -> Any:
+        return client.patch(
+            f"/api/v1/departments/{created.json()['id']}", json=body, headers=admin_headers
+        )
+
+    # Renaming leaves the head alone.
+    assert (await patch({"name": "Sales 2"})).json()["head_user_id"] == str(first)
+    assert (await patch({"head_user_id": str(second)})).json()["head_user_id"] == str(second)
+    assert (await patch({"head_user_id": None})).json()["head_user_id"] is None
+
+
+async def test_the_head_must_be_an_active_employee_of_the_organization(
+    client: AsyncClient, admin_headers: dict[str, str], migrated_database_url: str
+) -> None:
+    disabled = await create_user(
+        migrated_database_url, employee_code="GONE", status=UserStatus.DISABLED
+    )
+    other = await create_other_organization(migrated_database_url)
+
+    for head in (disabled, other["user_id"], uuid.uuid4()):
+        response = await client.post(
+            "/api/v1/departments",
+            json={"name": f"D{head}", "kind": "division", "head_user_id": str(head)},
+            headers=admin_headers,
+        )
+        assert_problem(response, 422)
+
+    division = await create(client, admin_headers, "Sales", "division")
+    response = await client.patch(
+        f"/api/v1/departments/{division['id']}",
+        json={"head_user_id": str(disabled)},
+        headers=admin_headers,
+    )
+    assert_problem(response, 422)
+
+
+async def test_only_an_admin_can_set_a_department_head(
+    client: AsyncClient, admin_headers: dict[str, str], migrated_database_url: str
+) -> None:
+    division = await create(client, admin_headers, "Sales", "division")
+    member = await create_user(migrated_database_url, employee_code="EMP")
+    headers = await login_as(client, "EMP")
+    response = await client.patch(
+        f"/api/v1/departments/{division['id']}",
+        json={"head_user_id": str(member)},
+        headers=headers,
+    )
+    assert_problem(response, 403)

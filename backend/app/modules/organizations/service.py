@@ -7,7 +7,7 @@ from app.modules.organizations import repository
 from app.modules.organizations.models import Department, DepartmentKind
 from app.modules.organizations.schemas import DepartmentCreate, DepartmentUpdate
 from app.modules.users import repository as users
-from app.modules.users.models import User
+from app.modules.users.models import User, UserStatus
 
 
 async def _validate_parent(
@@ -31,6 +31,19 @@ async def _validate_parent(
         raise ProblemError(422, "A department can only be placed under a division.")
 
 
+async def _validate_head(
+    session: AsyncSession, actor: User, head_user_id: uuid.UUID | None
+) -> None:
+    """The head is an active employee of the same organization (else 422, same as unknown)."""
+    if head_user_id is None:
+        return
+    head = await users.get_in_organization(
+        session, organization_id=actor.organization_id, user_id=head_user_id
+    )
+    if head is None or head.status != UserStatus.ACTIVE:
+        raise ProblemError(422, "The head does not exist or is disabled.")
+
+
 async def get_department(
     session: AsyncSession, actor: User, department_id: uuid.UUID
 ) -> Department:
@@ -46,6 +59,7 @@ async def create_department(
     session: AsyncSession, actor: User, data: DepartmentCreate
 ) -> Department:
     await _validate_parent(session, actor, kind=data.kind, parent_id=data.parent_id)
+    await _validate_head(session, actor, data.head_user_id)
     if await repository.sibling_name_exists(
         session,
         organization_id=actor.organization_id,
@@ -58,6 +72,7 @@ async def create_department(
         name=data.name,
         kind=data.kind,
         parent_id=data.parent_id,
+        head_user_id=data.head_user_id,
     )
     repository.add_department(session, department)
     await session.flush()
@@ -75,6 +90,9 @@ async def update_department(
     new_name = changes.get("name", department.name)
     new_parent = changes["parent_id"] if "parent_id" in changes else department.parent_id
     await _validate_parent(session, actor, kind=department.kind, parent_id=new_parent)
+    new_head = changes["head_user_id"] if "head_user_id" in changes else department.head_user_id
+    if new_head != department.head_user_id:
+        await _validate_head(session, actor, new_head)
     if await repository.sibling_name_exists(
         session,
         organization_id=actor.organization_id,
@@ -86,6 +104,7 @@ async def update_department(
 
     department.name = new_name
     department.parent_id = new_parent
+    department.head_user_id = new_head
     await session.flush()
     return department
 

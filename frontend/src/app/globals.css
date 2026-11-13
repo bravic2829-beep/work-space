@@ -1,270 +1,298 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens. Components use the semantic names (bg-surface, text-muted, border-line,
+ * bg-primary ...) and never raw colours, so light and dark mode and a future re-brand are changed
+ * here only.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-muted: #f1f3f6;
+  --fg: #16181d;
+  --muted: #5d6573;
+  --line: #e1e4ea;
+  --line-strong: #c5cad4;
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-fg: #ffffff;
+  --primary-soft: #eef0ff;
+  --danger: #c62828;
+  --danger-soft: #fdecec;
+  --success: #1b7f4b;
+  --success-soft: #e6f6ed;
+  --warning: #a35a00;
+  --warning-soft: #fff3e0;
+  --info: #1769aa;
+  --info-soft: #e8f3fc;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --bg: #0e1013;
+    --surface: #171a1f;
+    --surface-muted: #1f232a;
+    --fg: #eceef2;
+    --muted: #9aa3b2;
+    --line: #2a2f38;
+    --line-strong: #3b414d;
+    --primary: #818cf8;
+    --primary-hover: #a5b0fb;
+    --primary-fg: #0e1013;
+    --primary-soft: #232650;
+    --danger: #ff8a80;
+    --danger-soft: #3a1f1f;
+    --success: #6fd49b;
+    --success-soft: #16301f;
+    --warning: #ffb74d;
+    --warning-soft: #33260f;
+    --info: #7cc4f5;
+    --info-soft: #14283a;
   }
 }
 
-* {
-  box-sizing: border-box;
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-fg: var(--primary-fg);
+  --color-primary-soft: var(--primary-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
-html,
-body {
-  margin: 0;
-  padding: 0;
+/*
+ * Sensible defaults for plain HTML elements, so screens that do not use the UI kit yet (and any
+ * new plain markup) still look consistent. Components in src/components/ui override these with
+ * utility classes.
+ */
+@layer base {
+  html {
+    color-scheme: light dark;
+  }
+
+  body {
+    min-height: 100vh;
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1 {
+    @apply text-2xl font-semibold tracking-tight;
+    margin-block: 0 0.75rem;
+  }
+
+  h2 {
+    @apply text-lg font-semibold;
+    margin-block: 1.5rem 0.5rem;
+  }
+
+  h3 {
+    @apply text-base font-semibold;
+    margin-block: 1rem 0.5rem;
+  }
+
+  p {
+    margin-block: 0.4rem;
+  }
+
+  a {
+    @apply text-primary underline-offset-2 hover:underline;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  button {
+    @apply inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-md border border-line-strong bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  input:not([type="checkbox"], [type="radio"]),
+  select,
+  textarea {
+    @apply rounded-md border border-line-strong bg-surface px-2.5 py-1.5 text-sm text-fg placeholder:text-muted;
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: var(--color-primary);
+  }
+
+  table {
+    @apply w-full border-collapse text-sm;
+    margin-block: 0.75rem;
+  }
+
+  th {
+    @apply bg-surface-muted px-3 py-2 text-left text-xs font-semibold tracking-wide text-muted uppercase;
+  }
+
+  td {
+    @apply px-3 py-2 text-left align-top;
+  }
+
+  th,
+  td {
+    border-bottom: 1px solid var(--color-line);
+  }
+
+  small {
+    @apply text-muted;
+  }
 }
 
-body {
-  min-height: 100vh;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing: antialiased;
-}
+/*
+ * Older class names still used by screens that are not rebuilt with the UI kit yet. Move a
+ * screen to components/ui, then delete what it no longer needs from here.
+ */
+@layer components {
+  .container {
+    @apply mx-auto max-w-xl px-6 py-12;
+  }
 
-.container {
-  max-width: 40rem;
-  margin: 0 auto;
-  padding: 3rem 1.5rem;
-}
+  .container.wide {
+    @apply max-w-[90rem] py-6;
+  }
 
-button {
-  font: inherit;
-  padding: 0.4rem 0.9rem;
-  cursor: pointer;
-}
+  .visually-hidden {
+    @apply sr-only;
+  }
 
-.container.wide {
-  max-width: 60rem;
-}
+  ul.plain {
+    @apply m-0 list-none p-0;
+  }
 
-.app-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-  padding: 0.75rem 1.5rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 20%, transparent);
-}
+  .stack {
+    @apply flex flex-col gap-3;
+  }
 
-.app-header nav {
-  display: flex;
-  gap: 1rem;
-}
+  .form {
+    @apply my-4 grid max-w-sm gap-3;
+  }
 
-.form {
-  display: grid;
-  gap: 0.75rem;
-  max-width: 24rem;
-  margin: 1rem 0;
-}
+  .form label {
+    @apply grid gap-1 text-sm font-medium;
+  }
 
-.form label {
-  display: grid;
-  gap: 0.25rem;
-}
+  .form label.inline {
+    @apply flex items-center gap-2 font-normal;
+  }
 
-.form label.inline {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
+  .inline-form,
+  .toolbar {
+    @apply my-2 flex max-w-none flex-wrap items-center gap-2;
+  }
 
-.inline-form {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: 0.75rem;
-  max-width: none;
-}
+  .inline-form {
+    @apply items-end;
+  }
 
-input,
-select {
-  font: inherit;
-  padding: 0.35rem 0.5rem;
-}
+  .link-button {
+    @apply border-0 bg-transparent p-0 text-left font-normal text-primary underline hover:bg-transparent;
+  }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 1rem 0;
-}
+  .chips {
+    @apply my-1 flex list-none flex-wrap gap-1.5 p-0;
+  }
 
-th,
-td {
-  text-align: left;
-  padding: 0.4rem 0.6rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 15%, transparent);
-}
+  .chips li {
+    @apply rounded-full border border-line-strong bg-surface-muted px-2.5 py-0.5 text-sm;
+  }
 
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
+  .chips button {
+    @apply border-0 bg-transparent py-0 pr-0 pl-1.5 shadow-none;
+  }
 
-/* --- tables, records, workspaces --- */
+  .grid-wrap {
+    @apply overflow-x-auto rounded-lg border border-line bg-surface;
+  }
 
-.container.wide {
-  max-width: 90rem;
-}
+  table.grid {
+    @apply m-0 w-full border-collapse;
+  }
 
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
+  table.grid th,
+  table.grid td {
+    @apply max-w-80 border border-line wrap-anywhere;
+  }
 
-ul.plain {
-  list-style: none;
-  padding: 0;
-}
+  table.grid tr.selected td {
+    background: var(--color-primary-soft);
+  }
 
-.stack {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.inline-form,
-.toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  margin: 0.5rem 0;
-}
-
-.link-button {
-  background: none;
-  border: none;
-  padding: 0;
-  color: inherit;
-  text-decoration: underline;
-  cursor: pointer;
-  font: inherit;
-  text-align: left;
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  list-style: none;
-  padding: 0;
-  margin: 0.25rem 0;
-}
-
-.chips li {
-  border: 1px solid color-mix(in srgb, var(--foreground) 30%, transparent);
-  border-radius: 1rem;
-  padding: 0.1rem 0.6rem;
-}
-
-.chips button {
-  border: none;
-  background: none;
-  padding: 0 0 0 0.4rem;
-}
-
-.grid-wrap {
-  overflow-x: auto;
-}
-
-table.grid {
-  border-collapse: collapse;
-  width: 100%;
-}
-
-table.grid th,
-table.grid td {
-  border: 1px solid color-mix(in srgb, var(--foreground) 20%, transparent);
-  padding: 0.35rem 0.6rem;
-  text-align: left;
-  vertical-align: top;
-  max-width: 20rem;
-  overflow-wrap: anywhere;
-}
-
-table.grid tr.selected td {
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
-}
-
-.with-sidebar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 24rem;
-  gap: 1.5rem;
-  align-items: start;
-}
-
-@media (max-width: 60rem) {
   .with-sidebar {
-    grid-template-columns: minmax(0, 1fr);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 26rem;
+    gap: 1.5rem;
+    align-items: start;
   }
-}
 
-.sidebar {
-  border: 1px solid color-mix(in srgb, var(--foreground) 25%, transparent);
-  border-radius: 0.5rem;
-  padding: 1rem;
-}
+  @media (max-width: 60rem) {
+    .with-sidebar {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
 
-.sidebar header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
+  .sidebar {
+    @apply rounded-xl border border-line bg-surface p-4 shadow-sm;
+  }
 
-.cell-editor {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
+  .sidebar header {
+    @apply mb-3 flex items-center justify-between;
+  }
 
-.cell-editor .label,
-.cell-editor label {
-  font-weight: 600;
-}
+  .sidebar header h2 {
+    @apply m-0;
+  }
 
-.cell-editor input[type="text"],
-.cell-editor input[type="url"],
-.cell-editor input[type="number"],
-.cell-editor input[type="date"],
-.cell-editor input[type="datetime-local"],
-.cell-editor input[type="search"],
-.cell-editor select,
-.cell-editor textarea {
-  width: 100%;
-}
+  .cell-editor {
+    @apply flex flex-col gap-1;
+  }
 
-.field-error {
-  color: #b00020;
-  margin: 0;
-}
+  .cell-editor .label,
+  .cell-editor label {
+    @apply text-sm font-medium;
+  }
 
-fieldset.options,
-fieldset.link-picker {
-  border: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
+  .cell-editor input[type="text"],
+  .cell-editor input[type="url"],
+  .cell-editor input[type="number"],
+  .cell-editor input[type="date"],
+  .cell-editor input[type="datetime-local"],
+  .cell-editor input[type="search"],
+  .cell-editor select,
+  .cell-editor textarea {
+    @apply w-full;
+  }
 
-.base {
-  margin: 1.5rem 0;
+  .field-error {
+    @apply m-0 text-sm text-danger;
+  }
+
+  fieldset.options,
+  fieldset.link-picker {
+    @apply m-0 flex flex-col gap-1 border-0 p-0;
+  }
+
+  .base {
+    @apply my-6;
+  }
 }

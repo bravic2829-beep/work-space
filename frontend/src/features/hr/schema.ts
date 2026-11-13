@@ -7,6 +7,7 @@ export type Department = {
   name: string;
   kind: DepartmentKind;
   parent_id: string | null;
+  head_user_id: string | null;
 };
 
 export type UserPage = { items: User[]; next_cursor: string | null };
@@ -21,7 +22,8 @@ export function isDepartment(value: unknown): value is Department {
     typeof value.id === "string" &&
     typeof value.name === "string" &&
     (value.kind === "division" || value.kind === "department") &&
-    (value.parent_id === null || typeof value.parent_id === "string")
+    (value.parent_id === null || typeof value.parent_id === "string") &&
+    (value.head_user_id === null || typeof value.head_user_id === "string")
   );
 }
 

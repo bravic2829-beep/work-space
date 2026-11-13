@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { useAuth } from "@/features/auth/AuthProvider";
 import { ApiError } from "@/lib/api/client";
 
+import { MembersPanel } from "./MembersPanel";
 import { createBase, createTable, getWorkspace, listBases, listTables } from "./api";
 import type { BaseItem, TableSummary, WorkspaceItem } from "./schema";
 
@@ -29,6 +31,8 @@ function message(error: unknown, fallback: string): string {
 
 /** One workspace: its bases and their tables, with forms to add more (editors and admins). */
 export function WorkspaceScreen({ workspaceId }: { workspaceId: string }) {
+  const { state: auth } = useAuth();
+  const me = auth.status === "authenticated" ? auth.user.id : "";
   const [state, setState] = useState<State>({ kind: "loading" });
   const [reload, setReload] = useState(0);
   const [baseName, setBaseName] = useState("");
@@ -173,6 +177,13 @@ export function WorkspaceScreen({ workspaceId }: { workspaceId: string }) {
             Add base
           </button>
         </form>
+      )}
+      {workspace.kind === "shared" && (
+        <MembersPanel
+          workspaceId={workspace.id}
+          canManage={workspace.my_role === "admin"}
+          currentUserId={me}
+        />
       )}
     </section>
   );

@@ -34,6 +34,7 @@ class Department(Base):
         CheckConstraint("parent_id <> id", name="no_self_parent"),
         Index("ix_departments_organization_id", "organization_id"),
         Index("ix_departments_parent_id", "parent_id"),
+        Index("ix_departments_head_user_id", "head_user_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -47,4 +48,8 @@ class Department(Base):
     )
     name: Mapped[str] = mapped_column(String(200))
     kind: Mapped[DepartmentKind] = mapped_column(str_enum(DepartmentKind, "department_kind"))
+    # The head may split a task assigned to them into subtasks (docs/usecases.md 3.2).
+    head_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

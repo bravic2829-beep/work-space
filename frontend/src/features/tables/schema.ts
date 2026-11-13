@@ -45,6 +45,13 @@ export type WorkspaceItem = {
   my_role: Role;
 };
 
+export type MemberItem = {
+  user_id: string;
+  employee_code: string;
+  full_name: string;
+  role: Role;
+};
+
 export type BaseItem = { id: string; workspace_id: string; name: string };
 export type TableSummary = { id: string; base_id: string; name: string };
 export type TableDetail = TableSummary & { fields: FieldItem[]; my_role: Role | null };
@@ -59,6 +66,15 @@ export type RecordItem = {
   version: number;
 };
 export type RecordPage = { items: RecordItem[]; next_cursor: string | null };
+
+export type CommentItem = {
+  id: string;
+  record_id: string;
+  author: { id: string; full_name: string };
+  body: string;
+  created_at: string;
+};
+export type CommentPage = { items: CommentItem[]; next_cursor: string | null };
 
 export type Condition = { field: string; op: string; value?: unknown };
 export type SortColumn = { field: string; direction: "asc" | "desc" };
@@ -106,6 +122,17 @@ export function isWorkspaceItem(value: unknown): value is WorkspaceItem {
   );
 }
 export const isWorkspaceList = isArrayOf(isWorkspaceItem);
+
+export function isMemberItem(value: unknown): value is MemberItem {
+  return (
+    isRecord(value) &&
+    typeof value.user_id === "string" &&
+    typeof value.employee_code === "string" &&
+    typeof value.full_name === "string" &&
+    isRole(value.role)
+  );
+}
+export const isMemberList = isArrayOf(isMemberItem);
 
 export function isBaseItem(value: unknown): value is BaseItem {
   return (
@@ -195,3 +222,25 @@ export function isDirectoryUser(value: unknown): value is DirectoryUser {
   );
 }
 export const isDirectoryList = isArrayOf(isDirectoryUser);
+
+export function isCommentItem(value: unknown): value is CommentItem {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.record_id === "string" &&
+    isRecord(value.author) &&
+    typeof value.author.id === "string" &&
+    typeof value.author.full_name === "string" &&
+    typeof value.body === "string" &&
+    typeof value.created_at === "string"
+  );
+}
+
+export function isCommentPage(value: unknown): value is CommentPage {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.items) &&
+    value.items.every(isCommentItem) &&
+    (value.next_cursor === null || typeof value.next_cursor === "string")
+  );
+}

@@ -7,7 +7,7 @@ import { ApiError } from "@/lib/api/client";
 import { createField, listTables } from "./api";
 import { FIELD_TYPES, type FieldItem, type FieldType, type TableSummary } from "./schema";
 
-const LABELS: Record<FieldType, string> = {
+export const LABELS: Record<FieldType, string> = {
   text: "Text",
   long_text: "Long text",
   number: "Number",
