@@ -10,5 +10,7 @@ export { EmptyState, LoadingState } from "./feedback";
 export { FormField } from "./FormField";
 export { InlineConfirm } from "./InlineConfirm";
 export { PageHeader } from "./PageHeader";
+export { Popover, PopoverContent, PopoverTrigger } from "./Popover";
 export { SegmentedControl, type SegmentOption } from "./SegmentedControl";
 export { Tabs, type TabItem } from "./Tabs";
+export { Tooltip, TooltipContent, TooltipTrigger } from "./Tooltip";

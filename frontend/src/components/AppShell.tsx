@@ -11,6 +11,7 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -21,6 +22,7 @@ import { useAuth } from "@/features/auth/AuthProvider";
 import { isOrgAdmin } from "@/features/auth/schema";
 import { NotificationBell } from "@/features/notifications/NotificationBell";
 
+import { BreadcrumbProvider, useCrumbTitle } from "./Breadcrumb";
 import { NavLink } from "./NavLink";
 
 type NavItem = { href: string; label: string; icon: LucideIcon; adminOnly?: boolean };
@@ -34,20 +36,32 @@ const NAV: NavItem[] = [
 ];
 
 /** The section a page belongs to, for the breadcrumb ("/tables/x" is part of the workspaces). */
-function sectionOf(pathname: string): string | null {
-  if (pathname.startsWith("/tables/")) return "Workspaces";
-  const match = NAV.find((item) =>
-    item.href === "/" ? pathname === "/" : pathname === item.href || pathname.startsWith(`${item.href}/`),
+function sectionOf(pathname: string): NavItem | null {
+  if (pathname.startsWith("/tables/")) return NAV.find((item) => item.href === "/workspaces") ?? null;
+  return (
+    NAV.find((item) =>
+      item.href === "/" ? pathname === "/" : pathname === item.href || pathname.startsWith(`${item.href}/`),
+    ) ?? null
   );
-  return match?.label ?? null;
 }
+
+const CRUMB_LINK = "text-muted no-underline hover:text-primary hover:underline";
 
 /**
  * The frame of every signed-in page: a navigation sidebar on the left (a slide-in menu on a
  * phone), a slim top bar with the breadcrumb and the notification bell, and the page below.
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
+  return (
+    <BreadcrumbProvider>
+      <Shell>{children}</Shell>
+    </BreadcrumbProvider>
+  );
+}
+
+function Shell({ children }: { children: React.ReactNode }) {
   const { state, logout } = useAuth();
+  const crumbTitle = useCrumbTitle();
   const router = useRouter();
   const pathname = usePathname() ?? "";
   const [signingOut, setSigningOut] = useState(false);
@@ -143,14 +157,32 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Menu className="size-4" aria-hidden />
           </Button>
           <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-[13px]">
-            <span className="text-muted">WorkBase</span>
+            <Link href="/" className={CRUMB_LINK}>
+              WorkBase
+            </Link>
             {section && (
               <>
                 <span aria-hidden className="text-line-strong">
                   /
                 </span>
+                {crumbTitle ? (
+                  <Link href={section.href} className={`${CRUMB_LINK} shrink-0`}>
+                    {section.label}
+                  </Link>
+                ) : (
+                  <span aria-current="page" className="truncate font-semibold">
+                    {section.label}
+                  </span>
+                )}
+              </>
+            )}
+            {section && crumbTitle && (
+              <>
+                <span aria-hidden className="text-line-strong">
+                  /
+                </span>
                 <span aria-current="page" className="truncate font-semibold">
-                  {section}
+                  {crumbTitle}
                 </span>
               </>
             )}
@@ -165,7 +197,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Alert>{error}</Alert>
           </div>
         )}
-        <main className="mx-auto w-full max-w-[90rem] flex-1 px-4 py-5 md:px-6">{children}</main>
+        <main className="w-full flex-1 px-3 py-3 md:px-4">{children}</main>
       </div>
     </div>
   );

@@ -1,0 +1,104 @@
+"use client";
+
+import { Eye, EyeOff } from "lucide-react";
+
+import {
+  Button,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui";
+
+import type { FieldItem } from "./schema";
+
+type Props = {
+  fields: FieldItem[];
+  /** The ids of the columns that are hidden. */
+  hidden: string[];
+  onChange: (hidden: string[]) => void;
+};
+
+const LABEL = "Show or hide columns";
+
+/** One eye button: hover for what it does, click to choose which columns are shown. */
+export function ColumnsMenu({ fields, hidden, onChange }: Props) {
+  const Icon = hidden.length > 0 ? EyeOff : Eye;
+  return (
+    <Popover>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <PopoverTrigger
+              render={
+                <Button variant="ghost" size="icon" aria-label={LABEL} className="relative size-7">
+                  <Icon className="size-4" aria-hidden />
+                  {hidden.length > 0 && (
+                    // A dot says "some columns are hidden"; the tooltip has the numbers.
+                    <span
+                      aria-hidden
+                      className="absolute top-1 right-1 size-1.5 rounded-full bg-primary ring-2 ring-surface-muted"
+                    />
+                  )}
+                </Button>
+              }
+            />
+          }
+        />
+        <TooltipContent align="end">
+          {hidden.length > 0
+            ? `${LABEL} · ${fields.length - hidden.length} of ${fields.length} shown`
+            : LABEL}
+        </TooltipContent>
+      </Tooltip>
+
+      <PopoverContent align="end">
+        <div className="flex items-center justify-between px-2 py-1 text-[11px] font-medium tracking-wider text-muted uppercase">
+          Columns
+          {hidden.length > 0 && (
+            <button
+              type="button"
+              className="cursor-pointer border-0 bg-transparent p-0 text-[11px] font-medium tracking-normal text-primary normal-case hover:underline"
+              onClick={() => onChange([])}
+            >
+              Show all
+            </button>
+          )}
+        </div>
+        <ul className="m-0 max-h-72 list-none overflow-y-auto p-0">
+          {fields.map((field) => {
+            const visible = !hidden.includes(field.id);
+            return (
+              <li key={field.id}>
+                <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-[13px] hover:bg-surface-muted has-focus-visible:outline-2 has-focus-visible:outline-primary">
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={visible}
+                    onChange={(event) =>
+                      onChange(
+                        event.target.checked
+                          ? hidden.filter((id) => id !== field.id)
+                          : [...hidden, field.id],
+                      )
+                    }
+                  />
+                  {visible ? (
+                    <Eye className="size-4 shrink-0 text-primary" aria-hidden />
+                  ) : (
+                    <EyeOff className="size-4 shrink-0 text-muted" aria-hidden />
+                  )}
+                  <span className={visible ? "truncate" : "truncate text-muted line-through"}>
+                    {field.name}
+                  </span>
+                </label>
+              </li>
+            );
+          })}
+        </ul>
+      </PopoverContent>
+    </Popover>
+  );
+}

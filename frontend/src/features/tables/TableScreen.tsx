@@ -1,15 +1,16 @@
 "use client";
 
-import { ChevronLeft, Columns3, Plus, Save, Settings2, Table2, Trash2 } from "lucide-react";
-import Link from "next/link";
+import { Plus, Save, Settings2, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { usePageCrumb } from "@/components/Breadcrumb";
 import { Alert, Button, Drawer, DrawerBody, Input, LoadingState, Select } from "@/components/ui";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { ApiError } from "@/lib/api/client";
 
 import { AddFieldForm } from "./AddFieldForm";
 import { createView, deleteRecord, deleteView, getTable, listRecords, listViews } from "./api";
+import { ColumnsMenu } from "./ColumnsMenu";
 import { FilterBar } from "./FilterBar";
 import { ManageFieldsPanel } from "./ManageFieldsPanel";
 import { RecordGrid } from "./RecordGrid";
@@ -22,6 +23,7 @@ import type {
   TableDetail,
   ViewItem,
 } from "./schema";
+import { useHiddenColumns } from "./useHiddenColumns";
 import { useUserNames } from "./useUserNames";
 import { userIdsIn } from "./values";
 
@@ -60,7 +62,7 @@ export function TableScreen({ tableId }: { tableId: string }) {
   const [activeView, setActiveView] = useState("");
   const [rawFilter, setFilter] = useState<Condition[]>([]);
   const [rawSort, setSort] = useState<SortColumn[]>([]);
-  const [rawHidden, setHidden] = useState<string[]>([]);
+  const [rawHidden, setHidden] = useHiddenColumns(tableId);
   const [records, setRecords] = useState<RecordsState>({ kind: "loading" });
   const [recordsKey, setRecordsKey] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -120,6 +122,7 @@ export function TableScreen({ tableId }: { tableId: string }) {
   }, [tableId, filter, sort, recordsKey]);
 
   const table = tableState.kind === "ready" ? tableState.table : null;
+  usePageCrumb(table?.name ?? null);
 
   const items = records.kind === "ready" ? records.items : [];
   const shownFields = useMemo<FieldItem[]>(() => {
@@ -233,19 +236,8 @@ export function TableScreen({ tableId }: { tableId: string }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <Link
-          href="/workspaces"
-          className="inline-flex items-center gap-0.5 text-xs text-muted no-underline hover:text-primary"
-        >
-          <ChevronLeft className="size-3.5" aria-hidden />
-          Workspaces
-        </Link>
-        <h1 className="m-0 flex items-center gap-2">
-          <Table2 className="size-5 text-primary" aria-hidden />
-          {table.name}
-        </h1>
-      </div>
+      {/* The name and the way back are in the top bar; the heading stays for screen readers. */}
+      <h1 className="sr-only">{table.name}</h1>
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">
         <section aria-label="View" className="flex flex-wrap items-center gap-2">
@@ -291,38 +283,6 @@ export function TableScreen({ tableId }: { tableId: string }) {
               </Button>
             </form>
           )}
-          <details className="relative">
-            <summary className="inline-flex h-7 cursor-pointer list-none items-center gap-1.5 rounded-md border border-line-strong bg-surface px-2.5 text-xs font-medium hover:bg-surface-muted [&::-webkit-details-marker]:hidden">
-              <Columns3 className="size-4" aria-hidden />
-              Columns
-              {hidden.length > 0 && (
-                <span className="rounded bg-primary-soft px-1 font-mono text-[10px] text-primary">
-                  {table.fields.length - hidden.length}/{table.fields.length}
-                </span>
-              )}
-            </summary>
-            <ul className="absolute z-20 m-0 mt-1 max-h-72 w-56 list-none overflow-y-auto rounded-lg border border-line-strong bg-surface p-1.5 shadow-lg">
-              {table.fields.map((field) => (
-                <li key={field.id}>
-                  <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-[13px] hover:bg-surface-muted">
-                    <input
-                      type="checkbox"
-                      checked={!hidden.includes(field.id)}
-                      onChange={(event) => {
-                        setActiveView("");
-                        setHidden((current) =>
-                          event.target.checked
-                            ? current.filter((id) => id !== field.id)
-                            : [...current, field.id],
-                        );
-                      }}
-                    />
-                    {field.name}
-                  </label>
-                </li>
-              ))}
-            </ul>
-          </details>
         </section>
 
         {canEdit && (
@@ -347,6 +307,16 @@ export function TableScreen({ tableId }: { tableId: string }) {
           setActiveView("");
           setFilter(next);
         }}
+        trailing={
+          <ColumnsMenu
+            fields={table.fields}
+            hidden={hidden}
+            onChange={(next) => {
+              setActiveView("");
+              setHidden(next);
+            }}
+          />
+        }
       />
 
       <Drawer open={showManage && canEdit} title="Manage columns" onClose={() => setShowManage(false)}>

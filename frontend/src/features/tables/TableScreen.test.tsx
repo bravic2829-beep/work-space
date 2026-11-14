@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -61,6 +61,7 @@ const beta = makeRecord("r-2", { "f-name": "Beta", "f-points": 5, "f-priority": 
 
 beforeEach(() => {
   vi.resetAllMocks();
+  window.localStorage.clear();
   resetUserNames();
   fetchMeMock.mockResolvedValue(sampleUser({ id: "u-me" }));
   getTableMock.mockResolvedValue(makeTable("editor"));
@@ -365,7 +366,7 @@ describe("columns", () => {
   it("hides a column on request", async () => {
     const user = userEvent.setup();
     await renderTable();
-    await user.click(screen.getByText("Columns"));
+    await user.click(screen.getByRole("button", { name: "Show or hide columns" }));
     await user.click(screen.getByRole("checkbox", { name: "Points" }));
     expect(screen.queryByRole("columnheader", { name: /Points/ })).not.toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: /Name/ })).toBeInTheDocument();
@@ -384,7 +385,7 @@ describe("views", () => {
 
     await user.click(screen.getByRole("button", { name: "Sort by Points" }));
     await user.click(screen.getByRole("button", { name: "Sort by Points" }));
-    await user.click(screen.getByText("Columns"));
+    await user.click(screen.getByRole("button", { name: "Show or hide columns" }));
     await user.click(screen.getByRole("checkbox", { name: "Tags" }));
     await user.click(screen.getByRole("button", { name: "Save as a view" }));
     await user.type(screen.getByLabelText("View name"), "Big ones");
@@ -468,7 +469,7 @@ describe("views", () => {
 it("does not break when every column is hidden", async () => {
   const user = userEvent.setup();
   await renderTable();
-  await user.click(screen.getByText("Columns"));
+  await user.click(screen.getByRole("button", { name: "Show or hide columns" }));
   for (const field of FIELDS) {
     await user.click(screen.getByRole("checkbox", { name: field.name }));
   }
@@ -476,4 +477,19 @@ it("does not break when every column is hidden", async () => {
   // (An editor also has the unnamed column of row buttons.)
   const headers = screen.getAllByRole("columnheader").filter((h) => h.textContent !== "Actions");
   expect(headers).toHaveLength(1);
+});
+
+describe("hidden columns survive a reload", () => {
+  it("remembers the hidden columns of a table in the browser", async () => {
+    const user = userEvent.setup();
+    await renderTable();
+    await user.click(screen.getByRole("button", { name: "Show or hide columns" }));
+    await user.click(screen.getByRole("checkbox", { name: "Points" }));
+    expect(screen.queryByRole("columnheader", { name: /Points/ })).not.toBeInTheDocument();
+    cleanup();
+
+    await renderTable();
+    expect(await screen.findByRole("columnheader", { name: /Name/ })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: /Points/ })).not.toBeInTheDocument();
+  });
 });

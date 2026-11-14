@@ -12,12 +12,14 @@ type Props = {
   fields: FieldItem[];
   filter: Condition[];
   onChange: (filter: Condition[]) => void;
+  /** Shown at the right end of the bar (the show/hide columns button). */
+  trailing?: React.ReactNode;
 };
 
 const SMALL = "h-7 w-auto min-w-36 py-0 text-[13px]";
 
 /** Narrow the table to the rows that match every condition. Values never become SQL. */
-export function FilterBar({ fields, filter, onChange }: Props) {
+export function FilterBar({ fields, filter, onChange, trailing }: Props) {
   const filterable = fields.filter((field) => operatorsFor(field).length > 0);
   const [fieldId, setFieldId] = useState("");
   const [op, setOp] = useState("");
@@ -141,6 +143,7 @@ export function FilterBar({ fields, filter, onChange }: Props) {
           Add filter
         </Button>
       </form>
+      {trailing && <div className="ml-auto">{trailing}</div>}
     </section>
   );
 }

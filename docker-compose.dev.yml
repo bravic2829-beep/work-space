@@ -1,0 +1,29 @@
+# Development overrides: edit code and see it without rebuilding.
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build   (first time)
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d           (afterwards)
+# Source folders are mounted into the containers; `next dev` and `uvicorn --reload` pick up
+# changes. Rebuild (--build) only when package.json / package-lock.json / pyproject.toml change.
+# Polling is on because file-change events from Windows do not reach Linux containers.
+services:
+  backend:
+    command:
+      - sh
+      - -c
+      - "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir app"
+    environment:
+      WATCHFILES_FORCE_POLLING: "true"
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/alembic:/app/alembic
+
+  frontend:
+    # `next dev` writes next-env.d.ts and .next in /app, which the image owns as root.
+    user: root
+    command: ["npm", "run", "dev", "--", "-H", "0.0.0.0", "-p", "3000"]
+    environment:
+      NODE_ENV: development
+      WATCHPACK_POLLING: "true"
+      BACKEND_INTERNAL_URL: http://backend:8000
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
