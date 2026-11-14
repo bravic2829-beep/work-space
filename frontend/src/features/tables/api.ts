@@ -106,6 +106,8 @@ export type FieldPatch = {
   type?: FieldType;
   config?: Record<string, unknown>;
   is_required?: boolean;
+  /** A role (assignee, follower, status, due_date), or null to take the role away. */
+  semantic?: string | null;
 };
 
 /** Renames a column, changes its options, makes it required, or converts its type. */

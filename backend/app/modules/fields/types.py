@@ -67,6 +67,11 @@ def _reject_unknown(config: dict[str, Any], allowed: set[str]) -> None:
         raise FieldConfigError(f"Unknown config key: {unknown[0]}.")
 
 
+# A date column is either picked by hand, or filled with the day (or moment) a record is created.
+DATE_FILL_MANUAL = "manual"
+DATE_FILL_CREATED = "created"
+
+
 def _as_bool(config: dict[str, Any], key: str, default: bool) -> bool:
     value = config.get(key, default)
     if not isinstance(value, bool):
@@ -167,8 +172,18 @@ def normalize_config(
         return {"precision": precision}
 
     if field_type == FieldType.DATE:
-        _reject_unknown(config, {"include_time"})
-        return {"include_time": _as_bool(config, "include_time", False)}
+        _reject_unknown(config, {"include_time", "fill"})
+        fill = config.get("fill", DATE_FILL_MANUAL)
+        if fill not in (DATE_FILL_MANUAL, DATE_FILL_CREATED):
+            raise FieldConfigError(
+                f"fill must be '{DATE_FILL_MANUAL}' (pick a date) or "
+                f"'{DATE_FILL_CREATED}' (filled when the record is created)."
+            )
+        cleaned: dict[str, Any] = {"include_time": _as_bool(config, "include_time", False)}
+        # Only the non-default is stored, so a date column made before this option is unchanged.
+        if fill == DATE_FILL_CREATED:
+            cleaned["fill"] = DATE_FILL_CREATED
+        return cleaned
 
     if field_type == FieldType.USER:
         _reject_unknown(config, {"multiple"})

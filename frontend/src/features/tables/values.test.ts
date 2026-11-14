@@ -18,10 +18,12 @@ import {
   canEditField,
   changesFor,
   conditionValue,
+  createdDateValue,
   describeCondition,
   displayValue,
   draftFromValue,
   isSortable,
+  newRecordDraft,
   operatorsFor,
   parseDraft,
   userIdsIn,
@@ -207,5 +209,45 @@ describe("people in the records", () => {
       makeRecord("r-2", { "f-assignee": ["u-2"] }),
     ];
     expect(userIdsIn([ASSIGNEE, AUTHOR, NAME], records).sort()).toEqual(["u-1", "u-2", "u-3"]);
+  });
+});
+
+describe("a date column filled when the record is created", () => {
+  const auto = makeField("f-d", "Created on", "date", {
+    config: { include_time: false, fill: "created" },
+  });
+  const autoTime = makeField("f-t", "Created at", "date", {
+    config: { include_time: true, fill: "created" },
+  });
+  const noon = new Date(2026, 10, 14, 12, 30); // 14 November 2026, local time
+  // 23:30 local: the UTC day can be another one, and the local day is what a person means.
+  const lateEvening = new Date(2026, 10, 14, 23, 30);
+
+  it("is today's date by the clock of this computer", () => {
+    expect(createdDateValue(auto, noon)).toBe("2026-11-14");
+    expect(createdDateValue(auto, lateEvening)).toBe("2026-11-14");
+  });
+
+  it("is the exact moment when the column has a time", () => {
+    expect(createdDateValue(autoTime, noon)).toBe(noon.toISOString());
+  });
+
+  it("is nothing for a date picked by hand, and for other kinds of column", () => {
+    expect(createdDateValue(DUE, noon)).toBeNull();
+    expect(createdDateValue(NAME, noon)).toBeNull();
+    expect(createdDateValue(CREATED, noon)).toBeNull();
+  });
+
+  it("is already in the form of a new record, as a draft that can be changed", () => {
+    expect(newRecordDraft(auto)).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(newRecordDraft(autoTime)).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
+    expect(newRecordDraft(DUE)).toBe("");
+    expect(newRecordDraft(NAME)).toBe("");
+  });
+
+  it("is sent when the record is saved", () => {
+    const drafts = { [auto.id]: newRecordDraft(auto) };
+    const { changes } = changesFor([auto], null, drafts);
+    expect(changes[auto.id]).toBe(createdDateValue(auto));
   });
 });

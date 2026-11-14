@@ -227,7 +227,12 @@ async def test_records_in_the_trash_are_converted_too(
 ) -> None:
     await sheet.column("text")
     (gone,) = await sheet.add("7")
-    await sheet.work.api("DELETE", f"/records/{gone['id']}")
+    # DELETE removes a record for good now, so put it in the trash the way an older version did.
+    await db_execute(
+        migrated_database_url,
+        "UPDATE records SET deleted_at = now(), version = version + 1 WHERE id = $1",
+        uuid.UUID(gone["id"]),
+    )
     assert (await sheet.convert("number")).status_code == 200
     rows = await db_fetch(migrated_database_url, "SELECT data, version FROM records")
     assert json.loads(rows[0]["data"])[sheet.field["id"]] == 7

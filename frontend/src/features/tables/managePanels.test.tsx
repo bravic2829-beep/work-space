@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -208,5 +208,103 @@ describe("MembersPanel", () => {
     listMembersMock.mockRejectedValue(new ApiError("You may not see the members.", 403));
     render(<MembersPanel workspaceId="w-1" canManage={false} currentUserId="u-1" />);
     expect(await screen.findByRole("alert")).toHaveTextContent("may not see");
+  });
+});
+
+describe("ManageFieldsPanel: how a date is set", () => {
+  const picked = makeField("f-d", "Date", "date", { config: { include_time: false } });
+  const auto = makeField("f-a", "Made on", "date", {
+    config: { include_time: true, fill: "created" },
+  });
+
+  it("switches a date column to being filled when the record is created", async () => {
+    updateFieldMock.mockResolvedValue(picked);
+    const onChanged = vi.fn();
+    render(<ManageFieldsPanel fields={[picked]} onChanged={onChanged} />);
+    expect(screen.getByLabelText("Date mode of Date")).toHaveValue("manual");
+    await userEvent.selectOptions(screen.getByLabelText("Date mode of Date"), "created");
+    await waitFor(() =>
+      expect(updateFieldMock).toHaveBeenCalledWith("f-d", {
+        config: { include_time: false, fill: "created" },
+      }),
+    );
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  it("switches back to picking, and keeps the time setting", async () => {
+    updateFieldMock.mockResolvedValue(auto);
+    render(<ManageFieldsPanel fields={[auto]} onChanged={vi.fn()} />);
+    expect(screen.getByLabelText("Date mode of Made on")).toHaveValue("created");
+    await userEvent.selectOptions(screen.getByLabelText("Date mode of Made on"), "manual");
+    await waitFor(() =>
+      expect(updateFieldMock).toHaveBeenCalledWith("f-a", { config: { include_time: true } }),
+    );
+  });
+
+  it("says that existing records are left alone, and shows the server's refusal", async () => {
+    updateFieldMock.mockRejectedValue(new ApiError("Dates and times cannot be switched.", 409));
+    render(<ManageFieldsPanel fields={[picked]} onChanged={vi.fn()} />);
+    expect(screen.getByText(/left alone/)).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText("Date mode of Date"), "created");
+    expect(await screen.findByText(/cannot be switched/)).toBeInTheDocument();
+  });
+
+  it("offers no such choice for other columns", () => {
+    render(<ManageFieldsPanel fields={[makeField("f-n", "Name", "text")]} onChanged={vi.fn()} />);
+    expect(screen.queryByLabelText(/^Date mode of/)).not.toBeInTheDocument();
+  });
+});
+
+describe("ManageFieldsPanel: roles", () => {
+  const people = makeField("f-p", "Assign", "user");
+  const done = { ...makeField("f-q", "Assigned", "user"), semantic: "assignee", grants_view: true };
+
+  it("warns about a People column without a role, and marks it in the list", () => {
+    render(<ManageFieldsPanel fields={[people]} onChanged={vi.fn()} />);
+    expect(screen.getByText("no role")).toBeInTheDocument();
+    expect(screen.getByText(/Nobody is notified/)).toBeInTheDocument();
+  });
+
+  it("gives an existing People column the assignee role", async () => {
+    updateFieldMock.mockResolvedValue({ ...people, semantic: "assignee", grants_view: true });
+    const onChanged = vi.fn();
+    render(<ManageFieldsPanel fields={[people]} onChanged={onChanged} />);
+    await userEvent.selectOptions(screen.getByLabelText("Role of Assign"), "assignee");
+    await waitFor(() =>
+      expect(updateFieldMock).toHaveBeenCalledWith("f-p", { semantic: "assignee" }),
+    );
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  it("takes the role away with No role", async () => {
+    updateFieldMock.mockResolvedValue({ ...done, semantic: null, grants_view: false });
+    render(<ManageFieldsPanel fields={[done]} onChanged={vi.fn()} />);
+    expect(screen.getByLabelText("Role of Assigned")).toHaveValue("assignee");
+    expect(screen.queryByText(/Nobody is notified/)).not.toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText("Role of Assigned"), "");
+    await waitFor(() => expect(updateFieldMock).toHaveBeenCalledWith("f-q", { semantic: null }));
+  });
+
+  it("disables a role that another column of the table has", () => {
+    render(<ManageFieldsPanel fields={[people, done]} onChanged={vi.fn()} />);
+    const option = within(screen.getByLabelText("Role of Assign")).getByRole("option", {
+      name: /Assignee.*already has one/,
+    });
+    expect(option).toBeDisabled();
+  });
+
+  it("shows the server's refusal", async () => {
+    updateFieldMock.mockRejectedValue(new ApiError("The table already has a 'assignee' field.", 409));
+    render(<ManageFieldsPanel fields={[people]} onChanged={vi.fn()} />);
+    await userEvent.selectOptions(screen.getByLabelText("Role of Assign"), "assignee");
+    expect(await screen.findByText(/already has a 'assignee' field/)).toBeInTheDocument();
+  });
+
+  it("offers no role for a text column or a link column's parent role", () => {
+    const parent = { ...makeField("f-l", "Parent", "link_record"), semantic: "parent" };
+    render(
+      <ManageFieldsPanel fields={[makeField("f-t", "Name", "text"), parent]} onChanged={vi.fn()} />,
+    );
+    expect(screen.queryByLabelText(/^Role of/)).not.toBeInTheDocument();
   });
 });

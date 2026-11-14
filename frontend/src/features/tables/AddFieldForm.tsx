@@ -37,7 +37,7 @@ type Props = {
  * The roles a column can take. Without one it is only a column: nobody is notified, the task
  * does not appear in "My tasks", and the people named in it cannot open the record.
  */
-const ROLES: Partial<Record<FieldType, { value: string; label: string }[]>> = {
+export const ROLES: Partial<Record<FieldType, { value: string; label: string }[]>> = {
   user: [
     {
       value: "assignee",
@@ -56,6 +56,7 @@ export function AddFieldForm({ tableId, baseId, existing = [], onCreated }: Prop
   const [options, setOptions] = useState("");
   const [precision, setPrecision] = useState("0");
   const [includeTime, setIncludeTime] = useState(false);
+  const [fill, setFill] = useState<"manual" | "created">("manual");
   const [role, setRole] = useState("");
   const [target, setTarget] = useState("");
   const [tables, setTables] = useState<TableSummary[]>([]);
@@ -73,19 +74,23 @@ export function AddFieldForm({ tableId, baseId, existing = [], onCreated }: Prop
     return () => controller.abort();
   }, [type, baseId]);
 
+  const optionLines = options
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
   function configFor(): Record<string, unknown> {
     if (type === "single_select" || type === "multi_select" || type === "status") {
-      const lines = options
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean);
+      const lines = optionLines;
       // A status field without options gets the default four states from the server.
       return type === "status" && lines.length === 0
         ? {}
         : { options: lines.map((line) => ({ name: line })) };
     }
     if (type === "number") return { precision: Number(precision) };
-    if (type === "date") return { include_time: includeTime };
+    if (type === "date") {
+      return { include_time: includeTime, ...(fill === "created" ? { fill } : {}) };
+    }
     if (type === "link_record") return { table_id: target };
     return {};
   }
@@ -103,6 +108,7 @@ export function AddFieldForm({ tableId, baseId, existing = [], onCreated }: Prop
       });
       setName("");
       setRole("");
+      setFill("manual");
       setOptions("");
       onCreated(field);
     } catch (caught) {
@@ -124,6 +130,7 @@ export function AddFieldForm({ tableId, baseId, existing = [], onCreated }: Prop
           onChange={(e) => {
             setType(e.target.value as FieldType);
             setRole("");
+            setFill("manual");
           }}
         >
           {FIELD_TYPES.map((t) => (
@@ -155,10 +162,31 @@ export function AddFieldForm({ tableId, baseId, existing = [], onCreated }: Prop
       {needsOptions && (
         <FormField
           label="Options (one per line)"
-          hint={type === "status" ? "Leave empty for To do, In progress, In review, Done." : undefined}
+          hint={
+            type === "status"
+              ? "Leave empty for To do, In progress, In review, Done."
+              : "Press Enter to start a new option."
+          }
         >
-          <Textarea rows={4} value={options} onChange={(e) => setOptions(e.target.value)} />
+          <Textarea
+            rows={4}
+            value={options}
+            placeholder={"Low\nMedium\nHigh"}
+            onChange={(e) => setOptions(e.target.value)}
+          />
         </FormField>
+      )}
+      {needsOptions && optionLines.length > 0 && (
+        <div aria-label="Preview of the options" className="flex flex-wrap gap-1.5">
+          {optionLines.map((line, index) => (
+            <span
+              key={`${line}-${index}`}
+              className="rounded-full border border-line-strong bg-surface px-3 py-1 text-sm font-medium"
+            >
+              {line}
+            </span>
+          ))}
+        </div>
       )}
       {type === "number" && (
         <FormField label="Decimal places">
@@ -169,6 +197,21 @@ export function AddFieldForm({ tableId, baseId, existing = [], onCreated }: Prop
             value={precision}
             onChange={(e) => setPrecision(e.target.value)}
           />
+        </FormField>
+      )}
+      {type === "date" && (
+        <FormField
+          label="How is the date set?"
+          hint={
+            fill === "created"
+              ? "The day the record is made is filled in for you. It can still be changed."
+              : "Whoever edits the record picks the date."
+          }
+        >
+          <Select value={fill} onChange={(e) => setFill(e.target.value as "manual" | "created")}>
+            <option value="manual">Pick a date</option>
+            <option value="created">Filled automatically when the record is created</option>
+          </Select>
         </FormField>
       )}
       {type === "date" && (

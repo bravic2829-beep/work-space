@@ -1,5 +1,6 @@
 "use client";
 
+import { ChoiceChips } from "./ChoiceChips";
 import { LinkPicker } from "./LinkPicker";
 import type { FieldItem } from "./schema";
 import { UserPicker } from "./UserPicker";
@@ -82,45 +83,28 @@ export function FieldEditor({ field, draft, value, names, onChange, disabled, er
       case "single_select":
       case "status":
         input = (
-          <select
-            {...common}
-            value={String(draft)}
-            onChange={(event) => onChange(event.target.value)}
-          >
-            <option value="">—</option>
-            {optionsOf(field).map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.name}
-              </option>
-            ))}
-          </select>
+          <ChoiceChips
+            label={field.name}
+            options={optionsOf(field)}
+            value={draft === "" ? [] : [String(draft)]}
+            onChange={(ids) => onChange(ids[0] ?? "")}
+            multiple={false}
+            disabled={disabled}
+          />
         );
         break;
-      case "multi_select": {
-        const chosen = Array.isArray(draft) ? draft : [];
+      case "multi_select":
         input = (
-          <fieldset disabled={disabled} className="options">
-            <legend className="visually-hidden">{field.name}</legend>
-            {optionsOf(field).map((option) => (
-              <label key={option.id}>
-                <input
-                  type="checkbox"
-                  checked={chosen.includes(option.id)}
-                  onChange={(event) =>
-                    onChange(
-                      event.target.checked
-                        ? [...chosen, option.id]
-                        : chosen.filter((other) => other !== option.id),
-                    )
-                  }
-                />{" "}
-                {option.name}
-              </label>
-            ))}
-          </fieldset>
+          <ChoiceChips
+            label={field.name}
+            options={optionsOf(field)}
+            value={Array.isArray(draft) ? draft : []}
+            onChange={onChange}
+            multiple
+            disabled={disabled}
+          />
         );
         break;
-      }
       case "user":
         input = (
           <UserPicker
@@ -154,7 +138,12 @@ export function FieldEditor({ field, draft, value, names, onChange, disabled, er
     }
   }
 
-  const labelled = field.type === "multi_select" || field.type === "user" || field.type === "link_record";
+  const labelled =
+    field.type === "single_select" ||
+    field.type === "status" ||
+    field.type === "multi_select" ||
+    field.type === "user" ||
+    field.type === "link_record";
   return (
     <div className="cell-editor">
       {labelled ? (

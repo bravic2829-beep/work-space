@@ -25,6 +25,7 @@ import {
   changesFor,
   draftFromValue,
   isComputed,
+  newRecordDraft,
   userIdsIn,
   type Draft,
 } from "./values";
@@ -48,7 +49,9 @@ const FORM_ID = "record-form";
 
 function initialDrafts(fields: FieldItem[], record: RecordItem | null): Record<string, Draft> {
   const drafts: Record<string, Draft> = {};
-  for (const field of fields) drafts[field.id] = draftFromValue(field, record?.data[field.id]);
+  for (const field of fields) {
+    drafts[field.id] = record ? draftFromValue(field, record.data[field.id]) : newRecordDraft(field);
+  }
   return drafts;
 }
 

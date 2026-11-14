@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Alert, Badge, Button, Checkbox, Input, Select, Textarea } from "@/components/ui";
 import { ApiError } from "@/lib/api/client";
 
-import { LABELS } from "./AddFieldForm";
+import { LABELS, ROLES } from "./AddFieldForm";
 import { deleteField, updateField, type FieldPatch } from "./api";
 import { FIELD_TYPES, type FieldItem, type FieldType, type SelectOption } from "./schema";
 
@@ -26,9 +26,9 @@ function typeIsLocked(field: FieldItem): boolean {
   return field.semantic !== null || field.grants_view || field.type === "link_record";
 }
 
-type RowProps = { field: FieldItem; onChanged: () => void };
+type RowProps = { field: FieldItem; all: FieldItem[]; onChanged: () => void };
 
-function FieldRow({ field, onChanged }: RowProps) {
+function FieldRow({ field, all, onChanged }: RowProps) {
   const [name, setName] = useState(field.name);
   const [options, setOptions] = useState<SelectOption[]>(optionsOf(field));
   const [newOption, setNewOption] = useState("");
@@ -74,6 +74,9 @@ function FieldRow({ field, onChanged }: RowProps) {
     );
   }
 
+  // Parent and subtasks belong to link columns and keep their role.
+  const roleChoices =
+    field.semantic === "parent" || field.semantic === "subtasks" ? undefined : ROLES[field.type];
   const optionsChanged = JSON.stringify(options) !== JSON.stringify(optionsOf(field));
   const locked = typeIsLocked(field);
   const label = field.name;
@@ -89,6 +92,12 @@ function FieldRow({ field, onChanged }: RowProps) {
           />
           <span className="min-w-0 flex-1 truncate font-medium">{field.name}</span>
           {field.is_required && <Badge tone="warning">required</Badge>}
+          {field.type === "user" && field.semantic === null && (
+            <Badge tone="warning">no role</Badge>
+          )}
+          {field.semantic && field.semantic !== "parent" && field.semantic !== "subtasks" && (
+            <Badge tone="info">{field.semantic.replace("_", " ")}</Badge>
+          )}
           <Badge>{LABELS[field.type]}</Badge>
         </summary>
         <div className="grid gap-3 border-t border-line p-3">
@@ -122,6 +131,69 @@ function FieldRow({ field, onChanged }: RowProps) {
           void patch({ is_required: event.target.checked }, "Could not change this setting.")
         }
       />
+
+      {field.type === "date" && (
+        <div className="grid gap-1">
+          <label className="grid gap-1 text-sm font-medium">
+            How is the date set?
+            <Select
+              aria-label={`Date mode of ${label}`}
+              value={field.config.fill === "created" ? "created" : "manual"}
+              disabled={busy}
+              onChange={(event) =>
+                void patch(
+                  {
+                    config: {
+                      include_time: field.config.include_time === true,
+                      ...(event.target.value === "created" ? { fill: "created" } : {}),
+                    },
+                  },
+                  "Could not change how the date is set.",
+                )
+              }
+            >
+              <option value="manual">Pick a date</option>
+              <option value="created">Filled automatically when the record is created</option>
+            </Select>
+          </label>
+          <p className="m-0 text-xs text-muted">
+            Only records made from now on are filled. The ones that exist are left alone.
+          </p>
+        </div>
+      )}
+
+      {roleChoices && (
+        <div className="grid gap-1.5">
+          <label className="grid gap-1 text-sm font-medium">
+            Role of this column
+            <Select
+              aria-label={`Role of ${label}`}
+              value={field.semantic ?? ""}
+              disabled={busy}
+              onChange={(event) =>
+                void patch({ semantic: event.target.value || null }, "Could not change the role.")
+              }
+            >
+              <option value="">No role</option>
+              {roleChoices.map((item) => {
+                const taken = all.some((f) => f.id !== field.id && f.semantic === item.value);
+                return (
+                  <option key={item.value} value={item.value} disabled={taken}>
+                    {item.label}
+                    {taken ? " (the table already has one)" : ""}
+                  </option>
+                );
+              })}
+            </Select>
+          </label>
+          {field.type === "user" && field.semantic === null && (
+            <Alert tone="warning">
+              Nobody is notified and nobody sees the task because of this column. Choose Assignee
+              to give tasks to the people named in it.
+            </Alert>
+          )}
+        </div>
+      )}
 
       {isChoice(field.type) && (
         <div className="grid gap-2">
@@ -285,8 +357,9 @@ export function ManageFieldsPanel({
         {fields.map((field) => (
           // The key includes what the server can change, so a saved column shows its new values.
           <FieldRow
-            key={`${field.id}-${field.name}-${field.type}-${JSON.stringify(field.config)}`}
+            key={`${field.id}-${field.name}-${field.type}-${field.semantic}-${JSON.stringify(field.config)}`}
             field={field}
+            all={fields}
             onChanged={onChanged}
           />
         ))}

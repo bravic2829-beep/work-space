@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/api/client";
 
 import { createRecord, deleteRecord, lookupUsers, updateRecord } from "./api";
-import { FIELDS, NAME, POINTS, makeRecord } from "./fixtures";
+import { DUE, FIELDS, NAME, POINTS, makeField, makeRecord } from "./fixtures";
 import { RecordSidebar } from "./RecordSidebar";
 import { resetUserNames } from "./useUserNames";
 
@@ -256,6 +256,44 @@ describe("deleting", () => {
     await user.click(screen.getByRole("button", { name: "Yes, delete" }));
     expect(await screen.findByText(/Only the person who created/)).toBeInTheDocument();
     expect(handlers.onDeleted).not.toHaveBeenCalled();
+  });
+});
+
+describe("a new record", () => {
+  const auto = makeField("f-d", "Created on", "date", {
+    config: { include_time: false, fill: "created" },
+  });
+
+  it("starts with today's date in a column filled automatically, and saves it", async () => {
+    const user = userEvent.setup();
+    createRecordMock.mockResolvedValue(record);
+    renderSidebar({ record: null, fields: [FIELDS[0], auto] });
+    const input = screen.getByLabelText("Created on") as HTMLInputElement;
+    expect(input.value).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    const shown = input.value;
+
+    await user.type(screen.getByLabelText("Name"), "Launch");
+    await user.click(screen.getByRole("button", { name: "Create record" }));
+    await waitFor(() => expect(createRecordMock).toHaveBeenCalled());
+    expect(createRecordMock.mock.calls[0][1]).toMatchObject({ "f-d": shown });
+  });
+
+  it("lets the person pick another date", async () => {
+    const user = userEvent.setup();
+    createRecordMock.mockResolvedValue(record);
+    renderSidebar({ record: null, fields: [FIELDS[0], auto] });
+    const input = screen.getByLabelText("Created on");
+    await user.clear(input);
+    await user.type(input, "2026-01-02");
+    await user.type(screen.getByLabelText("Name"), "Launch");
+    await user.click(screen.getByRole("button", { name: "Create record" }));
+    await waitFor(() => expect(createRecordMock).toHaveBeenCalled());
+    expect(createRecordMock.mock.calls[0][1]).toMatchObject({ "f-d": "2026-01-02" });
+  });
+
+  it("leaves a date picked by hand empty", () => {
+    renderSidebar({ record: null, fields: [FIELDS[0], DUE] });
+    expect(screen.getByLabelText("Due date")).toHaveValue("");
   });
 });
 

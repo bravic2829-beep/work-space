@@ -128,6 +128,23 @@ export function draftFromValue(field: FieldItem, value: unknown): Draft {
   }
 }
 
+/**
+ * What a date column set to "created" holds for a record made now, by the clock of this computer
+ * (so somebody in Vietnam at 22:00 gets their own day): "YYYY-MM-DD", or a UTC moment when the
+ * column has a time. Null for every other column.
+ */
+export function createdDateValue(field: FieldItem, now: Date = new Date()): string | null {
+  if (field.type !== "date" || field.config.fill !== "created") return null;
+  if (field.config.include_time === true) return now.toISOString();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+/** The start of a form for a new record: an automatic date is already there (and can be changed). */
+export function newRecordDraft(field: FieldItem): Draft {
+  return draftFromValue(field, createdDateValue(field) ?? undefined);
+}
+
 function toLocalInput(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";

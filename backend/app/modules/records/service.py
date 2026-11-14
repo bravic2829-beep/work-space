@@ -17,7 +17,12 @@ from app.core.pagination import MAX_PAGE_SIZE, Page
 from app.modules.fields import repository as fields_repo
 from app.modules.fields.access import column_access
 from app.modules.fields.models import Field, FieldAccessLevel, FieldSemantic, FieldType
-from app.modules.fields.types import COMPUTED_TYPES, STORED_IN_DATA, normalize_value
+from app.modules.fields.types import (
+    COMPUTED_TYPES,
+    DATE_FILL_CREATED,
+    STORED_IN_DATA,
+    normalize_value,
+)
 from app.modules.notifications import service as notifications
 from app.modules.permissions.service import (
     TableContext,
@@ -242,6 +247,7 @@ async def create_record(
     for column, _ in fields:
         if column.type == FieldType.AUTO_NUMBER:
             data[str(column.id)] = await fields_repo.next_auto_number(session, field_id=column.id)
+    _fill_created_dates(fields, data)
 
     record = Record(table_id=table_id, data=data, created_by=actor.id)
     session.add(record)
@@ -252,6 +258,26 @@ async def create_record(
     await session.refresh(record)
     rendered = await render(session, actor, context, [record], _visible(fields))
     return record, rendered[0]
+
+
+def _fill_created_dates(fields: list[tuple[Field, FieldAccessLevel]], data: dict[str, Any]) -> None:
+    """Date columns set to "created" get the moment of creation when nobody gave a value.
+
+    The web page sends the date of the person's own clock, so a person in Vietnam at 22:00 gets
+    their own day. This is the fallback for every other way of making a record: a date without a
+    time is then the day in UTC, a date with a time is exact.
+    """
+    now = datetime.now(UTC)
+    for column, _ in fields:
+        if column.type != FieldType.DATE or column.config.get("fill") != DATE_FILL_CREATED:
+            continue
+        if str(column.id) in data:
+            continue
+        data[str(column.id)] = (
+            now.strftime("%Y-%m-%dT%H:%M:%SZ")
+            if column.config.get("include_time")
+            else now.date().isoformat()
+        )
 
 
 async def _notify_newassignees(

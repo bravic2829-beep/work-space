@@ -86,6 +86,35 @@ describe("adding a column", () => {
     expect(createFieldMock.mock.calls[0][1].config).toEqual({ include_time: true });
   });
 
+  it("picks the date by hand unless told otherwise", async () => {
+    const user = await fill("Due", "date");
+    expect(screen.getByLabelText("How is the date set?")).toHaveValue("manual");
+    await user.click(screen.getByRole("button", { name: "Add column" }));
+    await waitFor(() => expect(createFieldMock).toHaveBeenCalled());
+    expect(createFieldMock.mock.calls[0][1].config).toEqual({ include_time: false });
+  });
+
+  it("can fill the date when the record is created", async () => {
+    const user = await fill("Created on", "date");
+    await user.selectOptions(screen.getByLabelText("How is the date set?"), "created");
+    expect(screen.getByText(/The day the record is made is filled in/)).toBeInTheDocument();
+    await user.click(screen.getByLabelText("Include the time"));
+    await user.click(screen.getByRole("button", { name: "Add column" }));
+    await waitFor(() => expect(createFieldMock).toHaveBeenCalled());
+    expect(createFieldMock.mock.calls[0][1].config).toEqual({
+      include_time: true,
+      fill: "created",
+    });
+  });
+
+  it("forgets the mode when the type changes to something else", async () => {
+    const user = await fill("X", "date");
+    await user.selectOptions(screen.getByLabelText("How is the date set?"), "created");
+    await user.selectOptions(screen.getByLabelText("Type"), "text");
+    await user.selectOptions(screen.getByLabelText("Type"), "date");
+    expect(screen.getByLabelText("How is the date set?")).toHaveValue("manual");
+  });
+
   it("links to another table of the same base", async () => {
     const user = await fill("Project", "link_record");
     expect(await screen.findByRole("option", { name: "Projects" })).toBeInTheDocument();

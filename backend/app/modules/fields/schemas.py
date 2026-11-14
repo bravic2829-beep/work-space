@@ -46,6 +46,8 @@ class FieldUpdate(BaseModel):
     config: dict[str, Any] | None = None
     is_required: bool | None = None
     position: int | None = None
+    # The role of the column (assignee, follower, status, due_date). null takes the role away.
+    semantic: FieldSemantic | None = None
 
 
 class FieldAccessSet(BaseModel):

@@ -383,12 +383,55 @@ async def update_field(
         await conversion.check_removed_options(session, field, new_config)
         field.config = new_config
 
+    if "semantic" in changes:
+        if await _change_role(session, field, data.semantic):
+            # Rebuilding the viewers expires everything the session holds; reload what the
+            # answer below is built from.
+            for item in (field, actor, context.table, context.base, context.workspace):
+                await session.refresh(item)
+
     try:
         await session.flush()
     except IntegrityError:
         raise ProblemError(409, DUPLICATE_NAME) from None
     access = await column_access(session, actor, context, [field])
     return public(field, access[field.id])
+
+
+_LINK_ROLES = (FieldSemantic.PARENT, FieldSemantic.SUBTASKS)
+
+
+async def _change_role(session: AsyncSession, field: Field, semantic: FieldSemantic | None) -> bool:
+    """Give a column a role, or take it away (a People column made without one stays useless).
+
+    The assignee and follower roles also let the people named in the column open the record, so
+    the table's viewers are rebuilt when that changes (ADR 0003). Tasks that already name
+    somebody are found by "My tasks" at once; no notification is sent for them afterwards.
+    Returns True when the viewers were rebuilt.
+    """
+    if semantic == field.semantic:
+        return False
+    if field.semantic in _LINK_ROLES or semantic in _LINK_ROLES:
+        raise _invalid(
+            "The parent and subtasks roles belong to link columns and cannot be changed."
+        )
+    if semantic is None:
+        grants_view = False
+    else:
+        try:
+            grants_view = check_semantic(field.type, semantic, None)
+        except FieldConfigError as exc:
+            raise _invalid(str(exc)) from None
+        if await repository.semantic_taken(session, table_id=field.table_id, semantic=semantic):
+            raise ProblemError(409, f"The table already has a '{semantic.value}' field.")
+    rebuild = grants_view != field.grants_view
+    field.semantic = semantic
+    field.grants_view = grants_view
+    await session.flush()
+    if rebuild:
+        live = await repository.list_fields(session, table_id=field.table_id)
+        await visibility.rebuild_table(session, field.table_id, live)
+    return rebuild
 
 
 async def delete_field(session: AsyncSession, actor: User, field_id: uuid.UUID) -> None:
