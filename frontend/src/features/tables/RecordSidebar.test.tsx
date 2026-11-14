@@ -260,7 +260,7 @@ describe("closing", () => {
   it("calls onClose", async () => {
     const user = userEvent.setup();
     renderSidebar();
-    await user.click(screen.getByRole("button", { name: "Close the record" }));
+    await user.click(screen.getByRole("button", { name: "Close panel" }));
     expect(handlers.onClose).toHaveBeenCalled();
   });
 });

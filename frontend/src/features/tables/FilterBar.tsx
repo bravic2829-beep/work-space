@@ -1,20 +1,20 @@
 "use client";
 
+import { Plus, X } from "lucide-react";
 import { useState } from "react";
 
+import { Button, Input, Select } from "@/components/ui";
+
 import type { Condition, FieldItem } from "./schema";
-import {
-  conditionValue,
-  describeCondition,
-  operatorsFor,
-  optionsOf,
-} from "./values";
+import { conditionValue, describeCondition, operatorsFor, optionsOf } from "./values";
 
 type Props = {
   fields: FieldItem[];
   filter: Condition[];
   onChange: (filter: Condition[]) => void;
 };
+
+const SMALL = "h-7 w-auto min-w-36 py-0 text-[13px]";
 
 /** Narrow the table to the rows that match every condition. Values never become SQL. */
 export function FilterBar({ fields, filter, onChange }: Props) {
@@ -50,22 +50,22 @@ export function FilterBar({ fields, filter, onChange }: Props) {
     if (!field || !chosen?.needsValue) return null;
     if (field.type === "checkbox") {
       return (
-        <select aria-label="Value" value={text} onChange={(e) => setText(e.target.value)}>
+        <Select aria-label="Value" className={SMALL} value={text} onChange={(e) => setText(e.target.value)}>
           <option value="true">checked</option>
           <option value="false">unchecked</option>
-        </select>
+        </Select>
       );
     }
     if (["single_select", "status", "multi_select"].includes(field.type)) {
       return (
-        <select aria-label="Value" value={text} onChange={(e) => setText(e.target.value)}>
+        <Select aria-label="Value" className={SMALL} value={text} onChange={(e) => setText(e.target.value)}>
           <option value="">Choose…</option>
           {optionsOf(field).map((option) => (
             <option key={option.id} value={option.id}>
               {option.name}
             </option>
           ))}
-        </select>
+        </Select>
       );
     }
     const type =
@@ -75,10 +75,11 @@ export function FilterBar({ fields, filter, onChange }: Props) {
           ? "date"
           : "text";
     return (
-      <input
+      <Input
         aria-label="Value"
         type={type}
         step={type === "number" ? "any" : undefined}
+        className={`${SMALL} w-36`}
         value={text}
         onChange={(e) => setText(e.target.value)}
       />
@@ -86,45 +87,59 @@ export function FilterBar({ fields, filter, onChange }: Props) {
   }
 
   return (
-    <section aria-label="Filters" className="filter-bar">
+    <section
+      aria-label="Filters"
+      className="flex flex-wrap items-center gap-2 rounded-lg border border-line bg-surface-muted px-3 py-1.5"
+    >
+      <span className="text-[11px] font-semibold tracking-wider text-muted uppercase">Where</span>
       {filter.length > 0 && (
-        <ul className="chips">
+        <ul className="m-0 flex list-none flex-wrap items-center gap-1.5 p-0">
           {filter.map((condition, index) => (
-            <li key={`${condition.field}-${condition.op}-${index}`}>
+            <li
+              key={`${condition.field}-${condition.op}-${index}`}
+              className="inline-flex items-center gap-1 rounded border border-line-strong bg-surface py-0.5 pr-0.5 pl-2 text-xs"
+            >
               {describeCondition(fields, condition)}
               <button
                 type="button"
+                className="size-4 rounded-sm border-0 bg-transparent p-0 text-muted hover:bg-danger-soft hover:text-danger"
                 aria-label={`Remove filter ${describeCondition(fields, condition)}`}
                 onClick={() => onChange(filter.filter((_, i) => i !== index))}
               >
-                ×
+                <X className="size-3" aria-hidden />
               </button>
             </li>
           ))}
         </ul>
       )}
-      <form onSubmit={add} className="inline-form">
-        <select aria-label="Filter column" value={fieldId} onChange={(e) => pickField(e.target.value)}>
+      {filter.length === 0 && <span className="text-xs text-muted">no conditions, showing everything</span>}
+      <form onSubmit={add} className="flex flex-wrap items-center gap-1.5">
+        <Select
+          aria-label="Filter column"
+          className={SMALL}
+          value={fieldId}
+          onChange={(e) => pickField(e.target.value)}
+        >
           <option value="">Filter by…</option>
           {filterable.map((f) => (
             <option key={f.id} value={f.id}>
               {f.name}
             </option>
           ))}
-        </select>
+        </Select>
         {field && (
-          <select aria-label="Operator" value={op} onChange={(e) => setOp(e.target.value)}>
+          <Select aria-label="Operator" className={SMALL} value={op} onChange={(e) => setOp(e.target.value)}>
             {operators.map((o) => (
               <option key={o.op} value={o.op}>
                 {o.label}
               </option>
             ))}
-          </select>
+          </Select>
         )}
         {valueInput()}
-        <button type="submit" disabled={!canAdd}>
+        <Button type="submit" size="sm" icon={Plus} disabled={!canAdd}>
           Add filter
-        </button>
+        </Button>
       </form>
     </section>
   );

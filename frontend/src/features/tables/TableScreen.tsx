@@ -1,8 +1,10 @@
 "use client";
 
+import { ChevronLeft, Columns3, Plus, Save, Settings2, Table2, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import { Alert, Button, Drawer, DrawerBody, Input, LoadingState, Select } from "@/components/ui";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { ApiError } from "@/lib/api/client";
 
@@ -127,15 +129,17 @@ export function TableScreen({ tableId }: { tableId: string }) {
   }, [table, hidden]);
   const names = useUserNames(userIdsIn(shownFields, items));
 
-  if (tableState.kind === "loading") return <p role="status">Loading…</p>;
+  if (tableState.kind === "loading") return <LoadingState>Loading…</LoadingState>;
   if (tableState.kind === "error" || !table) {
     return (
-      <p role="alert">
-        {describe(tableState.kind === "error" ? tableState.error : null)}{" "}
-        <button type="button" onClick={() => setTableKey((n) => n + 1)}>
+      <Alert>
+        <span className="mr-2">
+          {describe(tableState.kind === "error" ? tableState.error : null)}
+        </span>
+        <Button size="sm" onClick={() => setTableKey((n) => n + 1)}>
           Try again
-        </button>
-      </p>
+        </Button>
+      </Alert>
     );
   }
 
@@ -212,75 +216,113 @@ export function TableScreen({ tableId }: { tableId: string }) {
   }
 
   return (
-    <div className="table-screen">
-      <p>
-        <Link href={`/workspaces`}>Workspaces</Link>
-      </p>
-      <h1>{table.name}</h1>
+    <div className="flex flex-col gap-3">
+      <div>
+        <Link
+          href="/workspaces"
+          className="inline-flex items-center gap-0.5 text-xs text-muted no-underline hover:text-primary"
+        >
+          <ChevronLeft className="size-3.5" aria-hidden />
+          Workspaces
+        </Link>
+        <h1 className="m-0 flex items-center gap-2">
+          <Table2 className="size-5 text-primary" aria-hidden />
+          {table.name}
+        </h1>
+      </div>
 
-      <section aria-label="View" className="toolbar">
-        <label>
-          View{" "}
-          <select value={activeView} onChange={(event) => applyView(event.target.value)}>
-            <option value="">All records</option>
-            {views.map((view) => (
-              <option key={view.id} value={view.id}>
-                {view.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        {activeView && (
-          <button type="button" onClick={() => void removeView()}>
-            Delete this view
-          </button>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">
+        <section aria-label="View" className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2 text-[13px] font-medium">
+            View
+            <Select
+              className="h-7 w-auto py-0 text-[13px]"
+              value={activeView}
+              onChange={(event) => applyView(event.target.value)}
+            >
+              <option value="">All records</option>
+              {views.map((view) => (
+                <option key={view.id} value={view.id}>
+                  {view.name}
+                </option>
+              ))}
+            </Select>
+          </label>
+          {activeView && (
+            <Button size="sm" variant="ghost" icon={Trash2} onClick={() => void removeView()}>
+              Delete this view
+            </Button>
+          )}
+          {!savingView ? (
+            <Button size="sm" icon={Save} onClick={() => setSavingView(true)}>
+              Save as a view
+            </Button>
+          ) : (
+            <form onSubmit={(event) => void saveView(event)} className="flex items-center gap-1.5">
+              <Input
+                aria-label="View name"
+                className="h-7 w-40 py-0 text-[13px]"
+                value={viewName}
+                onChange={(event) => setViewName(event.target.value)}
+                maxLength={100}
+                required
+              />
+              <Button type="submit" size="sm" variant="primary" disabled={viewName.trim() === ""}>
+                Save view
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setSavingView(false)}>
+                Cancel
+              </Button>
+            </form>
+          )}
+          <details className="relative">
+            <summary className="inline-flex h-7 cursor-pointer list-none items-center gap-1.5 rounded-md border border-line-strong bg-surface px-2.5 text-xs font-medium hover:bg-surface-muted [&::-webkit-details-marker]:hidden">
+              <Columns3 className="size-4" aria-hidden />
+              Columns
+              {hidden.length > 0 && (
+                <span className="rounded bg-primary-soft px-1 font-mono text-[10px] text-primary">
+                  {table.fields.length - hidden.length}/{table.fields.length}
+                </span>
+              )}
+            </summary>
+            <ul className="absolute z-20 m-0 mt-1 max-h-72 w-56 list-none overflow-y-auto rounded-lg border border-line-strong bg-surface p-1.5 shadow-lg">
+              {table.fields.map((field) => (
+                <li key={field.id}>
+                  <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-[13px] hover:bg-surface-muted">
+                    <input
+                      type="checkbox"
+                      checked={!hidden.includes(field.id)}
+                      onChange={(event) => {
+                        setActiveView("");
+                        setHidden((current) =>
+                          event.target.checked
+                            ? current.filter((id) => id !== field.id)
+                            : [...current, field.id],
+                        );
+                      }}
+                    />
+                    {field.name}
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </details>
+        </section>
+
+        {canEdit && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" icon={Plus} onClick={() => { setShowManage(false); setShowAddField(true); }}>
+              Add a column
+            </Button>
+            <Button size="sm" icon={Settings2} onClick={() => { setShowAddField(false); setShowManage(true); }}>
+              Manage columns
+            </Button>
+            <Button variant="primary" size="sm" icon={Plus} onClick={() => setSelected("new")}>
+              New record
+            </Button>
+          </div>
         )}
-        {!savingView ? (
-          <button type="button" onClick={() => setSavingView(true)}>
-            Save as a view
-          </button>
-        ) : (
-          <form onSubmit={(event) => void saveView(event)} className="inline-form">
-            <input
-              aria-label="View name"
-              value={viewName}
-              onChange={(event) => setViewName(event.target.value)}
-              maxLength={100}
-              required
-            />
-            <button type="submit" disabled={viewName.trim() === ""}>
-              Save view
-            </button>
-            <button type="button" onClick={() => setSavingView(false)}>
-              Cancel
-            </button>
-          </form>
-        )}
-        <details>
-          <summary>Columns</summary>
-          <ul className="plain">
-            {table.fields.map((field) => (
-              <li key={field.id}>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={!hidden.includes(field.id)}
-                    onChange={(event) => {
-                      setActiveView("");
-                      setHidden((current) =>
-                        event.target.checked
-                          ? current.filter((id) => id !== field.id)
-                          : [...current, field.id],
-                      );
-                    }}
-                  />{" "}
-                  {field.name}
-                </label>
-              </li>
-            ))}
-          </ul>
-        </details>
-      </section>
+      </div>
 
       <FilterBar
         fields={table.fields}
@@ -291,55 +333,44 @@ export function TableScreen({ tableId }: { tableId: string }) {
         }}
       />
 
-      <div className="toolbar">
-        {canEdit && (
-          <>
-            <button type="button" onClick={() => setSelected("new")}>
-              New record
-            </button>
-            <button type="button" onClick={() => setShowAddField((value) => !value)}>
-              {showAddField ? "Hide column form" : "Add a column"}
-            </button>
-            <button type="button" onClick={() => setShowManage((value) => !value)}>
-              {showManage ? "Hide column settings" : "Manage columns"}
-            </button>
-          </>
-        )}
-      </div>
+      <Drawer open={showManage && canEdit} title="Manage columns" onClose={() => setShowManage(false)}>
+        <DrawerBody>
+          <ManageFieldsPanel
+            fields={table.fields}
+            onChanged={() => {
+              setTableKey((n) => n + 1);
+              reloadRecords();
+            }}
+          />
+        </DrawerBody>
+      </Drawer>
 
-      {showManage && canEdit && (
-        <ManageFieldsPanel
-          fields={table.fields}
-          onChanged={() => {
-            setTableKey((n) => n + 1);
-            reloadRecords();
-          }}
-        />
-      )}
+      <Drawer open={showAddField && canEdit} title="Add a column" onClose={() => setShowAddField(false)}>
+        <DrawerBody>
+          <AddFieldForm
+            tableId={table.id}
+            baseId={table.base_id}
+            onCreated={() => {
+              setShowAddField(false);
+              setTableKey((n) => n + 1);
+              reloadRecords();
+            }}
+          />
+        </DrawerBody>
+      </Drawer>
 
-      {showAddField && canEdit && (
-        <AddFieldForm
-          tableId={table.id}
-          baseId={table.base_id}
-          onCreated={() => {
-            setShowAddField(false);
-            setTableKey((n) => n + 1);
-            reloadRecords();
-          }}
-        />
-      )}
+      {notice && <Alert>{notice}</Alert>}
 
-      {notice && <p role="alert">{notice}</p>}
-
-      <div className={selected ? "with-sidebar" : undefined}>
-        <div>
-          {records.kind === "loading" && <p role="status">Loading records…</p>}
+      <div>
+        <div className="min-w-0">
+          {records.kind === "loading" && <LoadingState>Loading records…</LoadingState>}
           {records.kind === "error" && (
-            <p role="alert">
-              {describe(records.error)}{" "}
+            <Alert>
+              <span className="mr-2">{describe(records.error)}</span>
               {filter.length + sort.length > 0 && (
-                <button
-                  type="button"
+                <Button
+                  size="sm"
+                  className="mr-1.5"
                   onClick={() => {
                     setFilter([]);
                     setSort([]);
@@ -347,12 +378,12 @@ export function TableScreen({ tableId }: { tableId: string }) {
                   }}
                 >
                   Clear filter and sort
-                </button>
+                </Button>
               )}
-              <button type="button" onClick={reloadRecords}>
+              <Button size="sm" onClick={reloadRecords}>
                 Try again
-              </button>
-            </p>
+              </Button>
+            </Alert>
           )}
           {records.kind === "ready" && (
             <RecordGrid

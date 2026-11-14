@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { Alert, Button, Checkbox, FormField, Input, Select, Textarea } from "@/components/ui";
 import { ApiError } from "@/lib/api/client";
 
 import { createField, listTables } from "./api";
@@ -88,66 +89,63 @@ export function AddFieldForm({ tableId, baseId, onCreated }: Props) {
 
   const needsOptions = type === "single_select" || type === "multi_select" || type === "status";
   return (
-    <form onSubmit={(event) => void submit(event)} aria-label="Add a column" className="stack">
-      <label>
-        Column name
-        <input value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} />
-      </label>
-      <label>
-        Type
-        <select value={type} onChange={(e) => setType(e.target.value as FieldType)}>
+    <form onSubmit={(event) => void submit(event)} aria-label="Add a column" className="grid gap-4">
+      <FormField label="Column name">
+        <Input value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} />
+      </FormField>
+      <FormField label="Type">
+        <Select value={type} onChange={(e) => setType(e.target.value as FieldType)}>
           {FIELD_TYPES.map((t) => (
             <option key={t} value={t}>
               {LABELS[t]}
             </option>
           ))}
-        </select>
-      </label>
+        </Select>
+      </FormField>
       {needsOptions && (
-        <label>
-          Options (one per line)
-          <textarea rows={4} value={options} onChange={(e) => setOptions(e.target.value)} />
-        </label>
+        <FormField
+          label="Options (one per line)"
+          hint={type === "status" ? "Leave empty for To do, In progress, In review, Done." : undefined}
+        >
+          <Textarea rows={4} value={options} onChange={(e) => setOptions(e.target.value)} />
+        </FormField>
       )}
       {type === "number" && (
-        <label>
-          Decimal places
-          <input
+        <FormField label="Decimal places">
+          <Input
             type="number"
             min={0}
             max={10}
             value={precision}
             onChange={(e) => setPrecision(e.target.value)}
           />
-        </label>
+        </FormField>
       )}
       {type === "date" && (
-        <label>
-          <input
-            type="checkbox"
-            checked={includeTime}
-            onChange={(e) => setIncludeTime(e.target.checked)}
-          />{" "}
-          Include the time
-        </label>
+        <Checkbox
+          label="Include the time"
+          checked={includeTime}
+          onChange={(e) => setIncludeTime(e.target.checked)}
+        />
       )}
       {type === "link_record" && (
-        <label>
-          Link to table
-          <select value={target} onChange={(e) => setTarget(e.target.value)} required>
+        <FormField label="Link to table">
+          <Select value={target} onChange={(e) => setTarget(e.target.value)} required>
             <option value="">Choose a table…</option>
             {tables.map((table) => (
               <option key={table.id} value={table.id}>
                 {table.name}
               </option>
             ))}
-          </select>
-        </label>
+          </Select>
+        </FormField>
       )}
-      {error && <p role="alert">{error}</p>}
-      <button type="submit" disabled={saving || name.trim() === ""}>
-        {saving ? "Adding…" : "Add column"}
-      </button>
+      {error && <Alert>{error}</Alert>}
+      <div>
+        <Button type="submit" variant="primary" loading={saving} disabled={name.trim() === ""}>
+          {saving ? "Adding…" : "Add column"}
+        </Button>
+      </div>
     </form>
   );
 }

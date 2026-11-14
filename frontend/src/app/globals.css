@@ -6,48 +6,53 @@
  * here only.
  */
 :root {
-  --bg: #f6f7f9;
+  /* Syntropic Workspace palette (design/DESIGN.md): cool slate surfaces, cobalt primary. */
+  --bg: #f8f9ff;
   --surface: #ffffff;
-  --surface-muted: #f1f3f6;
-  --fg: #16181d;
-  --muted: #5d6573;
-  --line: #e1e4ea;
-  --line-strong: #c5cad4;
-  --primary: #4f46e5;
-  --primary-hover: #4338ca;
+  --surface-muted: #eff4ff;
+  --fg: #0b1c30;
+  --muted: #4a5262;
+  --line: #dde3ee;
+  --line-strong: #c2c6d6;
+  --primary: #0058be;
+  --primary-hover: #2170e4;
   --primary-fg: #ffffff;
-  --primary-soft: #eef0ff;
-  --danger: #c62828;
-  --danger-soft: #fdecec;
-  --success: #1b7f4b;
-  --success-soft: #e6f6ed;
+  --primary-soft: #e5eeff;
+  --secondary: #4648d4;
+  --secondary-soft: #e1e0ff;
+  --danger: #ba1a1a;
+  --danger-soft: #ffdad6;
+  --success: #006947;
+  --success-soft: #dcf7ea;
   --warning: #a35a00;
   --warning-soft: #fff3e0;
-  --info: #1769aa;
-  --info-soft: #e8f3fc;
+  --info: #0058be;
+  --info-soft: #e5eeff;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0e1013;
-    --surface: #171a1f;
-    --surface-muted: #1f232a;
-    --fg: #eceef2;
-    --muted: #9aa3b2;
-    --line: #2a2f38;
-    --line-strong: #3b414d;
-    --primary: #818cf8;
-    --primary-hover: #a5b0fb;
-    --primary-fg: #0e1013;
-    --primary-soft: #232650;
-    --danger: #ff8a80;
-    --danger-soft: #3a1f1f;
-    --success: #6fd49b;
-    --success-soft: #16301f;
+    --bg: #0b1220;
+    --surface: #111a2b;
+    --surface-muted: #18233a;
+    --fg: #e6edf8;
+    --muted: #a0abbd;
+    --line: #243049;
+    --line-strong: #33415e;
+    --primary: #adc6ff;
+    --primary-hover: #c9d9ff;
+    --primary-fg: #001a42;
+    --primary-soft: #1b2b4d;
+    --secondary: #c0c1ff;
+    --secondary-soft: #25264f;
+    --danger: #ffb4ab;
+    --danger-soft: #3b1a1a;
+    --success: #4edea3;
+    --success-soft: #0f2e22;
     --warning: #ffb74d;
     --warning-soft: #33260f;
-    --info: #7cc4f5;
-    --info-soft: #14283a;
+    --info: #adc6ff;
+    --info-soft: #1b2b4d;
   }
 }
 
@@ -63,6 +68,8 @@
   --color-primary-hover: var(--primary-hover);
   --color-primary-fg: var(--primary-fg);
   --color-primary-soft: var(--primary-soft);
+  --color-secondary: var(--secondary);
+  --color-secondary-soft: var(--secondary-soft);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
   --color-success: var(--success);
@@ -71,8 +78,9 @@
   --color-warning-soft: var(--warning-soft);
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+  --shadow-drawer: -8px 0 24px -4px rgb(15 28 48 / 0.12);
 }
 
 /*
@@ -90,6 +98,10 @@
     background: var(--color-bg);
     color: var(--color-fg);
     font-family: var(--font-sans);
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    /* Numbers line up in columns (design/DESIGN.md, Typography). */
+    font-feature-settings: "tnum" 1;
     -webkit-font-smoothing: antialiased;
   }
 
@@ -221,6 +233,15 @@
     @apply border-0 bg-transparent py-0 pr-0 pl-1.5 shadow-none;
   }
 
+  /* The matches of a person search (UserPicker): a small list of full-width choices. */
+  ul.results {
+    @apply mt-1 mb-0 flex max-h-48 list-none flex-col gap-0.5 overflow-y-auto rounded-md border border-line bg-surface p-1 shadow-sm;
+  }
+
+  ul.results button {
+    @apply w-full justify-start rounded border-0 bg-transparent px-2 py-1 text-left font-normal hover:bg-primary-soft;
+  }
+
   .grid-wrap {
     @apply overflow-x-auto rounded-lg border border-line bg-surface;
   }
@@ -236,31 +257,6 @@
 
   table.grid tr.selected td {
     background: var(--color-primary-soft);
-  }
-
-  .with-sidebar {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 26rem;
-    gap: 1.5rem;
-    align-items: start;
-  }
-
-  @media (max-width: 60rem) {
-    .with-sidebar {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  }
-
-  .sidebar {
-    @apply rounded-xl border border-line bg-surface p-4 shadow-sm;
-  }
-
-  .sidebar header {
-    @apply mb-3 flex items-center justify-between;
-  }
-
-  .sidebar header h2 {
-    @apply m-0;
   }
 
   .cell-editor {

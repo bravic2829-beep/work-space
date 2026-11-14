@@ -95,7 +95,7 @@ export function MyTasksScreen() {
           />
         )}
         {state.kind === "ready" && state.items.length > 0 && (
-          <DataTable>
+          <DataTable dense>
             <thead>
               <tr>
                 <th>Task</th>

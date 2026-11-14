@@ -1,9 +1,9 @@
 "use client";
 
-import { Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
+import { Plus, RefreshCw, Save, Trash2 } from "lucide-react";
 import { useState } from "react";
 
-import { Alert, Button } from "@/components/ui";
+import { Alert, Button, Drawer, DrawerBody, DrawerFooter } from "@/components/ui";
 import { ApiError } from "@/lib/api/client";
 
 import { createRecord, deleteRecord, updateRecord } from "./api";
@@ -36,6 +36,8 @@ type Props = {
   /** A subtask was added under this record (the list may want to reload). */
   onSubtaskCreated?: (subtask: RecordItem) => void;
 };
+
+const FORM_ID = "record-form";
 
 function initialDrafts(fields: FieldItem[], record: RecordItem | null): Record<string, Draft> {
   const drafts: Record<string, Draft> = {};
@@ -116,83 +118,97 @@ export function RecordSidebar({
     }
   }
 
+  const title = isNew ? "New record" : "Record";
+
   if (isNew && !canCreate) {
     return (
-      <aside className="sidebar" aria-label="Record">
-        <Alert>You do not have permission to add records to this table.</Alert>
-        <Button className="mt-3" onClick={onClose}>
-          Close
-        </Button>
-      </aside>
+      <Drawer open title={title} onClose={onClose}>
+        <DrawerBody>
+          <Alert>You do not have permission to add records to this table.</Alert>
+        </DrawerBody>
+        <DrawerFooter>
+          <Button onClick={onClose}>Close</Button>
+        </DrawerFooter>
+      </Drawer>
     );
   }
 
+  const showSave = editable && !conflict;
+  const showDelete = record !== null && isCreator;
+
   return (
-    <aside className="sidebar" aria-label="Record">
-      <header>
-        <h2>{isNew ? "New record" : "Record"}</h2>
-        <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close the record">
-          <X className="size-4" aria-hidden />
-        </Button>
-      </header>
-      <form onSubmit={(event) => void save(event)} className="stack">
-        {shown.map((field) => (
-          <FieldEditor
-            key={field.id}
-            field={field}
-            draft={drafts[field.id] ?? ""}
-            value={record?.data[field.id]}
-            names={names}
-            disabled={busy || !canEditField(field)}
-            error={errors[field.id]}
-            onChange={(draft) => setDrafts((current) => ({ ...current, [field.id]: draft }))}
-          />
-        ))}
-        {message && <Alert>{message}</Alert>}
-        {conflict && (
-          <Button icon={RefreshCw} onClick={onReload}>
-            Reload the latest version
-          </Button>
+    <Drawer open title={title} onClose={onClose}>
+      <DrawerBody>
+        <form id={FORM_ID} onSubmit={(event) => void save(event)} className="flex flex-col gap-3">
+          {shown.map((field) => (
+            <FieldEditor
+              key={field.id}
+              field={field}
+              draft={drafts[field.id] ?? ""}
+              value={record?.data[field.id]}
+              names={names}
+              disabled={busy || !canEditField(field)}
+              error={errors[field.id]}
+              onChange={(draft) => setDrafts((current) => ({ ...current, [field.id]: draft }))}
+            />
+          ))}
+          {message && <Alert>{message}</Alert>}
+          {conflict && (
+            <Button icon={RefreshCw} onClick={onReload}>
+              Reload the latest version
+            </Button>
+          )}
+          {!editable && !isNew && (
+            <p className="m-0 text-sm text-muted">You can read this record but not change it.</p>
+          )}
+        </form>
+        {record && (
+          <div className="grid gap-5 border-t border-line pt-4">
+            <ReviewActions
+              fields={fields}
+              record={record}
+              currentUserId={currentUserId}
+              onChanged={(updated) => onSaved(updated, false)}
+              onReload={onReload}
+            />
+            <SubtaskForm
+              tableId={tableId}
+              fields={fields}
+              parent={record}
+              currentUserId={currentUserId}
+              canCreate={canCreate}
+              onCreated={(subtask) => onSubtaskCreated?.(subtask)}
+            />
+            <CommentsPanel recordId={record.id} currentUserId={currentUserId} />
+          </div>
         )}
-        {editable && !conflict && (
-          <Button
-            type="submit"
-            variant="primary"
-            icon={isNew ? Plus : Save}
-            disabled={busy || (!isNew && !dirty)}
-          >
-            {busy ? "Saving…" : isNew ? "Create record" : "Save changes"}
-          </Button>
-        )}
-        {!editable && !isNew && (
-          <p className="text-sm text-muted">You can read this record but not change it.</p>
-        )}
-        {record && isCreator && (
-          <Button variant="ghost" icon={Trash2} onClick={() => void remove()} disabled={busy}>
-            Delete record
-          </Button>
-        )}
-      </form>
-      {record && (
-        <div className="mt-5 grid gap-5 border-t border-line pt-5">
-          <ReviewActions
-            fields={fields}
-            record={record}
-            currentUserId={currentUserId}
-            onChanged={(updated) => onSaved(updated, false)}
-            onReload={onReload}
-          />
-          <SubtaskForm
-            tableId={tableId}
-            fields={fields}
-            parent={record}
-            currentUserId={currentUserId}
-            canCreate={canCreate}
-            onCreated={(subtask) => onSubtaskCreated?.(subtask)}
-          />
-          <CommentsPanel recordId={record.id} currentUserId={currentUserId} />
-        </div>
+      </DrawerBody>
+      {(showSave || showDelete) && (
+        <DrawerFooter>
+          {showSave && (
+            <Button
+              type="submit"
+              form={FORM_ID}
+              variant="primary"
+              icon={isNew ? Plus : Save}
+              disabled={busy || (!isNew && !dirty)}
+            >
+              {busy ? "Saving…" : isNew ? "Create record" : "Save changes"}
+            </Button>
+          )}
+          {showDelete && (
+            <Button
+              variant="ghost"
+              icon={Trash2}
+              className="ml-auto text-danger"
+              onClick={() => void remove()}
+              disabled={busy}
+            >
+              Delete record
+            </Button>
+          )}
+        </DrawerFooter>
       )}
-    </aside>
+    </Drawer>
   );
 }

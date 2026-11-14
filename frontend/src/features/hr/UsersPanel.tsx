@@ -1,14 +1,23 @@
 "use client";
 
+import { Plus, Search, UserX } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import {
+  Button,
+  DataTable,
+  EmptyState,
+  Input,
+  LoadingState,
+  SegmentedControl,
+} from "@/components/ui";
 import { useAuth } from "@/features/auth/AuthProvider";
 import type { User } from "@/features/auth/schema";
 
-import { listUsers, type UserFilters } from "./api";
-import { CreateUserForm } from "./CreateUserForm";
+import { listUsers, updateUser, type UserFilters } from "./api";
 import { ErrorMessage } from "./ErrorMessage";
 import type { Department } from "./schema";
+import { UserDrawer, type UserDrawerTarget } from "./UserDrawer";
 import { UserRow } from "./UserRow";
 
 type ListState =
@@ -17,17 +26,30 @@ type ListState =
   | { kind: "ready"; items: User[]; nextCursor: string | null };
 
 const NO_FILTERS: UserFilters = { q: "", status: "" };
+/** Wait for a pause in typing before asking the server, so each letter is not a request. */
+const SEARCH_DELAY_MS = 300;
+
+const STATUS_OPTIONS: { value: UserFilters["status"]; label: string }[] = [
+  { value: "", label: "All" },
+  { value: "active", label: "Active" },
+  { value: "disabled", label: "Disabled" },
+];
 
 export function UsersPanel({ departments }: { departments: Department[] }) {
   const { state } = useAuth();
   const meId = state.status === "authenticated" ? state.user.id : null;
 
-  const [draft, setDraft] = useState<UserFilters>(NO_FILTERS);
+  const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<UserFilters>(NO_FILTERS);
   const [reloadKey, setReloadKey] = useState(0);
   const [list, setList] = useState<ListState>({ kind: "loading" });
+  // Rows stay on screen (dimmed) while a new search loads, instead of the table blinking away.
+  const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreError, setMoreError] = useState<unknown>(null);
+  const [rowError, setRowError] = useState<unknown>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [target, setTarget] = useState<UserDrawerTarget | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -39,6 +61,8 @@ export function UsersPanel({ departments }: { departments: Department[] }) {
       } catch (error) {
         if (controller.signal.aborted) return;
         setList({ kind: "error", error });
+      } finally {
+        if (!controller.signal.aborted) setRefreshing(false);
       }
     }
 
@@ -46,15 +70,25 @@ export function UsersPanel({ departments }: { departments: Department[] }) {
     return () => controller.abort();
   }, [filters, reloadKey]);
 
+  // Typing: apply the search after a short pause.
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (trimmed === filters.q) return;
+    const timer = setTimeout(() => {
+      setRefreshing(true);
+      setFilters((current) => ({ ...current, q: trimmed }));
+    }, SEARCH_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [query, filters.q]);
+
   function reload() {
-    setList({ kind: "loading" });
+    setRefreshing(true);
     setReloadKey((value) => value + 1);
   }
 
-  function search(event: React.FormEvent) {
-    event.preventDefault();
-    setList({ kind: "loading" });
-    setFilters({ q: draft.q.trim(), status: draft.status });
+  function chooseStatus(status: UserFilters["status"]) {
+    setRefreshing(true);
+    setFilters((current) => ({ ...current, status }));
   }
 
   async function loadMore() {
@@ -75,79 +109,129 @@ export function UsersPanel({ departments }: { departments: Department[] }) {
     }
   }
 
+  async function setStatus(user: User, status: "active" | "disabled") {
+    setBusyId(user.id);
+    setRowError(null);
+    try {
+      await updateUser(user.id, { status });
+      reload();
+    } catch (error) {
+      setRowError(error);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const filtering = filters.q !== "" || filters.status !== "";
+  // "50+" when there is another page behind "Load more".
+  const countText =
+    list.kind === "ready"
+      ? `${list.items.length}${list.nextCursor ? "+" : ""} ${
+          list.items.length === 1 && !list.nextCursor ? "employee" : "employees"
+        }`
+      : "";
+
   return (
-    <section aria-labelledby="employees-title">
-      <h2 id="employees-title">Employees</h2>
-
-      <form onSubmit={search} className="form inline-form" aria-label="Search employees">
-        <label>
-          Search
-          <input
-            value={draft.q}
-            onChange={(event) => setDraft({ ...draft, q: event.target.value })}
-            placeholder="Code or name"
-            maxLength={100}
+    <section aria-label="Employees" className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative">
+          <Search
+            className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted"
+            aria-hidden
           />
-        </label>
-        <label>
-          Status
-          <select
-            value={draft.status}
-            onChange={(event) =>
-              setDraft({ ...draft, status: event.target.value as UserFilters["status"] })
-            }
+          <Input
+            type="search"
+            aria-label="Search employees"
+            placeholder="Search code or name…"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            maxLength={100}
+            className="h-7 w-72 pl-7 text-[13px]"
+          />
+        </div>
+        <SegmentedControl
+          label="Status"
+          options={STATUS_OPTIONS}
+          value={filters.status}
+          onChange={chooseStatus}
+        />
+        <div className="ml-auto flex items-center gap-3">
+          {countText && <span className="font-mono text-xs text-muted">{countText}</span>}
+          <Button
+            variant="primary"
+            size="sm"
+            icon={Plus}
+            onClick={() => setTarget({ mode: "create" })}
           >
-            <option value="">All</option>
-            <option value="active">Active</option>
-            <option value="disabled">Disabled</option>
-          </select>
-        </label>
-        <button type="submit">Search</button>
-      </form>
+            New employee
+          </Button>
+        </div>
+      </div>
 
-      {list.kind === "loading" && <p role="status">Loading employees…</p>}
+      <ErrorMessage error={rowError} />
+
+      {list.kind === "loading" && <LoadingState>Loading employees…</LoadingState>}
       {list.kind === "error" && <ErrorMessage error={list.error} />}
       {list.kind === "ready" && (
         <>
           {list.items.length === 0 ? (
-            <p>No employees match.</p>
+            <EmptyState icon={UserX} title={filtering ? "No employees match." : "No employees yet."}>
+              {filtering ? "Try a different search or status." : "Add the first employee with “New employee”."}
+            </EmptyState>
           ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>Code</th>
-                  <th>Name</th>
-                  <th>Level</th>
-                  <th>Department</th>
-                  <th>Status</th>
-                  <th>
-                    <span className="visually-hidden">Actions</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {list.items.map((user) => (
-                  <UserRow
-                    key={user.id}
-                    user={user}
-                    departments={departments}
-                    isSelf={user.id === meId}
-                    onChanged={reload}
-                  />
-                ))}
-              </tbody>
-            </table>
+            <div className={refreshing ? "opacity-60 transition-opacity" : "transition-opacity"}>
+              <DataTable dense aria-label="Employees">
+                <thead>
+                  <tr>
+                    <th>Code</th>
+                    <th>Name</th>
+                    <th>Level</th>
+                    <th>Department</th>
+                    <th>Status</th>
+                    <th>
+                      <span className="sr-only">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {list.items.map((user) => (
+                    <UserRow
+                      key={user.id}
+                      user={user}
+                      departmentName={departments.find((d) => d.id === user.department_id)?.name ?? ""}
+                      isSelf={user.id === meId}
+                      selected={target?.mode === "edit" && target.user.id === user.id}
+                      busy={busyId === user.id}
+                      onEdit={() => setTarget({ mode: "edit", user })}
+                      onSetStatus={(status) => void setStatus(user, status)}
+                    />
+                  ))}
+                </tbody>
+              </DataTable>
+            </div>
           )}
           <ErrorMessage error={moreError} />
           {list.nextCursor && (
-            <button type="button" onClick={() => void loadMore()} disabled={loadingMore}>
-              {loadingMore ? "Loading…" : "Load more"}
-            </button>
+            <div>
+              <Button onClick={() => void loadMore()} loading={loadingMore}>
+                {loadingMore ? "Loading…" : "Load more"}
+              </Button>
+            </div>
           )}
         </>
       )}
 
-      <CreateUserForm departments={departments} onCreated={reload} />
+      <UserDrawer
+        target={target}
+        departments={departments}
+        meId={meId}
+        onClose={() => setTarget(null)}
+        onCreated={reload}
+        onSaved={() => {
+          setTarget(null);
+          reload();
+        }}
+      />
     </section>
   );
 }

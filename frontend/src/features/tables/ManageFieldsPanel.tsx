@@ -1,8 +1,9 @@
 "use client";
 
+import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 
-import { Alert, Button, Checkbox, Input, Select, Textarea } from "@/components/ui";
+import { Alert, Badge, Button, Checkbox, Input, Select, Textarea } from "@/components/ui";
 import { ApiError } from "@/lib/api/client";
 
 import { LABELS } from "./AddFieldForm";
@@ -78,7 +79,19 @@ function FieldRow({ field, onChanged }: RowProps) {
   const label = field.name;
 
   return (
-    <li className="grid gap-3 rounded-lg border border-line p-3">
+    <li className="rounded-lg border border-line">
+      {/* One line per column; open it to rename, edit options, convert or delete. */}
+      <details className="group">
+        <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 hover:bg-surface-muted [&::-webkit-details-marker]:hidden">
+          <ChevronRight
+            className="size-4 shrink-0 text-muted transition-transform group-open:rotate-90"
+            aria-hidden
+          />
+          <span className="min-w-0 flex-1 truncate font-medium">{field.name}</span>
+          {field.is_required && <Badge tone="warning">required</Badge>}
+          <Badge>{LABELS[field.type]}</Badge>
+        </summary>
+        <div className="grid gap-3 border-t border-line p-3">
       <div className="flex flex-wrap items-end gap-2">
         <label className="grid min-w-48 flex-1 gap-1 text-sm font-medium">
           Name
@@ -252,6 +265,8 @@ function FieldRow({ field, onChanged }: RowProps) {
           </div>
         )}
       </div>
+        </div>
+      </details>
     </li>
   );
 }
@@ -266,8 +281,7 @@ export function ManageFieldsPanel({
 }) {
   return (
     <section aria-label="Manage columns" className="grid gap-3">
-      <h2 className="m-0 text-base font-semibold">Manage columns</h2>
-      <ul className="m-0 grid list-none gap-3 p-0">
+      <ul className="m-0 grid list-none gap-2 p-0">
         {fields.map((field) => (
           // The key includes what the server can change, so a saved column shows its new values.
           <FieldRow

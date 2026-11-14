@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -55,8 +55,37 @@ describe("AppShell", () => {
     fetchMeMock.mockResolvedValue(adminUser);
     renderShell();
     expect(await screen.findByText("page content")).toBeInTheDocument();
-    expect(screen.getByText(/Admin User \(ADMIN\)/)).toBeInTheDocument();
+    expect(screen.getByText("Admin User")).toBeInTheDocument();
+    expect(screen.getByText("ADMIN")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Human resources" })).toHaveAttribute("href", "/hr");
+  });
+
+  it("puts the navigation in a sidebar and names the current section in the breadcrumb", async () => {
+    fetchMeMock.mockResolvedValue(sampleUser());
+    renderShell();
+    await screen.findByText("page content");
+
+    const sidebar = screen.getByRole("complementary", { name: "Sidebar" });
+    expect(within(sidebar).getByRole("navigation", { name: "Main" })).toBeInTheDocument();
+    // The mocked path is /my-tasks.
+    const breadcrumb = screen.getByRole("navigation", { name: "Breadcrumb" });
+    expect(within(breadcrumb).getByText("My tasks")).toHaveAttribute("aria-current", "page");
+    // Which link is highlighted is covered by NavLink.test.tsx (the Link mock here drops props).
+    expect(within(sidebar).getByRole("link", { name: "My tasks" })).toBeInTheDocument();
+  });
+
+  it("opens the menu with the menu button, and closes it after choosing a page", async () => {
+    fetchMeMock.mockResolvedValue(sampleUser());
+    renderShell();
+    await screen.findByText("page content");
+
+    const button = screen.getByRole("button", { name: "Open menu" });
+    expect(button).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(button);
+    expect(button).toHaveAttribute("aria-expanded", "true");
+
+    await userEvent.click(screen.getByRole("link", { name: "Trash" }));
+    expect(button).toHaveAttribute("aria-expanded", "false");
   });
 
   it("hides the HR link from an employee", async () => {

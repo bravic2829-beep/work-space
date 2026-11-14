@@ -1,157 +1,90 @@
 "use client";
 
-import { useState } from "react";
+import { Pencil } from "lucide-react";
 
-import { LEVEL_LABELS, type User, type UserLevel } from "@/features/auth/schema";
+import { Avatar, Badge, Button } from "@/components/ui";
+import { LEVEL_LABELS, type User } from "@/features/auth/schema";
 
-import { updateUser, type UserChanges } from "./api";
-import { ErrorMessage } from "./ErrorMessage";
-import type { Department } from "./schema";
+import { InlineConfirm } from "./InlineConfirm";
 
-const LEVELS = Object.keys(LEVEL_LABELS) as UserLevel[];
-
-export function UserRow({
-  user,
-  departments,
-  isSelf,
-  onChanged,
-}: {
+type Props = {
   user: User;
-  departments: Department[];
+  departmentName: string;
   isSelf: boolean;
-  onChanged: () => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [fullName, setFullName] = useState(user.full_name);
-  const [level, setLevel] = useState<UserLevel>(user.level);
-  const [departmentId, setDepartmentId] = useState(user.department_id ?? "");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<unknown>(null);
+  /** This row is the one open in the drawer. */
+  selected: boolean;
+  busy: boolean;
+  onEdit: () => void;
+  onSetStatus: (status: "active" | "disabled") => void;
+};
 
-  const departmentName = departments.find((item) => item.id === user.department_id)?.name ?? "";
-  // The owner is protected by the backend. Admins also cannot change their own role or status.
+/** One employee in the grid. Clicking the row opens it in the drawer; the buttons stay on the right. */
+export function UserRow({ user, departmentName, isSelf, selected, busy, onEdit, onSetStatus }: Props) {
+  // The owner is protected by the backend, so there is nothing to do on that row.
   const isOwner = user.org_role === "owner";
-
-  async function apply(changes: UserChanges) {
-    setBusy(true);
-    setError(null);
-    try {
-      await updateUser(user.id, changes);
-      setEditing(false);
-      onChanged();
-    } catch (caught) {
-      setError(caught);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function save(event: React.FormEvent) {
-    event.preventDefault();
-    const changes: UserChanges = {
-      full_name: fullName.trim(),
-      department_id: departmentId || null,
-    };
-    if (!isOwner && !isSelf && level !== user.level) {
-      changes.level = level;
-      changes.org_role = level === "admin" ? "admin" : "member";
-    }
-    void apply(changes);
-  }
-
-  if (editing) {
-    return (
-      <tr>
-        <td colSpan={6}>
-          <form onSubmit={save} className="form" aria-label={`Edit ${user.employee_code}`}>
-            <label>
-              Full name
-              <input
-                value={fullName}
-                onChange={(event) => setFullName(event.target.value)}
-                maxLength={200}
-                required
-              />
-            </label>
-            <label>
-              Level
-              <select
-                value={level}
-                disabled={isOwner || isSelf}
-                onChange={(event) => setLevel(event.target.value as UserLevel)}
-              >
-                {LEVELS.map((item) => (
-                  <option key={item} value={item}>
-                    {LEVEL_LABELS[item]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Department
-              <select
-                value={departmentId}
-                onChange={(event) => setDepartmentId(event.target.value)}
-              >
-                <option value="">None</option>
-                {departments.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <ErrorMessage error={error} />
-            <div>
-              <button type="submit" disabled={busy}>
-                Save
-              </button>{" "}
-              <button type="button" onClick={() => setEditing(false)} disabled={busy}>
-                Cancel
-              </button>
-            </div>
-          </form>
-        </td>
-      </tr>
-    );
-  }
+  const active = user.status === "active";
 
   return (
-    <>
-      <tr>
-        <td>{user.employee_code}</td>
-        <td>{user.full_name}</td>
-        <td>{LEVEL_LABELS[user.level]}</td>
-        <td>{departmentName}</td>
-        <td>{user.status === "active" ? "Active" : "Disabled"}</td>
-        <td>
-          {!isOwner && (
-            <>
-              <button type="button" onClick={() => setEditing(true)} disabled={busy}>
-                Edit
-              </button>{" "}
-              {!isSelf && (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() =>
-                    void apply({ status: user.status === "active" ? "disabled" : "active" })
-                  }
-                >
-                  {user.status === "active" ? "Disable" : "Enable"}
-                </button>
-              )}
-            </>
-          )}
-        </td>
-      </tr>
-      {error !== null && (
-        <tr>
-          <td colSpan={6}>
-            <ErrorMessage error={error} />
-          </td>
-        </tr>
-      )}
-    </>
+    <tr
+      onClick={isOwner ? undefined : onEdit}
+      className={
+        selected
+          ? "bg-primary-soft"
+          : isOwner
+            ? undefined
+            : "cursor-pointer"
+      }
+    >
+      <td className="font-mono text-xs">{user.employee_code}</td>
+      <td>
+        <span className="inline-flex items-center gap-2">
+          <Avatar name={user.full_name} className="size-5 text-[10px]" />
+          <span className={active ? "font-medium" : "font-medium text-muted"}>{user.full_name}</span>
+          {isSelf && <Badge tone="info">You</Badge>}
+        </span>
+      </td>
+      <td>{LEVEL_LABELS[user.level]}</td>
+      <td className={departmentName ? undefined : "text-muted"}>{departmentName || "—"}</td>
+      <td>
+        <Badge tone={active ? "success" : "neutral"}>
+          <span
+            aria-hidden
+            className={`mr-1.5 size-1.5 rounded-full ${active ? "bg-success" : "bg-muted"}`}
+          />
+          {active ? "Active" : "Disabled"}
+        </Badge>
+      </td>
+      <td className="text-right whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
+        {!isOwner && (
+          <span className="inline-flex items-center justify-end gap-1">
+            <Button size="sm" variant="ghost" icon={Pencil} disabled={busy} onClick={onEdit}>
+              Edit
+            </Button>
+            {/* A fixed-width slot, so Edit is in the same place on every row. */}
+            <span className="inline-flex min-w-16 justify-start">
+              {!isSelf &&
+                (active ? (
+                  <InlineConfirm
+                    label="Disable"
+                    prompt="Disable and sign out?"
+                    confirmLabel="Yes, disable"
+                    disabled={busy}
+                    onConfirm={() => onSetStatus("disabled")}
+                  />
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={busy}
+                    onClick={() => onSetStatus("active")}
+                  >
+                    Enable
+                  </Button>
+                ))}
+            </span>
+          </span>
+        )}
+      </td>
+    </tr>
   );
 }

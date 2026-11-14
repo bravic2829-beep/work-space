@@ -166,7 +166,7 @@ describe("who can change things", () => {
     const user = userEvent.setup();
     await renderTable("viewer");
     await user.click(screen.getByRole("button", { name: "Open record Alpha" }));
-    const panel = screen.getByRole("complementary", { name: "Record" });
+    const panel = screen.getByRole("dialog", { name: "Record" });
     expect(within(panel).getByLabelText("Name")).toHaveValue("Alpha");
     expect(within(panel).getByLabelText("Name")).toBeDisabled(); // a viewer cannot edit
   });

@@ -1,8 +1,19 @@
 "use client";
 
+import { ChevronLeft, Database, Plus, Table2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Input,
+  LoadingState,
+  Select,
+} from "@/components/ui";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { ApiError } from "@/lib/api/client";
 
@@ -62,26 +73,27 @@ export function WorkspaceScreen({ workspaceId }: { workspaceId: string }) {
     return () => controller.abort();
   }, [workspaceId, reload]);
 
-  if (state.kind === "loading") return <p role="status">Loading…</p>;
+  if (state.kind === "loading") return <LoadingState>Loading…</LoadingState>;
   if (state.kind === "error") {
     return (
-      <p role="alert">
-        {state.message}{" "}
-        <button
-          type="button"
+      <Alert>
+        <span className="mr-2">{state.message}</span>
+        <Button
+          size="sm"
           onClick={() => {
             setState({ kind: "loading" });
             setReload((n) => n + 1);
           }}
         >
           Try again
-        </button>
-      </p>
+        </Button>
+      </Alert>
     );
   }
 
   const { workspace, bases } = state.data;
   const canEdit = workspace.my_role === "editor" || workspace.my_role === "admin";
+  const shared = workspace.kind === "shared";
 
   async function addBase(event: React.FormEvent) {
     event.preventDefault();
@@ -108,83 +120,132 @@ export function WorkspaceScreen({ workspaceId }: { workspaceId: string }) {
   }
 
   return (
-    <section aria-labelledby="workspace-title">
-      <p>
-        <Link href="/workspaces">Workspaces</Link>
-      </p>
-      <h1 id="workspace-title">{workspace.name}</h1>
-      {error && <p role="alert">{error}</p>}
-      {bases.length === 0 && <p>No bases yet.</p>}
-      {bases.map(({ base, tables }) => (
-        <section key={base.id} aria-label={`Base ${base.name}`} className="base">
-          <h2>{base.name}</h2>
-          {tables.length === 0 ? (
-            <p>No tables yet.</p>
-          ) : (
-            <ul className="plain">
-              {tables.map((table) => (
-                <li key={table.id}>
-                  <Link href={`/tables/${table.id}`}>{table.name}</Link>
-                </li>
-              ))}
-            </ul>
+    <section aria-labelledby="workspace-title" className="flex flex-col gap-4">
+      <div>
+        <Link
+          href="/workspaces"
+          className="inline-flex items-center gap-0.5 text-xs text-muted no-underline hover:text-primary"
+        >
+          <ChevronLeft className="size-3.5" aria-hidden />
+          Workspaces
+        </Link>
+        <div className="flex items-center gap-2">
+          <h1 id="workspace-title" className="m-0">
+            {workspace.name}
+          </h1>
+          <Badge tone={shared ? "info" : "neutral"}>
+            {shared ? "shared" : "personal"} · {workspace.my_role}
+          </Badge>
+        </div>
+      </div>
+
+      {error && <Alert>{error}</Alert>}
+
+      <div className={shared ? "grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]" : "grid gap-4"}>
+        <div className="flex flex-col gap-3">
+          {bases.length === 0 && (
+            <EmptyState icon={Database} title="No bases yet.">
+              A base groups related tables, for example one per project or team.
+            </EmptyState>
           )}
+          {bases.map(({ base, tables }) => (
+            <Card key={base.id} flush aria-label={`Base ${base.name}`} className="flex flex-col gap-3">
+              <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
+                <Database className="size-4 text-secondary" aria-hidden />
+                <h2 className="m-0 text-base">{base.name}</h2>
+                <span className="font-mono text-xs text-muted">{tables.length}</span>
+              </div>
+              <div className="flex flex-col gap-3 px-4 pb-4">
+                {tables.length === 0 ? (
+                  <p className="m-0 text-sm text-muted">No tables yet.</p>
+                ) : (
+                  <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-2 p-0">
+                    {tables.map((table) => (
+                      <li key={table.id}>
+                        <Link
+                          href={`/tables/${table.id}`}
+                          className="flex items-center gap-2 rounded-md border border-line px-3 py-2 text-sm font-medium text-fg no-underline transition-colors hover:border-primary hover:bg-primary-soft hover:no-underline"
+                        >
+                          <Table2 className="size-4 shrink-0 text-primary" aria-hidden />
+                          <span className="truncate">{table.name}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {canEdit && (
+                  <form
+                    onSubmit={(event) => void addTable(event, base.id)}
+                    className="flex flex-wrap items-center gap-1.5"
+                    aria-label={`New table in ${base.name}`}
+                  >
+                    <Input
+                      aria-label={`Table name in ${base.name}`}
+                      placeholder="New table…"
+                      className="h-7 w-48 py-0 text-[13px]"
+                      value={tableNames[base.id] ?? ""}
+                      onChange={(event) =>
+                        setTableNames((current) => ({ ...current, [base.id]: event.target.value }))
+                      }
+                      maxLength={200}
+                      required
+                    />
+                    <Select
+                      aria-label={`Template for the table in ${base.name}`}
+                      className="h-7 w-auto py-0 text-[13px]"
+                      value={templates[base.id] ?? "blank"}
+                      onChange={(event) =>
+                        setTemplates((current) => ({
+                          ...current,
+                          [base.id]: event.target.value === "tasks" ? "tasks" : "blank",
+                        }))
+                      }
+                    >
+                      <option value="blank">Blank table</option>
+                      <option value="tasks">Tasks (assignee, status, due date, subtasks)</option>
+                    </Select>
+                    <Button
+                      type="submit"
+                      size="sm"
+                      icon={Plus}
+                      disabled={(tableNames[base.id] ?? "").trim() === ""}
+                    >
+                      Add table
+                    </Button>
+                  </form>
+                )}
+              </div>
+            </Card>
+          ))}
           {canEdit && (
             <form
-              onSubmit={(event) => void addTable(event, base.id)}
-              className="inline-form"
-              aria-label={`New table in ${base.name}`}
+              onSubmit={(event) => void addBase(event)}
+              className="flex flex-wrap items-center gap-1.5 rounded-lg border border-dashed border-line-strong p-3"
+              aria-label="New base"
             >
-              <input
-                aria-label={`Table name in ${base.name}`}
-                value={tableNames[base.id] ?? ""}
-                onChange={(event) =>
-                  setTableNames((current) => ({ ...current, [base.id]: event.target.value }))
-                }
+              <Input
+                aria-label="Base name"
+                placeholder="New base…"
+                className="h-7 w-56 py-0 text-[13px]"
+                value={baseName}
+                onChange={(event) => setBaseName(event.target.value)}
                 maxLength={200}
                 required
               />
-              <select
-                aria-label={`Template for the table in ${base.name}`}
-                value={templates[base.id] ?? "blank"}
-                onChange={(event) =>
-                  setTemplates((current) => ({
-                    ...current,
-                    [base.id]: event.target.value === "tasks" ? "tasks" : "blank",
-                  }))
-                }
-              >
-                <option value="blank">Blank table</option>
-                <option value="tasks">Tasks (assignee, status, due date, subtasks)</option>
-              </select>
-              <button type="submit" disabled={(tableNames[base.id] ?? "").trim() === ""}>
-                Add table
-              </button>
+              <Button type="submit" size="sm" icon={Plus} disabled={baseName.trim() === ""}>
+                Add base
+              </Button>
             </form>
           )}
-        </section>
-      ))}
-      {canEdit && (
-        <form onSubmit={(event) => void addBase(event)} className="inline-form" aria-label="New base">
-          <input
-            aria-label="Base name"
-            value={baseName}
-            onChange={(event) => setBaseName(event.target.value)}
-            maxLength={200}
-            required
+        </div>
+        {shared && (
+          <MembersPanel
+            workspaceId={workspace.id}
+            canManage={workspace.my_role === "admin"}
+            currentUserId={me}
           />
-          <button type="submit" disabled={baseName.trim() === ""}>
-            Add base
-          </button>
-        </form>
-      )}
-      {workspace.kind === "shared" && (
-        <MembersPanel
-          workspaceId={workspace.id}
-          canManage={workspace.my_role === "admin"}
-          currentUserId={me}
-        />
-      )}
+        )}
+      </div>
     </section>
   );
 }

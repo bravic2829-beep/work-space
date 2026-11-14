@@ -23,12 +23,15 @@ export function NavLink({ href, icon: Icon, children, exact = href === "/" }: Pr
       href={href}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium no-underline transition-colors hover:no-underline",
-        active ? "bg-primary-soft text-primary" : "text-muted hover:bg-surface-muted hover:text-fg",
+        "flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-sm no-underline transition-colors hover:no-underline",
+        active
+          ? "bg-primary-soft font-semibold text-primary"
+          : "font-normal text-muted hover:bg-primary-soft/60 hover:text-fg",
       )}
     >
-      <Icon className="size-4" aria-hidden />
-      {children}
+      <Icon className="size-4 shrink-0" aria-hidden />
+      <span className="truncate">{children}</span>
+      {active && <span aria-hidden className="ml-auto size-1.5 rounded-full bg-primary" />}
     </Link>
   );
 }
