@@ -49,6 +49,13 @@ export const ROLES: Partial<Record<FieldType, { value: string; label: string }[]
   date: [{ value: "due_date", label: "Due date (used by Today's tasks)" }],
 };
 
+/** What the role of a column does, for the type being added. */
+const ROLE_HINTS: Partial<Record<FieldType, string>> = {
+  user: "Choose Assignee to give tasks to people. Without a role this is just a column.",
+  status: "Choose Status so review and Done know which column holds the state of the task.",
+  date: "Choose Due date so the task shows in Today's tasks when it is due. Without a role this is just a date.",
+};
+
 /** Adds a column. Choice fields take their options one per line. */
 export function AddFieldForm({ tableId, baseId, existing = [], onCreated }: Props) {
   const [name, setName] = useState("");
@@ -143,7 +150,7 @@ export function AddFieldForm({ tableId, baseId, existing = [], onCreated }: Prop
       {ROLES[type] && (
         <FormField
           label="Role of this column"
-          hint="Choose Assignee to give tasks to people. Without a role this is just a column."
+          hint={ROLE_HINTS[type]}
         >
           <Select value={role} onChange={(e) => setRole(e.target.value)}>
             <option value="">No role</option>
