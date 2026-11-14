@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ProblemError
@@ -407,11 +408,14 @@ async def update_record(
 
 
 async def delete_record(session: AsyncSession, actor: User, record_id: uuid.UUID) -> None:
-    """Move a record to the trash. Only the person who created it may do that."""
+    """Delete a record for good. Only the person who created it may do that.
+
+    There is no trash step: the record, its links, viewers, comments and notifications go in
+    one statement (the database cascades). The subtasks of the record stay, without a parent.
+    Records that were put in the trash before this change can still be restored (trash.py).
+    """
     record, _ = await _load(session, actor, record_id, for_update=True)
     if record.created_by != actor.id:
         raise ProblemError(403, "Only the person who created a record can delete it.")
-    record.deleted_at = datetime.now(UTC)
-    record.deleted_by = actor.id
-    record.version = record.version + 1
+    await session.execute(delete(Record).where(Record.id == record.id))
     await session.flush()

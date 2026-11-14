@@ -497,13 +497,11 @@ async def test_only_the_creator_deletes_a_record(board: Board, migrated_database
     assert (await work.api("DELETE", url, "editor")).status_code == 204
     assert_problem(await work.api("GET", url), 404)
     assert_problem(await work.api("DELETE", url, "editor"), 404)
+    # Deleted for good: the row is gone, not only marked (there is no trash step).
     rows = await db_fetch(
-        migrated_database_url,
-        "SELECT deleted_at, deleted_by FROM records WHERE id = $1",
-        uuid.UUID(record["id"]),
+        migrated_database_url, "SELECT id FROM records WHERE id = $1", uuid.UUID(record["id"])
     )
-    assert rows[0]["deleted_at"] is not None
-    assert str(rows[0]["deleted_by"]) == board.user("editor")
+    assert rows == []
 
 
 async def test_a_deleted_record_cannot_be_changed(board: Board) -> None:

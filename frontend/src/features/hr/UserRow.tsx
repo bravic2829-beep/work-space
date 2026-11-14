@@ -2,10 +2,9 @@
 
 import { Pencil } from "lucide-react";
 
-import { Avatar, Badge, Button } from "@/components/ui";
+import { Avatar, Badge, Button, InlineConfirm } from "@/components/ui";
 import { LEVEL_LABELS, type User } from "@/features/auth/schema";
 
-import { InlineConfirm } from "./InlineConfirm";
 
 type Props = {
   user: User;

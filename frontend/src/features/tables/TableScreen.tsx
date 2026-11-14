@@ -9,7 +9,7 @@ import { useAuth } from "@/features/auth/AuthProvider";
 import { ApiError } from "@/lib/api/client";
 
 import { AddFieldForm } from "./AddFieldForm";
-import { createView, deleteView, getTable, listRecords, listViews } from "./api";
+import { createView, deleteRecord, deleteView, getTable, listRecords, listViews } from "./api";
 import { FilterBar } from "./FilterBar";
 import { ManageFieldsPanel } from "./ManageFieldsPanel";
 import { RecordGrid } from "./RecordGrid";
@@ -173,6 +173,22 @@ export function TableScreen({ tableId }: { tableId: string }) {
       setNotice(describe(error));
     } finally {
       setLoadingMore(false);
+    }
+  }
+
+  /** Deleting is for good: there is no trash step. The row leaves the list at once. */
+  async function removeRecord(record: RecordItem) {
+    setNotice(null);
+    try {
+      await deleteRecord(record.id);
+      if (selected === record.id) setSelected(null);
+      setRecords((current) =>
+        current.kind === "ready"
+          ? { ...current, items: current.items.filter((item) => item.id !== record.id) }
+          : current,
+      );
+    } catch (error) {
+      setNotice(error instanceof ApiError ? error.message : "Could not delete the record.");
     }
   }
 
@@ -350,6 +366,7 @@ export function TableScreen({ tableId }: { tableId: string }) {
           <AddFieldForm
             tableId={table.id}
             baseId={table.base_id}
+            existing={table.fields}
             onCreated={() => {
               setShowAddField(false);
               setTableKey((n) => n + 1);
@@ -397,6 +414,9 @@ export function TableScreen({ tableId }: { tableId: string }) {
               onSort={toggleSort}
               onSelect={(record) => setSelected(record.id)}
               onLoadMore={() => void loadMore()}
+              canEdit={canEdit}
+              currentUserId={me}
+              onDelete={(record) => void removeRecord(record)}
             />
           )}
         </div>

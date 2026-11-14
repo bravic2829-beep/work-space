@@ -1,9 +1,16 @@
 "use client";
 
-import { Plus, RefreshCw, Save, Trash2 } from "lucide-react";
+import { Plus, RefreshCw, Save } from "lucide-react";
 import { useState } from "react";
 
-import { Alert, Button, Drawer, DrawerBody, DrawerFooter } from "@/components/ui";
+import {
+  Alert,
+  Button,
+  Drawer,
+  DrawerBody,
+  DrawerFooter,
+  InlineConfirm,
+} from "@/components/ui";
 import { ApiError } from "@/lib/api/client";
 
 import { createRecord, deleteRecord, updateRecord } from "./api";
@@ -105,7 +112,7 @@ export function RecordSidebar({
   }
 
   async function remove() {
-    if (!record || !window.confirm("Move this record to the trash?")) return;
+    if (!record) return;
     setBusy(true);
     setMessage(null);
     try {
@@ -197,15 +204,15 @@ export function RecordSidebar({
             </Button>
           )}
           {showDelete && (
-            <Button
-              variant="ghost"
-              icon={Trash2}
-              className="ml-auto text-danger"
-              onClick={() => void remove()}
-              disabled={busy}
-            >
-              Delete record
-            </Button>
+            <span className="ml-auto">
+              <InlineConfirm
+                label="Delete record"
+                prompt="Delete this record for good?"
+                confirmLabel="Yes, delete"
+                disabled={busy}
+                onConfirm={() => void remove()}
+              />
+            </span>
           )}
         </DrawerFooter>
       )}

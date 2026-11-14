@@ -3,14 +3,13 @@
 import { Building2, CornerDownRight, Layers, Plus, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { Badge, Button, DataTable, EmptyState, Input } from "@/components/ui";
+import { Badge, Button, DataTable, EmptyState, InlineConfirm, Input } from "@/components/ui";
 
 import { deleteDepartment, setDepartmentHead } from "./api";
 import { DepartmentDrawer } from "./DepartmentDrawer";
 import { orderDepartments } from "./departmentTree";
 import { ErrorMessage } from "./ErrorMessage";
 import { HeadCell } from "./HeadCell";
-import { InlineConfirm } from "./InlineConfirm";
 import type { Department } from "./schema";
 
 export function DepartmentsPanel({

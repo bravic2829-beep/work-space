@@ -9,6 +9,7 @@ import { sampleUser } from "@/test/fixtures";
 
 import {
   createView,
+  deleteRecord,
   deleteView,
   getTable,
   listRecords,
@@ -47,6 +48,12 @@ const listViewsMock = vi.mocked(listViews);
 const listRecordsMock = vi.mocked(listRecords);
 const createViewMock = vi.mocked(createView);
 const deleteViewMock = vi.mocked(deleteView);
+const deleteRecordMock = vi.mocked(deleteRecord);
+
+/** The grid row whose first column is this text. */
+function rowOf(text: string): HTMLElement {
+  return screen.getByRole("button", { name: `Open record ${text}` }).closest("tr") as HTMLElement;
+}
 const lookupUsersMock = vi.mocked(lookupUsers);
 
 const alpha = makeRecord("r-1", { "f-name": "Alpha", "f-points": 10, "f-assignee": ["u-2"] });
@@ -169,6 +176,84 @@ describe("who can change things", () => {
     const panel = screen.getByRole("dialog", { name: "Record" });
     expect(within(panel).getByLabelText("Name")).toHaveValue("Alpha");
     expect(within(panel).getByLabelText("Name")).toBeDisabled(); // a viewer cannot edit
+  });
+});
+
+describe("editing and deleting from the row", () => {
+  it("has an Edit button on every row for an editor, and none for a viewer", async () => {
+    await renderTable("editor");
+    expect(screen.getByRole("button", { name: "Edit record Alpha" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit record Beta" })).toBeInTheDocument();
+  });
+
+  it("shows no row buttons to a viewer", async () => {
+    await renderTable("viewer");
+    expect(screen.queryByRole("button", { name: /^Edit record/ })).not.toBeInTheDocument();
+    // A viewer who created the record can still delete it.
+    expect(screen.getAllByRole("button", { name: "Delete" })).toHaveLength(2);
+  });
+
+  it("opens the record, ready to edit, from the Edit button", async () => {
+    const user = userEvent.setup();
+    await renderTable("editor");
+    await user.click(screen.getByRole("button", { name: "Edit record Alpha" }));
+    const panel = screen.getByRole("dialog", { name: "Record" });
+    expect(within(panel).getByLabelText("Name")).toBeEnabled();
+  });
+
+  it("asks first, then deletes for good and drops the row at once", async () => {
+    const user = userEvent.setup();
+    deleteRecordMock.mockResolvedValue(undefined);
+    await renderTable("editor");
+
+    await user.click(within(rowOf("Alpha")).getByRole("button", { name: "Delete" }));
+    expect(deleteRecordMock).not.toHaveBeenCalled();
+    await user.click(within(rowOf("Alpha")).getByRole("button", { name: "Cancel" }));
+    expect(deleteRecordMock).not.toHaveBeenCalled();
+
+    await user.click(within(rowOf("Alpha")).getByRole("button", { name: "Delete" }));
+    await user.click(within(rowOf("Alpha")).getByRole("button", { name: "Yes, delete" }));
+
+    await waitFor(() => expect(deleteRecordMock).toHaveBeenCalledWith("r-1"));
+    await waitFor(() => expect(screen.queryByText("Alpha")).not.toBeInTheDocument());
+    expect(screen.getByText("Beta")).toBeInTheDocument();
+  });
+
+  it("closes the record panel when that record is deleted", async () => {
+    const user = userEvent.setup();
+    deleteRecordMock.mockResolvedValue(undefined);
+    await renderTable("editor");
+    await user.click(screen.getByRole("button", { name: "Edit record Alpha" }));
+    expect(screen.getByRole("dialog", { name: "Record" })).toBeInTheDocument();
+
+    await user.click(within(rowOf("Alpha")).getByRole("button", { name: "Delete" }));
+    await user.click(within(rowOf("Alpha")).getByRole("button", { name: "Yes, delete" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("offers Delete only on the records the person created", async () => {
+    listRecordsMock.mockResolvedValue({
+      items: [alpha, makeRecord("r-3", { "f-name": "Gamma" }, { created_by: "u-other" })],
+      next_cursor: null,
+    });
+    await renderTable("editor");
+    expect(within(rowOf("Alpha")).getByRole("button", { name: "Delete" })).toBeInTheDocument();
+    expect(within(rowOf("Gamma")).queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
+    expect(within(rowOf("Gamma")).getByRole("button", { name: /^Edit record/ })).toBeInTheDocument();
+  });
+
+  it("shows the server's refusal and keeps the row", async () => {
+    const user = userEvent.setup();
+    deleteRecordMock.mockRejectedValue(
+      new ApiError("Only the person who created a record can delete it.", 403),
+    );
+    await renderTable("editor");
+    await user.click(within(rowOf("Alpha")).getByRole("button", { name: "Delete" }));
+    await user.click(within(rowOf("Alpha")).getByRole("button", { name: "Yes, delete" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Only the person who created");
+    expect(screen.getByText("Alpha")).toBeInTheDocument();
   });
 });
 
@@ -388,5 +473,7 @@ it("does not break when every column is hidden", async () => {
     await user.click(screen.getByRole("checkbox", { name: field.name }));
   }
   // The first column stays: records are opened from it.
-  expect(screen.getAllByRole("columnheader")).toHaveLength(1);
+  // (An editor also has the unnamed column of row buttons.)
+  const headers = screen.getAllByRole("columnheader").filter((h) => h.textContent !== "Actions");
+  expect(headers).toHaveLength(1);
 });

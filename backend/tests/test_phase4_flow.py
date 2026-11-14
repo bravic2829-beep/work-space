@@ -108,17 +108,13 @@ async def test_the_whole_story(work: Work) -> None:
     assert [t["name"] for t in due.json()["items"]] == ["Launch campaign"]
     assert due.json()["items"][0]["status"]["kind"] == "done"
 
-    # 8. The head deletes the subtask they made, finds it in the trash and brings it back.
+    # 8. The head deletes the subtask they made: it is gone for good, with no way back.
     sub_id = subtask["id"]
     assert (await work.api("DELETE", f"/records/{sub_id}", head)).status_code == 204
     assert await titles(work, worker) == []
-    assert [i["id"] for i in (await work.api("GET", "/trash/records", head)).json()["items"]] == [
-        sub_id
-    ]
-    assert_problem(await work.api("POST", f"/records/{sub_id}/restore", worker), 403)
-    assert (await work.api("POST", f"/records/{sub_id}/restore", head)).status_code == 200
-    assert await titles(work, worker) == ["Design banner"]
-    assert len((await work.api("GET", f"/records/{sub_id}/comments", head)).json()["items"]) == 2
+    assert (await work.api("GET", "/trash/records", head)).json()["items"] == []
+    assert_problem(await work.api("POST", f"/records/{sub_id}/restore", head), 404)
+    assert_problem(await work.api("GET", f"/records/{sub_id}", head), 404)
 
 
 async def review(work: Work, record: dict[str, Any], who: str, action: str) -> Any:

@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from tests.api_helpers import assert_problem
+from tests.api_helpers import assert_problem, db_fetch
 from tests.test_records import Board
 from tests.work_world import Work
 
@@ -185,3 +185,27 @@ async def test_comments_of_a_record_in_the_trash_are_not_reachable(
     assert (await work.api("DELETE", f"/records/{record['id']}", "admin")).status_code == 204
     assert_problem(await read(work, record, "admin"), 404)
     assert_problem(await work.api("DELETE", f"/comments/{comment['id']}", "member"), 404)
+
+
+async def test_deleting_a_record_removes_its_comments_and_notifications_for_good(
+    work: Work, board: Board, migrated_database_url: str
+) -> None:
+    record = await task(work, board)  # the assignee is told about it
+    assert (await say(work, record, "member", "On it")).status_code == 201
+    record_id = uuid.UUID(record["id"])
+    for table in ("comments", "notifications", "records"):
+        key = "id" if table == "records" else "record_id"
+        rows = await db_fetch(
+            migrated_database_url, f"SELECT 1 FROM {table} WHERE {key} = $1", record_id
+        )
+        assert len(rows) == 1, table
+
+    assert (await work.api("DELETE", f"/records/{record['id']}", "admin")).status_code == 204
+
+    # Nothing is left behind, not even marked: there is no trash step.
+    for table in ("comments", "notifications", "records"):
+        key = "id" if table == "records" else "record_id"
+        rows = await db_fetch(
+            migrated_database_url, f"SELECT 1 FROM {table} WHERE {key} = $1", record_id
+        )
+        assert rows == [], table

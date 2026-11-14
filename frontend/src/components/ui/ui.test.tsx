@@ -19,6 +19,7 @@ import {
   DrawerFooter,
   EmptyState,
   FormField,
+  InlineConfirm,
   initials,
   Input,
   LoadingState,
@@ -454,5 +455,32 @@ describe("control width", () => {
     expect(screen.getByLabelText("area")).not.toHaveClass("w-full");
     // min-w-* is not a width: the control still fills its row.
     expect(screen.getByLabelText("spaced")).toHaveClass("w-full");
+  });
+});
+
+describe("InlineConfirm", () => {
+  it("asks in the same place, and only then does it", async () => {
+    const onConfirm = vi.fn();
+    render(
+      <InlineConfirm label="Delete" prompt="Sure?" confirmLabel="Yes" onConfirm={onConfirm} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(onConfirm).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await userEvent.click(screen.getByRole("button", { name: "Yes" }));
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
+  });
+
+  it("can be a bare icon that keeps the label as its name", async () => {
+    render(
+      <InlineConfirm label="Delete" icon={Plus} prompt="Sure?" confirmLabel="Yes" onConfirm={() => {}} />,
+    );
+    const button = screen.getByRole("button", { name: "Delete" });
+    expect(button).not.toHaveTextContent("Delete");
+    expect(button).toHaveAttribute("title", "Delete");
   });
 });

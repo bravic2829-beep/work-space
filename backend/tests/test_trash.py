@@ -36,8 +36,27 @@ async def restore(work: Work, record_id: str, who: str) -> Any:
     return await work.api("POST", f"/records/{record_id}/restore", who)
 
 
+_DATABASE: dict[str, str] = {}
+
+
+@pytest.fixture(autouse=True)
+def _remember_database(migrated_database_url: str) -> None:
+    _DATABASE["url"] = migrated_database_url
+
+
 async def delete(work: Work, record: dict[str, Any], who: str = "admin") -> None:
-    assert (await work.api("DELETE", f"/records/{record['id']}", who)).status_code == 204
+    """Put a record in the trash the way an older version did.
+
+    DELETE /records/{id} now removes a record for good, but the trash still has to work for the
+    records that were trashed before that change, so the tests mark them directly.
+    """
+    await db_execute(
+        _DATABASE["url"],
+        "UPDATE records SET deleted_at = now(), deleted_by = $2, version = version + 1 "
+        "WHERE id = $1",
+        uuid.UUID(record["id"]),
+        work.users[who],
+    )
 
 
 # --- the loop ---------------------------------------------------------------------------------

@@ -125,3 +125,47 @@ describe("when it fails", () => {
     expect(await screen.findByText("Could not load the tables of this base.")).toBeInTheDocument();
   });
 });
+
+describe("giving a column a role", () => {
+  it("offers the assignee role for a people column and sends it", async () => {
+    const user = await fill("Owner", "user");
+    await user.selectOptions(screen.getByLabelText("Role of this column"), "assignee");
+    await user.click(screen.getByRole("button", { name: "Add column" }));
+    await waitFor(() => expect(createFieldMock).toHaveBeenCalled());
+    expect(createFieldMock.mock.calls[0][1]).toMatchObject({ type: "user", semantic: "assignee" });
+  });
+
+  it("sends no role unless one is chosen, and offers none for a text column", async () => {
+    const user = await fill("Owner", "user");
+    await user.click(screen.getByRole("button", { name: "Add column" }));
+    await waitFor(() => expect(createFieldMock).toHaveBeenCalled());
+    expect(createFieldMock.mock.calls[0][1]).not.toHaveProperty("semantic");
+
+    await user.selectOptions(screen.getByLabelText("Type"), "text");
+    expect(screen.queryByLabelText("Role of this column")).not.toBeInTheDocument();
+  });
+
+  it("forgets the role when the type changes", async () => {
+    const user = await fill("Due", "user");
+    await user.selectOptions(screen.getByLabelText("Role of this column"), "assignee");
+    await user.selectOptions(screen.getByLabelText("Type"), "date");
+    await user.click(screen.getByRole("button", { name: "Add column" }));
+    await waitFor(() => expect(createFieldMock).toHaveBeenCalled());
+    expect(createFieldMock.mock.calls[0][1]).not.toHaveProperty("semantic");
+  });
+
+  it("disables a role the table already has", async () => {
+    const user = userEvent.setup();
+    render(
+      <AddFieldForm
+        tableId="t-1"
+        baseId="b-1"
+        existing={[{ ...NAME, type: "user", semantic: "assignee" }]}
+        onCreated={onCreated}
+      />,
+    );
+    await user.selectOptions(screen.getByLabelText("Type"), "user");
+    expect(screen.getByRole("option", { name: /Assignee.*already has one/ })).toBeDisabled();
+    expect(screen.getByRole("option", { name: /Follower/ })).toBeEnabled();
+  });
+});

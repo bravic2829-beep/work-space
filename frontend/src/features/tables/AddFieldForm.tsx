@@ -28,16 +28,35 @@ export const LABELS: Record<FieldType, string> = {
 type Props = {
   tableId: string;
   baseId: string;
+  /** The columns the table already has: a role can be given to one column only. */
+  existing?: FieldItem[];
   onCreated: (field: FieldItem) => void;
 };
 
+/**
+ * The roles a column can take. Without one it is only a column: nobody is notified, the task
+ * does not appear in "My tasks", and the people named in it cannot open the record.
+ */
+const ROLES: Partial<Record<FieldType, { value: string; label: string }[]>> = {
+  user: [
+    {
+      value: "assignee",
+      label: "Assignee: is notified, sees the task in My tasks, can open it",
+    },
+    { value: "follower", label: "Follower: can open the task" },
+  ],
+  status: [{ value: "status", label: "Status of the task (review and Done use it)" }],
+  date: [{ value: "due_date", label: "Due date (used by Today's tasks)" }],
+};
+
 /** Adds a column. Choice fields take their options one per line. */
-export function AddFieldForm({ tableId, baseId, onCreated }: Props) {
+export function AddFieldForm({ tableId, baseId, existing = [], onCreated }: Props) {
   const [name, setName] = useState("");
   const [type, setType] = useState<FieldType>("text");
   const [options, setOptions] = useState("");
   const [precision, setPrecision] = useState("0");
   const [includeTime, setIncludeTime] = useState(false);
+  const [role, setRole] = useState("");
   const [target, setTarget] = useState("");
   const [tables, setTables] = useState<TableSummary[]>([]);
   const [saving, setSaving] = useState(false);
@@ -76,8 +95,14 @@ export function AddFieldForm({ tableId, baseId, onCreated }: Props) {
     setError(null);
     setSaving(true);
     try {
-      const field = await createField(tableId, { name: name.trim(), type, config: configFor() });
+      const field = await createField(tableId, {
+        name: name.trim(),
+        type,
+        config: configFor(),
+        ...(role ? { semantic: role } : {}),
+      });
       setName("");
+      setRole("");
       setOptions("");
       onCreated(field);
     } catch (caught) {
@@ -94,7 +119,13 @@ export function AddFieldForm({ tableId, baseId, onCreated }: Props) {
         <Input value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} />
       </FormField>
       <FormField label="Type">
-        <Select value={type} onChange={(e) => setType(e.target.value as FieldType)}>
+        <Select
+          value={type}
+          onChange={(e) => {
+            setType(e.target.value as FieldType);
+            setRole("");
+          }}
+        >
           {FIELD_TYPES.map((t) => (
             <option key={t} value={t}>
               {LABELS[t]}
@@ -102,6 +133,25 @@ export function AddFieldForm({ tableId, baseId, onCreated }: Props) {
           ))}
         </Select>
       </FormField>
+      {ROLES[type] && (
+        <FormField
+          label="Role of this column"
+          hint="Choose Assignee to give tasks to people. Without a role this is just a column."
+        >
+          <Select value={role} onChange={(e) => setRole(e.target.value)}>
+            <option value="">No role</option>
+            {ROLES[type]?.map((item) => {
+              const taken = existing.some((f) => f.semantic === item.value);
+              return (
+                <option key={item.value} value={item.value} disabled={taken}>
+                  {item.label}
+                  {taken ? " (the table already has one)" : ""}
+                </option>
+              );
+            })}
+          </Select>
+        </FormField>
+      )}
       {needsOptions && (
         <FormField
           label="Options (one per line)"

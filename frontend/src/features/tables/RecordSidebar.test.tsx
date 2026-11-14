@@ -227,30 +227,33 @@ describe("deleting", () => {
 
   it("asks first, and does nothing when the person says no", async () => {
     const user = userEvent.setup();
-    vi.spyOn(window, "confirm").mockReturnValue(false);
     renderSidebar();
     await user.click(screen.getByRole("button", { name: "Delete record" }));
+    expect(screen.getByText("Delete this record for good?")).toBeInTheDocument();
     expect(deleteRecordMock).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(deleteRecordMock).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Delete record" })).toBeInTheDocument();
   });
 
-  it("moves the record to the trash after a yes", async () => {
+  it("deletes the record for good after a yes", async () => {
     const user = userEvent.setup();
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     deleteRecordMock.mockResolvedValue(undefined);
     renderSidebar();
     await user.click(screen.getByRole("button", { name: "Delete record" }));
+    await user.click(screen.getByRole("button", { name: "Yes, delete" }));
     await waitFor(() => expect(handlers.onDeleted).toHaveBeenCalledWith("r-1"));
     expect(deleteRecordMock).toHaveBeenCalledWith("r-1");
   });
 
   it("shows the reason when the server refuses", async () => {
     const user = userEvent.setup();
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     deleteRecordMock.mockRejectedValue(
       new ApiError("Only the person who created a record can delete it.", 403),
     );
     renderSidebar();
     await user.click(screen.getByRole("button", { name: "Delete record" }));
+    await user.click(screen.getByRole("button", { name: "Yes, delete" }));
     expect(await screen.findByText(/Only the person who created/)).toBeInTheDocument();
     expect(handlers.onDeleted).not.toHaveBeenCalled();
   });

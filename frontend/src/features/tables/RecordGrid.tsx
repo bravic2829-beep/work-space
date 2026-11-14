@@ -1,8 +1,8 @@
 "use client";
 
-import { ArrowDown, ArrowUp, ChevronsUpDown, FileSearch } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronsUpDown, FileSearch, Pencil, Trash2 } from "lucide-react";
 
-import { Badge, Button, DataTable, EmptyState } from "@/components/ui";
+import { Badge, Button, DataTable, EmptyState, InlineConfirm } from "@/components/ui";
 
 import type { FieldItem, RecordItem, SortColumn } from "./schema";
 import { StatusBadge } from "./StatusBadge";
@@ -19,6 +19,11 @@ type Props = {
   onSort: (field: FieldItem) => void;
   onSelect: (record: RecordItem) => void;
   onLoadMore: () => void;
+  /** An editor sees an Edit button on every row. */
+  canEdit?: boolean;
+  /** Only the person who created a record may delete it, so only they get a Delete button. */
+  currentUserId?: string;
+  onDelete?: (record: RecordItem) => void;
 };
 
 function isWebLink(text: string): boolean {
@@ -56,7 +61,11 @@ export function RecordGrid({
   onSort,
   onSelect,
   onLoadMore,
+  canEdit = false,
+  currentUserId = "",
+  onDelete,
 }: Props) {
+  const showActions = canEdit || (onDelete !== undefined && currentUserId !== "");
   function ariaSort(field: FieldItem): "ascending" | "descending" | "none" | undefined {
     if (!isSortable(field)) return undefined;
     const column = sort.find((s) => s.field === field.id);
@@ -101,6 +110,11 @@ export function RecordGrid({
                 </th>
               );
             })}
+            {showActions && (
+              <th scope="col">
+                <span className="sr-only">Actions</span>
+              </th>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -141,6 +155,33 @@ export function RecordGrid({
                     </td>
                   );
                 })}
+                {showActions && (
+                  <td className="text-right whitespace-nowrap">
+                    <span className="inline-flex items-center justify-end gap-1">
+                      {canEdit && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="size-7"
+                          title="Edit"
+                          aria-label={`Edit record ${displayValue(fields[0], record.data[fields[0].id], names) || "(untitled)"}`}
+                          onClick={() => onSelect(record)}
+                        >
+                          <Pencil className="size-4" aria-hidden />
+                        </Button>
+                      )}
+                      {onDelete && record.created_by === currentUserId && (
+                        <InlineConfirm
+                          label="Delete"
+                          icon={Trash2}
+                          prompt="Delete?"
+                          confirmLabel="Yes, delete"
+                          onConfirm={() => onDelete(record)}
+                        />
+                      )}
+                    </span>
+                  </td>
+                )}
               </tr>
             );
           })}
