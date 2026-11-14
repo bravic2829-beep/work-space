@@ -13,6 +13,7 @@ import {
   createWorkspace,
   getWorkspace,
   listBases,
+  listMembers,
   listTables,
   listWorkspaces,
 } from "./api";
@@ -34,6 +35,8 @@ vi.mock("./api", () => ({
   createBase: vi.fn(),
   listTables: vi.fn(),
   createTable: vi.fn(),
+  listMembers: vi.fn(),
+  searchDirectory: vi.fn(),
 }));
 
 const fetchMeMock = vi.mocked(fetchMe);
@@ -52,6 +55,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   fetchMeMock.mockResolvedValue(sampleUser());
   listWorkspacesMock.mockResolvedValue([personal, shared]);
+  vi.mocked(listMembers).mockResolvedValue([]);
 });
 
 function renderWorkspaces() {
@@ -126,7 +130,11 @@ describe("one workspace", () => {
   });
 
   function renderWorkspace() {
-    return render(<WorkspaceScreen workspaceId="w-1" />);
+    return render(
+      <AuthProvider>
+        <WorkspaceScreen workspaceId="w-1" />
+      </AuthProvider>,
+    );
   }
 
   it("shows its bases and links to the tables", async () => {

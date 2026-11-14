@@ -15,8 +15,9 @@ from app.core.errors import ProblemError
 from app.core.pagination import MAX_PAGE_SIZE, Page
 from app.modules.fields import repository as fields_repo
 from app.modules.fields.access import column_access
-from app.modules.fields.models import Field, FieldAccessLevel, FieldType
+from app.modules.fields.models import Field, FieldAccessLevel, FieldSemantic, FieldType
 from app.modules.fields.types import COMPUTED_TYPES, STORED_IN_DATA, normalize_value
+from app.modules.notifications import service as notifications
 from app.modules.permissions.service import (
     TableContext,
     can_view_record,
@@ -24,7 +25,7 @@ from app.modules.permissions.service import (
     load_table_context,
     require_table_read,
 )
-from app.modules.records import links, listing, repository, visibility
+from app.modules.records import links, listing, repository, subtasks, visibility
 from app.modules.records.models import Record
 from app.modules.records.schemas import RecordPublic
 from app.modules.users.models import User
@@ -220,7 +221,8 @@ async def create_record(
 ) -> tuple[Record, RecordPublic]:
     context = await load_table_context(session, actor, table_id)
     if not context.can_edit:
-        raise ProblemError(403, FORBIDDEN)
+        # Not an editor: the only way in is a subtask of a task assigned to a department head.
+        await subtasks.require_subtask_right(session, actor, table_id, incoming)
     fields = await _fields_with_access(session, actor, context, is_creator=True)
     changes = await _check_changes(session, actor, context, fields, incoming, record=None)
 
@@ -245,9 +247,36 @@ async def create_record(
     await session.flush()
     await visibility.rebuild_record(session, record, [f for f, _ in fields])
     await _write_links(session, fields, record, changes)
+    await _notify_newassignees(session, actor, record, fields, before=set(), after=record.data)
     await session.refresh(record)
     rendered = await render(session, actor, context, [record], _visible(fields))
     return record, rendered[0]
+
+
+async def _notify_newassignees(
+    session: AsyncSession,
+    actor: User,
+    record: Record,
+    fields: list[tuple[Field, FieldAccessLevel]],
+    *,
+    before: set[uuid.UUID],
+    after: dict[str, Any],
+) -> None:
+    """Notify the people who are newly named in the assignee column (UC-K1, UC-K7)."""
+    column = next((f for f, _ in fields if f.semantic == FieldSemantic.ASSIGNEE), None)
+    if column is None:
+        return
+    named = {uuid.UUID(str(item)) for item in after.get(str(column.id), [])}
+    await notifications.notify_task_assigned(
+        session, actor, record, [f for f, _ in fields], named - before
+    )
+
+
+def assignees(record: Record, fields: list[tuple[Field, FieldAccessLevel]]) -> set[uuid.UUID]:
+    column = next((f for f, _ in fields if f.semantic == FieldSemantic.ASSIGNEE), None)
+    if column is None:
+        return set()
+    return {uuid.UUID(str(item)) for item in record.data.get(str(column.id), [])}
 
 
 async def _write_links(
@@ -358,6 +387,7 @@ async def update_record(
     changes.links = changed_links
 
     if new_data != record.data or changed_links:
+        assigned_before = assignees(record, fields)
         record.data = new_data
         record.version = record.version + 1
         record.updated_at = datetime.now(UTC)
@@ -365,6 +395,9 @@ async def update_record(
         if changes.touches_viewers:
             await visibility.rebuild_record(session, record, [f for f, _ in fields])
         await _write_links(session, fields, record, changes)
+        await _notify_newassignees(
+            session, actor, record, fields, before=assigned_before, after=record.data
+        )
         await session.refresh(record)
     rendered = await render(session, actor, context, [record], _visible(fields))
     return record, rendered[0]

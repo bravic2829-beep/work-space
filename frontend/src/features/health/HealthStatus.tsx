@@ -1,6 +1,9 @@
 "use client";
 
+import { CheckCircle2, RotateCw, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
+
+import { Alert, Button, LoadingState } from "@/components/ui";
 
 import { fetchHealth, fetchReady } from "./api";
 import type { ReadyResponse } from "./schema";
@@ -41,25 +44,35 @@ export function HealthStatus() {
   }
 
   if (state.kind === "loading") {
-    return <p role="status">Checking the backend…</p>;
+    return <LoadingState>Checking the backend…</LoadingState>;
   }
 
   if (state.kind === "error") {
     return (
-      <div role="alert">
-        <p>Cannot reach the backend: {state.message}</p>
-        <button type="button" onClick={retry}>
+      <Alert>
+        <p className="m-0">Cannot reach the backend: {state.message}</p>
+        <Button size="sm" icon={RotateCw} className="mt-2" onClick={retry}>
           Retry
-        </button>
-      </div>
+        </Button>
+      </Alert>
     );
   }
 
   const databaseOk = state.ready.database === "ok";
   return (
-    <ul aria-label="Backend status">
-      <li>API: ok</li>
-      <li>Database: {databaseOk ? "ok" : "unavailable"}</li>
+    <ul aria-label="Backend status" className="m-0 grid list-none gap-1.5 p-0 text-sm">
+      <li className="flex items-center gap-2">
+        <CheckCircle2 className="size-4 text-success" aria-hidden />
+        API: ok
+      </li>
+      <li className="flex items-center gap-2">
+        {databaseOk ? (
+          <CheckCircle2 className="size-4 text-success" aria-hidden />
+        ) : (
+          <XCircle className="size-4 text-danger" aria-hidden />
+        )}
+        Database: {databaseOk ? "ok" : "unavailable"}
+      </li>
     </ul>
   );
 }

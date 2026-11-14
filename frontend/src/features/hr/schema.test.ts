@@ -4,7 +4,13 @@ import { sampleUser } from "@/test/fixtures";
 
 import { isDepartment, isDepartmentList, isUserPage } from "./schema";
 
-const division = { id: "d-1", name: "Sales", kind: "division", parent_id: null };
+const division = {
+  id: "d-1",
+  name: "Sales",
+  kind: "division",
+  parent_id: null,
+  head_user_id: null,
+};
 
 describe("isDepartment", () => {
   it("accepts valid departments", () => {
@@ -12,12 +18,17 @@ describe("isDepartment", () => {
     expect(isDepartment({ ...division, kind: "department", parent_id: "d-0" })).toBe(true);
   });
 
-  it.each([null, {}, { ...division, kind: "team" }, { ...division, parent_id: 3 }, "x"])(
-    "rejects %j",
-    (value) => {
-      expect(isDepartment(value)).toBe(false);
-    },
-  );
+  it.each([
+    null,
+    {},
+    { ...division, kind: "team" },
+    { ...division, parent_id: 3 },
+    { ...division, head_user_id: 7 },
+    { id: "d-1", name: "Sales", kind: "division", parent_id: null },
+    "x",
+  ])("rejects %j", (value) => {
+    expect(isDepartment(value)).toBe(false);
+  });
 
   it("checks every item of a list", () => {
     expect(isDepartmentList([division, division])).toBe(true);

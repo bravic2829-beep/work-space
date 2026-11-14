@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 
-import { createDepartment, deleteDepartment } from "./api";
+import { UserPicker } from "@/features/tables/UserPicker";
+
+import { createDepartment, deleteDepartment, setDepartmentHead } from "./api";
 import { ErrorMessage } from "./ErrorMessage";
 import type { Department, DepartmentKind } from "./schema";
 
@@ -42,6 +44,19 @@ export function DepartmentsPanel({
     }
   }
 
+  async function changeHead(department: Department, ids: string[]) {
+    setBusy(true);
+    setError(null);
+    try {
+      await setDepartmentHead(department.id, ids[0] ?? null);
+      onChanged();
+    } catch (caught) {
+      setError(caught);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function remove(department: Department) {
     if (!window.confirm(`Delete "${department.name}"?`)) return;
     setBusy(true);
@@ -69,6 +84,7 @@ export function DepartmentsPanel({
               <th>Name</th>
               <th>Type</th>
               <th>Under</th>
+              <th>Head</th>
               <th>
                 <span className="visually-hidden">Actions</span>
               </th>
@@ -80,6 +96,15 @@ export function DepartmentsPanel({
                 <td>{item.name}</td>
                 <td>{item.kind === "division" ? "Division" : "Department"}</td>
                 <td>{departments.find((parent) => parent.id === item.parent_id)?.name ?? ""}</td>
+                <td>
+                  <UserPicker
+                    label={`Head of ${item.name}`}
+                    value={item.head_user_id ? [item.head_user_id] : []}
+                    onChange={(ids) => void changeHead(item, ids)}
+                    multiple={false}
+                    disabled={busy}
+                  />
+                </td>
                 <td>
                   <button type="button" disabled={busy} onClick={() => void remove(item)}>
                     Delete

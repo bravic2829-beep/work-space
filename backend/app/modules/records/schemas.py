@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -29,3 +29,11 @@ class RecordUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     data: dict[str, Any]
+
+
+class ReviewAction(BaseModel):
+    """submit: report done (needs review). approve: reviewer says done. reject: back to work."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal["submit", "approve", "reject"]

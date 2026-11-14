@@ -17,6 +17,7 @@ class DepartmentPublic(BaseModel):
     name: str
     kind: DepartmentKind
     parent_id: uuid.UUID | None
+    head_user_id: uuid.UUID | None
 
 
 class DepartmentCreate(BaseModel):
@@ -25,6 +26,7 @@ class DepartmentCreate(BaseModel):
     name: DepartmentName
     kind: DepartmentKind
     parent_id: uuid.UUID | None = None
+    head_user_id: uuid.UUID | None = None
 
 
 class DepartmentUpdate(BaseModel):
@@ -34,3 +36,4 @@ class DepartmentUpdate(BaseModel):
 
     name: DepartmentName | None = None
     parent_id: uuid.UUID | None = None
+    head_user_id: uuid.UUID | None = None

@@ -1,8 +1,10 @@
 "use client";
 
+import { LogIn } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { Alert, Button, Checkbox, FormField, Input } from "@/components/ui";
 import { ApiError } from "@/lib/api/client";
 
 import { useAuth } from "./AuthProvider";
@@ -44,10 +46,9 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="form" aria-label="Sign in">
-      <label>
-        Employee code
-        <input
+    <form onSubmit={onSubmit} className="grid gap-4" aria-label="Sign in">
+      <FormField label="Employee code">
+        <Input
           name="employee_code"
           value={employeeCode}
           onChange={(event) => setEmployeeCode(event.target.value)}
@@ -55,10 +56,9 @@ export function LoginForm() {
           maxLength={50}
           required
         />
-      </label>
-      <label>
-        Password
-        <input
+      </FormField>
+      <FormField label="Password">
+        <Input
           name="password"
           type="password"
           value={password}
@@ -67,20 +67,17 @@ export function LoginForm() {
           maxLength={128}
           required
         />
-      </label>
-      <label className="inline">
-        <input
-          name="remember_me"
-          type="checkbox"
-          checked={rememberMe}
-          onChange={(event) => setRememberMe(event.target.checked)}
-        />
-        Remember me for 7 days
-      </label>
-      {error && <p role="alert">{error}</p>}
-      <button type="submit" disabled={submitting}>
+      </FormField>
+      <Checkbox
+        name="remember_me"
+        label="Remember me for 7 days"
+        checked={rememberMe}
+        onChange={(event) => setRememberMe(event.target.checked)}
+      />
+      {error && <Alert>{error}</Alert>}
+      <Button type="submit" variant="primary" icon={LogIn} disabled={submitting}>
         {submitting ? "Signing in…" : "Sign in"}
-      </button>
+      </Button>
     </form>
   );
 }
