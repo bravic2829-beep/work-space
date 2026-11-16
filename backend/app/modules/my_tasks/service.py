@@ -9,7 +9,7 @@ import uuid
 from datetime import UTC, date, datetime
 from typing import Any, Literal
 
-from sqlalchemy import Text, cast, exists, false, or_, select, true, tuple_
+from sqlalchemy import Text, cast, column, exists, false, func, or_, select, true, tuple_
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -23,10 +23,13 @@ from app.modules.fields.titles import title_field, title_of
 from app.modules.my_tasks.schemas import MyTask, TaskStatus
 from app.modules.permissions.service import is_org_admin
 from app.modules.records.models import Record, RecordViewer
+from app.modules.sheets.models import Sheet, SheetMember, SheetRole
 from app.modules.users.models import User
 from app.modules.workspaces.models import Workspace, WorkspaceMember
 
-Scope = Literal["assigned", "today"]
+# assigned: named as assignee. today: assigned and due on the given day. following: named as a
+# follower. review: in review, and I review it (I created it, or I manage a sheet that shows it).
+Scope = Literal["assigned", "today", "following", "review"]
 
 
 def _parse_cursor(cursor: str | None) -> tuple[datetime, uuid.UUID] | None:
@@ -66,9 +69,11 @@ async def list_my_tasks(
     today = _day(day)
 
     assignee = aliased(Field)
-    named = Record.data.op("->", return_type=JSONB)(cast(assignee.id, Text)).contains(
-        [str(actor.id)]
-    )
+
+    def cell(column: Any) -> Any:
+        return Record.data.op("->", return_type=JSONB)(cast(column.id, Text))
+
+    named = cell(assignee).contains([str(actor.id)])
     can_open = or_(
         exists().where(RecordViewer.record_id == Record.id, RecordViewer.user_id == actor.id),
         exists().where(
@@ -93,12 +98,53 @@ async def list_my_tasks(
             WorkBase.deleted_at.is_(None),
             Workspace.deleted_at.is_(None),
             Workspace.organization_id == actor.organization_id,
-            named,
             can_open,
         )
         .order_by(Record.created_at.desc(), Record.id.desc())
         .limit(limit + 1)
     )
+    if scope in ("assigned", "today"):
+        query = query.where(named)
+    elif scope == "following":
+        follower = aliased(Field)
+        query = query.join(
+            follower,
+            (follower.table_id == Record.table_id)
+            & (follower.semantic == FieldSemantic.FOLLOWER)
+            & follower.deleted_at.is_(None),
+        ).where(cell(follower).contains([str(actor.id)]))
+    else:  # review: waiting for a review that is mine to give
+        status = aliased(Field)
+        option = func.jsonb_array_elements(status.config["options"]).table_valued(
+            column("value", JSONB)
+        )
+        in_review = exists(
+            select(1)
+            .select_from(option)
+            .where(
+                option.c.value["id"].astext
+                == Record.data.op("->>", return_type=Text)(cast(status.id, Text)),
+                option.c.value["kind"].astext == "review",
+            )
+        )
+        manages_sheet = exists().where(
+            SheetMember.user_id == actor.id,
+            SheetMember.role == SheetRole.MANAGER,
+            SheetMember.sheet_id == Sheet.id,
+            Sheet.table_id == Record.table_id,
+            Sheet.archived_at.is_(None),
+            cell(assignee).contains(func.jsonb_build_array(cast(Sheet.owner_id, Text))),
+        )
+        query = query.join(
+            status,
+            (status.table_id == Record.table_id)
+            & (status.semantic == FieldSemantic.STATUS)
+            & status.deleted_at.is_(None),
+        ).where(
+            in_review,
+            # An admin reviews everything; others what they created or a sheet they manage.
+            true() if is_org_admin(actor) else or_(Record.created_by == actor.id, manages_sheet),
+        )
     if scope == "today":
         due = aliased(Field)
         query = query.join(

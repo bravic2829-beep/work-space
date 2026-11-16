@@ -23,12 +23,16 @@ async def review(
     action: str,
     *,
     version: Any = None,
+    reason: str | None = "Please fix the totals.",
 ) -> Any:
+    body: dict[str, Any] = {"action": action}
+    if action == "reject" and reason is not None:
+        body["reason"] = reason
     return await work.api(
         "POST",
         f"/records/{record['id']}/review",
         who,
-        json={"action": action},
+        json=body,
         headers={"If-Match": f'"{record["version"] if version is None else version}"'},
     )
 
@@ -88,10 +92,32 @@ async def test_the_reviewer_can_send_the_task_back(work: Work, board: Board) -> 
     assert rejected.status_code == 200, rejected.text
     assert (await status_of(work, board, task))[0] == "In progress"
 
+    # The assignee is told why, in the bell and in the comments of the task.
+    assert "changes_requested" in await inbox_types(work, "member")
+    comments = (await work.api("GET", f"/records/{task['id']}/comments", "member")).json()
+    assert [c["body"] for c in comments["items"]] == ["Sent back: Please fix the totals."]
+
     # The assignee can report again after a rejection.
     again = await review(work, rejected.json(), "member", "submit")
     assert again.status_code == 200, again.text
     assert len(await inbox_types(work, "admin")) == 2
+
+
+async def test_sending_back_needs_a_reason(work: Work, board: Board) -> None:
+    task = await started(work, board)
+    submitted = (await review(work, task, "member", "submit")).json()
+    assert_problem(await review(work, submitted, "admin", "reject", reason=None), 422)
+    assert_problem(await review(work, submitted, "admin", "reject", reason="   "), 422)
+    assert (await status_of(work, board, task))[0] == "Pending review"
+
+
+async def test_the_same_step_sent_twice_happens_once(work: Work, board: Board) -> None:
+    task = await started(work, board)
+    first = await review(work, task, "member", "submit")
+    assert first.status_code == 200
+    # A double click sends the same version again: refused, nothing changes twice.
+    assert_problem(await review(work, task, "member", "submit"), 412)
+    assert await inbox_types(work, "admin") == ["review_requested"]
 
 
 async def test_a_task_with_no_status_yet_can_be_reported(work: Work, board: Board) -> None:
@@ -144,8 +170,9 @@ async def test_nobody_is_notified_about_their_own_report(work: Work, board: Boar
 
 async def test_only_an_assignee_can_report_done(work: Work, board: Board) -> None:
     task = await started(work, board)
-    # Not assigned: another member, a workspace editor, even the admin who created it.
-    for who in ("member2", "editor", "admin", "viewer"):
+    # Not assigned: another member, a workspace editor or viewer. (The organization admin may
+    # report on anybody's behalf: test_admin_rights.py.)
+    for who in ("member2", "editor", "viewer"):
         response = await review(work, task, who, "submit")
         assert response.status_code == 403, (who, response.text)
     assert (await status_of(work, board, task))[0] == "In progress"

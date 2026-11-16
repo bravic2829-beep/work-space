@@ -115,13 +115,16 @@ async def test_only_the_person_who_deleted_a_record_sees_or_restores_it(
     record = await board.create("editor", Name="Mine")
     await delete(work, record, "editor")
 
-    # Not the admin, not another editor, not an outsider: nobody else sees it or brings it back.
-    for who in ("admin", "wsadmin", "member"):
+    # Not another editor, not an outsider: nobody else sees it or brings it back.
+    for who in ("wsadmin", "member"):
         assert await trashed(work, who) == []
         assert_problem(await restore(work, record["id"], who), 403)
     assert len(await trashed(work, "editor")) == 1
     assert_problem(await restore(work, record["id"], "other_admin"), 404)
     assert (await work.api("GET", f"/records/{record['id']}", "editor")).status_code == 404
+    # The organization admin sees everybody's trash and may bring it back.
+    assert [r["id"] for r in await trashed(work, "admin")] == [record["id"]]
+    assert (await restore(work, record["id"], "admin")).status_code == 200
 
 
 async def test_a_record_that_is_not_in_the_trash_cannot_be_restored(

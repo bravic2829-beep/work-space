@@ -15,15 +15,16 @@ router = APIRouter(tags=["my-tasks"])
 
 @router.get("/me/tasks", response_model=Page[MyTask])
 async def list_my_tasks(
-    scope: Literal["assigned", "today"] = "assigned",
+    scope: Literal["assigned", "today", "following", "review"] = "assigned",
     date: str | None = None,
     limit: int = DEFAULT_PAGE_SIZE,
     cursor: str | None = None,
     actor: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> Page[MyTask]:
-    """Tasks assigned to me across all tables. `scope=today` keeps those due on `date`
-    (YYYY-MM-DD, the caller's own day; the server's UTC day when left out)."""
+    """My tasks across all tables. `scope=assigned` (default): assigned to me. `scope=today`:
+    assigned and due on `date` (YYYY-MM-DD, the caller's own day; the server's UTC day when left
+    out). `scope=following`: I am a follower. `scope=review`: waiting for my review."""
     return await service.list_my_tasks(
         session, actor, scope=scope, day=date, limit=limit, cursor=cursor
     )

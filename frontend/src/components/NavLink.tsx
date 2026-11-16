@@ -12,26 +12,41 @@ type Props = {
   children: string;
   /** Highlight for every path under href, not only the exact one (default for all but "/"). */
   exact?: boolean;
+  /** On a wide screen show only the icon (the sidebar is collapsed). The name stays for screen readers. */
+  collapsed?: boolean;
 };
 
 /** A link of the main navigation. The page you are on is highlighted and marked for screen readers. */
-export function NavLink({ href, icon: Icon, children, exact = href === "/" }: Props) {
+export function NavLink({
+  href,
+  icon: Icon,
+  children,
+  exact = href === "/",
+  collapsed = false,
+}: Props) {
   const pathname = usePathname() ?? "";
   const active = exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
   return (
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
+      title={collapsed ? children : undefined}
       className={cn(
         "flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-sm no-underline transition-colors hover:no-underline",
+        collapsed && "md:justify-center md:px-0 md:py-2",
         active
           ? "bg-primary-soft font-semibold text-primary"
           : "font-normal text-muted hover:bg-primary-soft/60 hover:text-fg",
       )}
     >
       <Icon className="size-4 shrink-0" aria-hidden />
-      <span className="truncate">{children}</span>
-      {active && <span aria-hidden className="ml-auto size-1.5 rounded-full bg-primary" />}
+      <span className={cn("truncate", collapsed && "md:sr-only")}>{children}</span>
+      {active && (
+        <span
+          aria-hidden
+          className={cn("ml-auto size-1.5 rounded-full bg-primary", collapsed && "md:hidden")}
+        />
+      )}
     </Link>
   );
 }

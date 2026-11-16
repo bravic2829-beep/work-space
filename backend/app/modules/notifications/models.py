@@ -14,6 +14,8 @@ from app.db.types import str_enum
 class NotificationType(enum.StrEnum):
     TASK_ASSIGNED = "task_assigned"
     REVIEW_REQUESTED = "review_requested"
+    # The reviewer sent the work back with a reason.
+    CHANGES_REQUESTED = "changes_requested"
 
 
 class Notification(Base):

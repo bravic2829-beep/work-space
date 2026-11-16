@@ -164,8 +164,8 @@ async def test_only_the_author_deletes_a_comment(work: Work, board: Board) -> No
     comment = (await say(work, record, "member", "mine")).json()
     url = f"/comments/{comment['id']}"
 
-    # Even the admin and the creator of the task cannot remove somebody else's words.
-    for who in ("admin", "wsadmin", "editor"):
+    # The creator of the task and a workspace admin cannot remove somebody else's words.
+    for who in ("wsadmin", "editor"):
         assert_problem(await work.api("DELETE", url, who), 403)
     # Somebody who cannot see the record does not learn that the comment exists.
     assert_problem(await work.api("DELETE", url, "member2"), 404)
@@ -175,6 +175,13 @@ async def test_only_the_author_deletes_a_comment(work: Work, board: Board) -> No
     assert (await work.api("DELETE", url, "member")).status_code == 204
     assert (await read(work, record, "admin")).json()["items"] == []
     assert_problem(await work.api("DELETE", url, "member"), 404)
+
+
+async def test_the_organization_admin_deletes_any_comment(work: Work, board: Board) -> None:
+    record = await task(work, board)
+    comment = (await say(work, record, "member", "not okay")).json()
+    assert (await work.api("DELETE", f"/comments/{comment['id']}", "admin")).status_code == 204
+    assert (await read(work, record, "admin")).json()["items"] == []
 
 
 async def test_comments_of_a_record_in_the_trash_are_not_reachable(

@@ -52,6 +52,9 @@ SEMANTIC_TYPES: dict[FieldSemantic, FieldType] = {
     FieldSemantic.DUE_DATE: FieldType.DATE,
     FieldSemantic.PARENT: FieldType.LINK_RECORD,
     FieldSemantic.SUBTASKS: FieldType.LINK_RECORD,
+    FieldSemantic.TIMER_START: FieldType.DATE,
+    FieldSemantic.TIMER_STOP: FieldType.DATE,
+    FieldSemantic.FEEDBACK: FieldType.LONG_TEXT,
 }
 
 _COLOR = re.compile(r"^#[0-9a-fA-F]{6}$|^[a-z]{3,20}$")

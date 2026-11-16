@@ -14,6 +14,7 @@ from app.core.errors import ProblemError
 from app.modules.bases import repository as bases
 from app.modules.bases.models import Table, WorkBase
 from app.modules.records.models import Record, RecordViewer
+from app.modules.sheets.access import has_sheet_on_table
 from app.modules.users.models import OrgRole, User
 from app.modules.workspaces import repository as workspaces
 from app.modules.workspaces.models import Workspace, WorkspaceRole
@@ -152,7 +153,11 @@ async def require_table_read(
     that task, but only the records and the columns they may see.
     """
     context = await load_table_context(session, user, table_id)
-    if context.role is None and not await has_visible_records(session, user, table_id):
+    if (
+        context.role is None
+        and not await has_visible_records(session, user, table_id)
+        and not await has_sheet_on_table(session, user, table_id)
+    ):
         raise ProblemError(403, "You do not have permission to do this.")
     return context
 

@@ -14,6 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ProblemError
 from app.core.pagination import MAX_PAGE_SIZE, Page
+from app.modules.activity.log import diff, record_activity
+from app.modules.activity.models import ActivityAction
 from app.modules.fields import repository as fields_repo
 from app.modules.fields.access import column_access
 from app.modules.fields.models import Field, FieldAccessLevel, FieldSemantic, FieldType
@@ -31,9 +33,11 @@ from app.modules.permissions.service import (
     load_table_context,
     require_table_read,
 )
-from app.modules.records import links, listing, repository, subtasks, visibility
+from app.modules.records import links, listing, repository, sharing, subtasks, visibility
 from app.modules.records.models import Record
 from app.modules.records.schemas import RecordPublic
+from app.modules.sheets import access as sheet_access
+from app.modules.sheets.models import SheetRole
 from app.modules.users.models import User
 
 FORBIDDEN = "You do not have permission to do this."
@@ -122,10 +126,21 @@ async def render(
 
 
 async def _fields_with_access(
-    session: AsyncSession, actor: User, context: TableContext, *, is_creator: bool = False
+    session: AsyncSession,
+    actor: User,
+    context: TableContext,
+    *,
+    is_creator: bool = False,
+    record: Record | None = None,
+    sheet_role: SheetRole | None = None,
 ) -> list[tuple[Field, FieldAccessLevel]]:
+    """The columns with the caller's access. Given the record, a role on its sheet counts."""
     fields = await fields_repo.list_fields(session, table_id=context.table.id)
-    access = await column_access(session, actor, context, fields, is_creator=is_creator)
+    if sheet_role is None and record is not None:
+        sheet_role = await sheet_access.role_for_record(session, actor, record, fields)
+    access = await column_access(
+        session, actor, context, fields, is_creator=is_creator, sheet_role=sheet_role
+    )
     return [(f, access[f.id]) for f in fields]
 
 
@@ -223,14 +238,30 @@ async def _check_changes(
 
 
 async def create_record(
-    session: AsyncSession, actor: User, table_id: uuid.UUID, incoming: dict[str, Any]
+    session: AsyncSession,
+    actor: User,
+    table_id: uuid.UUID,
+    incoming: dict[str, Any],
+    *,
+    sheet_owner: uuid.UUID | None = None,
+    sheet_role: SheetRole | None = None,
 ) -> tuple[Record, RecordPublic]:
+    """Make a record. Given a sheet (its owner and the caller's role on it, already checked to
+    be an editor or better) the record goes on that sheet: the owner is its assignee."""
     context = await load_table_context(session, actor, table_id)
-    if not context.can_edit:
+    if sheet_owner is None and not context.can_edit:
         # Not an editor: the only way in is a subtask of a task assigned to a department head.
         await subtasks.require_subtask_right(session, actor, table_id, incoming)
-    fields = await _fields_with_access(session, actor, context, is_creator=True)
+    fields = await _fields_with_access(
+        session, actor, context, is_creator=sheet_owner is None, sheet_role=sheet_role
+    )
     changes = await _check_changes(session, actor, context, fields, incoming, record=None)
+    if sheet_owner is not None:
+        assignee = next((f for f, _ in fields if f.semantic == FieldSemantic.ASSIGNEE), None)
+        if assignee is None:
+            raise ProblemError(409, "The table has no assignee column.")
+        changes.data[str(assignee.id)] = [str(sheet_owner)]
+        changes.touches_viewers = True
 
     errors = [
         {"field": str(f.id), "message": "This field is required."}
@@ -255,6 +286,13 @@ async def create_record(
     await visibility.rebuild_record(session, record, [f for f, _ in fields])
     await _write_links(session, fields, record, changes)
     await _notify_newassignees(session, actor, record, fields, before=set(), after=record.data)
+    await record_activity(
+        session,
+        record_id=record.id,
+        actor_id=actor.id,
+        action=ActivityAction.CREATED,
+        changes=diff({}, record.data),
+    )
     await session.refresh(record)
     rendered = await render(session, actor, context, [record], _visible(fields))
     return record, rendered[0]
@@ -342,10 +380,21 @@ async def get_record(
 ) -> tuple[Record, RecordPublic]:
     record, context = await _load(session, actor, record_id)
     fields = await _fields_with_access(
-        session, actor, context, is_creator=record.created_by == actor.id
+        session, actor, context, is_creator=record.created_by == actor.id, record=record
     )
     rendered = await render(session, actor, context, [record], _visible(fields))
     return record, rendered[0]
+
+
+async def record_viewers(
+    session: AsyncSession, actor: User, record_id: uuid.UUID
+) -> sharing.RecordViewers:
+    """Who can see this record, for a person who may see it themselves."""
+    record, context = await _load(session, actor, record_id)
+    fields = await _fields_with_access(
+        session, actor, context, is_creator=record.created_by == actor.id, record=record
+    )
+    return await sharing.build(session, context, record, _visible(fields))
 
 
 async def list_records(
@@ -362,6 +411,27 @@ async def list_records(
     if not 1 <= limit <= MAX_PAGE_SIZE:
         raise ProblemError(422, f"The limit must be from 1 to {MAX_PAGE_SIZE}.")
     context = await require_table_read(session, actor, table_id)
+    return await list_in_context(
+        session, actor, context, limit=limit, cursor=cursor, sort=sort, filter_json=filter_json
+    )
+
+
+async def list_in_context(
+    session: AsyncSession,
+    actor: User,
+    context: TableContext,
+    *,
+    limit: int,
+    cursor: str | None,
+    sort: list[str],
+    filter_json: str | None,
+    extra_filters: list[Any] | None = None,
+) -> Page[RecordPublic]:
+    """`list_records` once the caller's right to read the table is settled. `extra_filters` are
+    conditions the caller adds itself (a sheet adds "names its owner")."""
+    if not 1 <= limit <= MAX_PAGE_SIZE:
+        raise ProblemError(422, f"The limit must be from 1 to {MAX_PAGE_SIZE}.")
+    table_id = context.table.id
     visible = _visible(await _fields_with_access(session, actor, context))
     # Filtering or sorting by a hidden column would reveal its values, so only visible columns
     # are known here.
@@ -370,7 +440,7 @@ async def list_records(
     built = listing.build_query(
         table_id=table_id,
         viewer_id=None if sees_everything(actor, context) else actor.id,
-        filters=listing.parse_filter(filter_json, by_id),
+        filters=[*listing.parse_filter(filter_json, by_id), *(extra_filters or [])],
         sort=listing.parse_sort(sort, by_id),
         cursor=cursor,
         limit=limit,
@@ -396,7 +466,7 @@ async def update_record(
 ) -> tuple[Record, RecordPublic]:
     record, context = await _load(session, actor, record_id, for_update=True)
     fields = await _fields_with_access(
-        session, actor, context, is_creator=record.created_by == actor.id
+        session, actor, context, is_creator=record.created_by == actor.id, record=record
     )
     expected = parse_if_match(if_match)
     changes = await _check_changes(session, actor, context, fields, incoming, record=record)
@@ -407,14 +477,21 @@ async def update_record(
     new_data.update(changes.data)
 
     changed_links = {}
+    link_history: dict[str, Any] = {}
     for field_id, targets in changes.links.items():
         column = next(f for f, _ in fields if f.id == field_id)
-        if set(targets) != set(await links.current_targets(session, column, record.id)):
+        current = await links.current_targets(session, column, record.id)
+        if set(targets) != set(current):
             changed_links[field_id] = targets
+            link_history[str(field_id)] = {
+                "from": [str(t) for t in current] or None,
+                "to": [str(t) for t in targets] or None,
+            }
     changes.links = changed_links
 
     if new_data != record.data or changed_links:
         assigned_before = assignees(record, fields)
+        history = {**diff(record.data, new_data), **link_history}
         record.data = new_data
         record.version = record.version + 1
         record.updated_at = datetime.now(UTC)
@@ -424,6 +501,13 @@ async def update_record(
         await _write_links(session, fields, record, changes)
         await _notify_newassignees(
             session, actor, record, fields, before=assigned_before, after=record.data
+        )
+        await record_activity(
+            session,
+            record_id=record.id,
+            actor_id=actor.id,
+            action=ActivityAction.UPDATED,
+            changes=history,
         )
         await session.refresh(record)
     rendered = await render(session, actor, context, [record], _visible(fields))
@@ -441,7 +525,7 @@ async def delete_record(session: AsyncSession, actor: User, record_id: uuid.UUID
     Records that were put in the trash before this change can still be restored (trash.py).
     """
     record, _ = await _load(session, actor, record_id, for_update=True)
-    if record.created_by != actor.id:
-        raise ProblemError(403, "Only the person who created a record can delete it.")
+    if record.created_by != actor.id and not is_org_admin(actor):
+        raise ProblemError(403, "Only the person who created a record, or an admin, can delete it.")
     await session.execute(delete(Record).where(Record.id == record.id))
     await session.flush()

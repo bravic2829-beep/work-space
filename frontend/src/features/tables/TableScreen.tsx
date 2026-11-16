@@ -1,15 +1,28 @@
 "use client";
 
-import { Plus, Save, Settings2, Trash2 } from "lucide-react";
+import { Plus, Save, Settings2, Timer, Trash2, UserPlus, Users, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { usePageCrumb } from "@/components/Breadcrumb";
 import { Alert, Button, Drawer, DrawerBody, Input, LoadingState, Select } from "@/components/ui";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { isOrgAdmin } from "@/features/auth/schema";
+import { createSheetRecord, listSheetRecords } from "@/features/sheets/api";
+import { CreateSheetDrawer } from "@/features/sheets/CreateSheetDrawer";
+import { sheetAccess, type SheetItem } from "@/features/sheets/schema";
 import { ApiError } from "@/lib/api/client";
 
 import { AddFieldForm } from "./AddFieldForm";
-import { createView, deleteRecord, deleteView, getTable, listRecords, listViews } from "./api";
+import { AssignTaskDrawer, assignTargets } from "./AssignTaskDrawer";
+import {
+  createField,
+  createView,
+  deleteRecord,
+  deleteView,
+  getTable,
+  listRecords,
+  listViews,
+} from "./api";
 import { ColumnsMenu } from "./ColumnsMenu";
 import { FilterBar } from "./FilterBar";
 import { ManageFieldsPanel } from "./ManageFieldsPanel";
@@ -23,6 +36,8 @@ import type {
   TableDetail,
   ViewItem,
 } from "./schema";
+import { fieldBySemantic } from "./taskWorkflow";
+import { timerFields } from "./timer";
 import { useHiddenColumns } from "./useHiddenColumns";
 import { useUserNames } from "./useUserNames";
 import { userIdsIn } from "./values";
@@ -51,9 +66,20 @@ function keepKnown<T>(items: T[], known: Set<string> | null, idOf: (item: T) => 
   return items.filter((item) => known.has(idOf(item)));
 }
 
+type Props = {
+  tableId: string;
+  /**
+   * Show one sheet of the table instead of the whole table: only the sheet's tasks, with the
+   * controls its role allows. A person who is not a member of the workspace uses a table this way.
+   */
+  sheet?: SheetItem;
+};
+
 /** The table view: columns, rows, filter, sort, saved views, and the record panel. */
-export function TableScreen({ tableId }: { tableId: string }) {
+export function TableScreen({ tableId, sheet }: Props) {
   const { state: auth } = useAuth();
+  const sheetId = sheet?.id;
+  const sheetRole = sheet?.my_role;
   const me = auth.status === "authenticated" ? auth.user.id : "";
 
   const [tableState, setTableState] = useState<TableState>({ kind: "loading" });
@@ -72,6 +98,10 @@ export function TableScreen({ tableId }: { tableId: string }) {
   const [savingView, setSavingView] = useState(false);
   const [viewName, setViewName] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
+  const [showAssign, setShowAssign] = useState(false);
+  const [flash, setFlash] = useState<string | null>(null);
+  const [addingTimer, setAddingTimer] = useState(false);
+  const [showCreateSheet, setShowCreateSheet] = useState(false);
 
   // A column deleted (here or by someone else) must not stay in the filter, sort or hidden list:
   // the server would answer 422 for a column it no longer knows. So these are derived, not stored.
@@ -97,6 +127,7 @@ export function TableScreen({ tableId }: { tableId: string }) {
         if (!controller.signal.aborted) setTableState({ kind: "error", error });
         return;
       }
+      if (sheetId) return; // saved views belong to the workspace, not to a sheet
       try {
         setViews(await listViews(tableId, controller.signal));
       } catch {
@@ -105,13 +136,16 @@ export function TableScreen({ tableId }: { tableId: string }) {
     }
     void load();
     return () => controller.abort();
-  }, [tableId, tableKey]);
+  }, [tableId, tableKey, sheetId]);
 
   useEffect(() => {
     const controller = new AbortController();
     async function load() {
       try {
-        const page = await listRecords(tableId, { filter, sort }, controller.signal);
+        const query = { filter, sort };
+        const page = sheetId
+          ? await listSheetRecords(sheetId, query, controller.signal)
+          : await listRecords(tableId, query, controller.signal);
         setRecords({ kind: "ready", items: page.items, nextCursor: page.next_cursor });
       } catch (error) {
         if (!controller.signal.aborted) setRecords({ kind: "error", error });
@@ -119,17 +153,23 @@ export function TableScreen({ tableId }: { tableId: string }) {
     }
     void load();
     return () => controller.abort();
-  }, [tableId, filter, sort, recordsKey]);
+  }, [tableId, sheetId, filter, sort, recordsKey]);
 
   const table = tableState.kind === "ready" ? tableState.table : null;
   usePageCrumb(table?.name ?? null);
 
+  // On a sheet the columns show what the person's role on the sheet allows.
+  const fields = useMemo<FieldItem[]>(() => {
+    if (!table) return [];
+    if (!sheetRole) return table.fields;
+    return table.fields.map((field) => ({ ...field, access: sheetAccess(sheetRole, field) }));
+  }, [table, sheetRole]);
+
   const items = records.kind === "ready" ? records.items : [];
   const shownFields = useMemo<FieldItem[]>(() => {
-    if (!table) return [];
-    const kept = table.fields.filter((field) => !hidden.includes(field.id));
-    return kept.length > 0 ? kept : table.fields.slice(0, 1);
-  }, [table, hidden]);
+    const kept = fields.filter((field) => !hidden.includes(field.id));
+    return kept.length > 0 ? kept : fields.slice(0, 1);
+  }, [fields, hidden]);
   const names = useUserNames(userIdsIn(shownFields, items));
 
   if (tableState.kind === "loading") return <LoadingState>Loading…</LoadingState>;
@@ -146,12 +186,54 @@ export function TableScreen({ tableId }: { tableId: string }) {
     );
   }
 
-  const canEdit = table.my_role === "editor" || table.my_role === "admin";
+  const canEdit = sheetRole
+    ? sheetRole === "editor" || sheetRole === "manager"
+    : table.my_role === "editor" || table.my_role === "admin";
+  const canAssign = !sheet && canEdit && assignTargets(table.fields) !== null;
+  const isAdmin = auth.status === "authenticated" && isOrgAdmin(auth.user);
+  // On a sheet, a manager of the sheet may start and stop the timer and review, like an admin.
+  const sheetManager = sheetRole === "manager";
+  const isTaskTable =
+    fieldBySemantic(table.fields, "assignee") !== undefined &&
+    fieldBySemantic(table.fields, "status") !== undefined;
+  // A task table that has no timer yet can get one.
+  const canAddTimer = !sheet && canEdit && isTaskTable && timerFields(table.fields) === null;
+  // The admin of the table's workspace may give a person a sheet of it.
+  const canMakeSheet = !sheet && (isAdmin || table.my_role === "admin") && isTaskTable;
   const selectedRecord = selected && selected !== "new" ? items.find((r) => r.id === selected) : null;
 
   function reloadRecords() {
     setRecords({ kind: "loading" });
     setRecordsKey((n) => n + 1);
+  }
+
+  /** A row came back from the server changed: show it in place, without a reload. */
+  function replaceRecord(saved: RecordItem) {
+    setRecords((current) =>
+      current.kind === "ready"
+        ? { ...current, items: current.items.map((item) => (item.id === saved.id ? saved : item)) }
+        : current,
+    );
+  }
+
+  /** Gives an older task table the two timer columns (new task tables already have them). */
+  async function addTimer() {
+    setNotice(null);
+    setAddingTimer(true);
+    try {
+      for (const [name, semantic] of [
+        ["Started at", "timer_start"],
+        ["Finished at", "timer_stop"],
+      ] as const) {
+        await createField(tableId, { name, type: "date", config: { include_time: true }, semantic });
+      }
+      setTableKey((n) => n + 1);
+      reloadRecords();
+    } catch (error) {
+      setNotice(error instanceof ApiError ? error.message : "Could not add the timer.");
+    } finally {
+      setAddingTimer(false);
+    }
   }
 
   function toggleSort(field: FieldItem) {
@@ -166,7 +248,8 @@ export function TableScreen({ tableId }: { tableId: string }) {
     if (records.kind !== "ready" || !records.nextCursor) return;
     setLoadingMore(true);
     try {
-      const page = await listRecords(tableId, { filter, sort, cursor: records.nextCursor });
+      const query = { filter, sort, cursor: records.nextCursor };
+      const page = sheetId ? await listSheetRecords(sheetId, query) : await listRecords(tableId, query);
       setRecords({
         kind: "ready",
         items: [...records.items, ...page.items],
@@ -240,7 +323,10 @@ export function TableScreen({ tableId }: { tableId: string }) {
       <h1 className="sr-only">{table.name}</h1>
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">
-        <section aria-label="View" className="flex flex-wrap items-center gap-2">
+        <section
+          aria-label="View"
+          className={sheet ? "hidden" : "flex flex-wrap items-center gap-2"}
+        >
           <label className="flex items-center gap-2 text-[13px] font-medium">
             View
             <Select
@@ -285,23 +371,71 @@ export function TableScreen({ tableId }: { tableId: string }) {
           )}
         </section>
 
-        {canEdit && (
+        {(canEdit || canMakeSheet) && (
           <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" icon={Plus} onClick={() => { setShowManage(false); setShowAddField(true); }}>
-              Add a column
-            </Button>
-            <Button size="sm" icon={Settings2} onClick={() => { setShowAddField(false); setShowManage(true); }}>
-              Manage columns
-            </Button>
-            <Button variant="primary" size="sm" icon={Plus} onClick={() => setSelected("new")}>
-              New record
-            </Button>
+            {canMakeSheet && (
+              <Button size="sm" icon={Users} onClick={() => setShowCreateSheet(true)}>
+                Create sheet
+              </Button>
+            )}
+            {canEdit && !sheet && (
+              <>
+                <Button
+                  size="sm"
+                  icon={Plus}
+                  onClick={() => {
+                    setShowManage(false);
+                    setShowAddField(true);
+                  }}
+                >
+                  Add a column
+                </Button>
+                <Button
+                  size="sm"
+                  icon={Settings2}
+                  onClick={() => {
+                    setShowAddField(false);
+                    setShowManage(true);
+                  }}
+                >
+                  Manage columns
+                </Button>
+              </>
+            )}
+            {canAddTimer && (
+              <Button size="sm" icon={Timer} loading={addingTimer} onClick={() => void addTimer()}>
+                Add timer
+              </Button>
+            )}
+            {canEdit && (
+              <Button
+                variant={canAssign ? "secondary" : "primary"}
+                size="sm"
+                icon={Plus}
+                onClick={() => setSelected("new")}
+              >
+                {sheet ? "Add task" : "New record"}
+              </Button>
+            )}
+            {canAssign && (
+              <Button
+                variant="primary"
+                size="sm"
+                icon={UserPlus}
+                onClick={() => {
+                  setSelected(null);
+                  setShowAssign(true);
+                }}
+              >
+                Assign task
+              </Button>
+            )}
           </div>
         )}
       </div>
 
       <FilterBar
-        fields={table.fields}
+        fields={fields}
         filter={filter}
         onChange={(next) => {
           setActiveView("");
@@ -309,7 +443,7 @@ export function TableScreen({ tableId }: { tableId: string }) {
         }}
         trailing={
           <ColumnsMenu
-            fields={table.fields}
+            fields={fields}
             hidden={hidden}
             onChange={(next) => {
               setActiveView("");
@@ -345,6 +479,45 @@ export function TableScreen({ tableId }: { tableId: string }) {
           />
         </DrawerBody>
       </Drawer>
+
+      {showAssign && canAssign && (
+        <AssignTaskDrawer
+          tableId={table.id}
+          fields={table.fields}
+          onClose={() => setShowAssign(false)}
+          onAssigned={(_record, taskName, assignee) => {
+            setFlash(`Assigned “${taskName}” to ${assignee}.`);
+            reloadRecords();
+          }}
+        />
+      )}
+
+      {showCreateSheet && canMakeSheet && (
+        <CreateSheetDrawer
+          tableId={table.id}
+          onClose={() => setShowCreateSheet(false)}
+          onCreated={(created) => {
+            setFlash(
+              `Sheet “${created.name}” created. Open Work summary in the sidebar to see it.`,
+            );
+          }}
+        />
+      )}
+
+      {flash && (
+        <Alert tone="success" className="items-center">
+          <span className="flex-1">{flash}</span>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="size-6"
+            aria-label="Dismiss"
+            onClick={() => setFlash(null)}
+          >
+            <X className="size-3.5" aria-hidden />
+          </Button>
+        </Alert>
+      )}
 
       {notice && <Alert>{notice}</Alert>}
 
@@ -386,6 +559,9 @@ export function TableScreen({ tableId }: { tableId: string }) {
               onLoadMore={() => void loadMore()}
               canEdit={canEdit}
               currentUserId={me}
+              isAdmin={isAdmin || sheetManager}
+              canDeleteAny={isAdmin}
+              onRecordChanged={replaceRecord}
               onDelete={(record) => void removeRecord(record)}
             />
           )}
@@ -394,10 +570,11 @@ export function TableScreen({ tableId }: { tableId: string }) {
           <RecordSidebar
             key="new"
             tableId={table.id}
-            fields={table.fields}
+            fields={fields}
             record={null}
             currentUserId={me}
             canCreate={canEdit}
+            onCreate={sheet ? (data) => createSheetRecord(sheet.id, data) : undefined}
             onSaved={(record) => {
               setSelected(record.id);
               reloadRecords();
@@ -411,20 +588,15 @@ export function TableScreen({ tableId }: { tableId: string }) {
           <RecordSidebar
             key={`${selectedRecord.id}-${selectedRecord.version}`}
             tableId={table.id}
-            fields={table.fields}
+            fields={fields}
             record={selectedRecord}
             currentUserId={me}
             canCreate={canEdit}
-            onSaved={(saved) =>
-              setRecords((current) =>
-                current.kind === "ready"
-                  ? {
-                      ...current,
-                      items: current.items.map((item) => (item.id === saved.id ? saved : item)),
-                    }
-                  : current,
-              )
-            }
+            isAdmin={isAdmin || sheetManager}
+            reviewer={sheetManager}
+            tableEditor={!sheet && canEdit}
+            admin={isAdmin}
+            onSaved={replaceRecord}
             onDeleted={(id) => {
               setSelected(null);
               setRecords((current) =>

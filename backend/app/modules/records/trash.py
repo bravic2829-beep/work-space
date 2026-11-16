@@ -1,6 +1,7 @@
 """The trash: list what I deleted, restore it, empty what is older than 30 days.
 
-Whoever deletes a record is the only one who restores it, and it stays 30 days
+Whoever deletes a record restores it (an organization admin sees and restores everybody's), and
+it stays 30 days
 (docs/usecases.md 3.4). After that a scheduled job (`python -m app.cli purge-trash`) removes it
 for good; links, viewers, comments and notifications of the record go with it.
 """
@@ -9,7 +10,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from pydantic import BaseModel
-from sqlalchemy import delete, select, tuple_
+from sqlalchemy import delete, select, true, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ProblemError
@@ -18,7 +19,7 @@ from app.modules.bases.models import Table, WorkBase
 from app.modules.fields import repository as fields_repo
 from app.modules.fields.models import FieldAccessLevel
 from app.modules.fields.titles import title_field, title_of
-from app.modules.permissions.service import load_table_context
+from app.modules.permissions.service import is_org_admin, load_table_context
 from app.modules.records import service
 from app.modules.records.models import Record
 from app.modules.records.schemas import RecordPublic
@@ -63,7 +64,7 @@ def _parse_cursor(cursor: str | None) -> tuple[datetime, uuid.UUID] | None:
 async def list_trash(
     session: AsyncSession, actor: User, *, limit: int, cursor: str | None
 ) -> Page[TrashItem]:
-    """The records this person deleted, newest deletion first."""
+    """The records this person deleted (an admin: everybody's), newest deletion first."""
     if not 1 <= limit <= MAX_PAGE_SIZE:
         raise ProblemError(422, f"The limit must be from 1 to {MAX_PAGE_SIZE}.")
     now = datetime.now(UTC)
@@ -73,7 +74,7 @@ async def list_trash(
         .join(WorkBase, WorkBase.id == Table.base_id)
         .join(Workspace, Workspace.id == WorkBase.workspace_id)
         .where(
-            Record.deleted_by == actor.id,
+            true() if is_org_admin(actor) else Record.deleted_by == actor.id,
             Record.deleted_at.is_not(None),
             Record.deleted_at >= now - timedelta(days=TRASH_DAYS),
             *_alive_in(actor.organization_id),
@@ -141,8 +142,10 @@ async def restore_record(
         raise ProblemError(404, "The record is not in the trash.")
     if record.deleted_at < datetime.now(UTC) - timedelta(days=TRASH_DAYS):
         raise ProblemError(404, "The record is not in the trash.")
-    if record.deleted_by != actor.id:
-        raise ProblemError(403, "Only the person who deleted a record can restore it.")
+    if record.deleted_by != actor.id and not is_org_admin(actor):
+        raise ProblemError(
+            403, "Only the person who deleted a record, or an admin, can restore it."
+        )
 
     record.deleted_at = None
     record.deleted_by = None

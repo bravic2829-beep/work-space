@@ -185,7 +185,7 @@ async def test_list_and_get_fields(work: Work) -> None:
     table = await table_with_tasks(work)
     listed = await work.api("GET", field_url(table), "viewer")
     assert listed.status_code == 200
-    assert len(listed.json()) == 7
+    assert len(listed.json()) == 13
     assert {f["access"] for f in listed.json()} == {"read"}
     positions = [f["position"] for f in listed.json()]
     assert positions == sorted(positions)
@@ -434,7 +434,8 @@ async def test_read_only_override_for_an_editor(work: Work) -> None:
     assert seen["Name"] == "edit"
 
 
-async def test_edit_override_for_a_viewer(work: Work) -> None:
+async def test_a_column_rule_never_gives_a_viewer_more_than_reading(work: Work) -> None:
+    """Column rules only narrow: "edit" on one column does not let a workspace viewer write."""
     table = await blank_table(work)
     field = await work.make_field(table["id"], "Notes", "text")
     url = f"/fields/{field['id']}/access/{work.users['viewer']}"
@@ -442,7 +443,7 @@ async def test_edit_override_for_a_viewer(work: Work) -> None:
     seen = {
         f["name"]: f["access"] for f in (await work.api("GET", field_url(table), "viewer")).json()
     }
-    assert seen["Notes"] == "edit"
+    assert seen["Notes"] == "read"
     assert seen["Name"] == "read"
 
 

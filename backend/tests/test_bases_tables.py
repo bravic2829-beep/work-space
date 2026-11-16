@@ -138,9 +138,24 @@ async def test_tasks_template_has_the_fields_a_task_needs(work: Work) -> None:
         "Follower",
         "Status",
         "Due date",
+        "Priority",
+        "Started at",
+        "Finished at",
+        "Progress update",
+        "Result",
+        "Manager feedback",
         "Parent task",
         "Subtasks",
     ]
+    assert by_name["Manager feedback"]["semantic"] == "feedback"
+    assert [o["name"] for o in by_name["Priority"]["config"]["options"]] == [
+        "High",
+        "Medium",
+        "Low",
+    ]
+    assert by_name["Started at"]["semantic"] == "timer_start"
+    assert by_name["Finished at"]["semantic"] == "timer_stop"
+    assert by_name["Started at"]["config"]["include_time"] is True
     assert by_name["Assignee"]["semantic"] == "assignee"
     assert by_name["Assignee"]["grants_view"] is True
     assert by_name["Follower"]["grants_view"] is True

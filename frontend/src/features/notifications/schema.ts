@@ -1,4 +1,6 @@
-export type NotificationType = "task_assigned" | "review_requested";
+export type NotificationType = "task_assigned" | "review_requested" | "changes_requested";
+
+const TYPES: string[] = ["task_assigned", "review_requested", "changes_requested"];
 
 export type Notification = {
   id: string;
@@ -22,7 +24,8 @@ export function isNotification(value: unknown): value is Notification {
   return (
     isRecord(value) &&
     typeof value.id === "string" &&
-    (value.type === "task_assigned" || value.type === "review_requested") &&
+    typeof value.type === "string" &&
+    TYPES.includes(value.type) &&
     typeof value.record_id === "string" &&
     typeof value.table_id === "string" &&
     (value.record_name === null || typeof value.record_name === "string") &&
@@ -57,6 +60,9 @@ export function describe(notification: Notification): string {
   const task = notification.record_name ? `"${notification.record_name}"` : "a task";
   if (notification.type === "review_requested") {
     return `${notification.actor.full_name} asks you to review ${task}`;
+  }
+  if (notification.type === "changes_requested") {
+    return `${notification.actor.full_name} sent ${task} back for changes`;
   }
   return `${notification.actor.full_name} assigned you ${task}`;
 }

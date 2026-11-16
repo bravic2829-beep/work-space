@@ -11,6 +11,7 @@ import {
   createView,
   deleteRecord,
   deleteView,
+  getRecordViewers,
   getTable,
   listRecords,
   listViews,
@@ -40,6 +41,7 @@ vi.mock("./api", () => ({
   deleteRecord: vi.fn(),
   createField: vi.fn(),
   listTables: vi.fn(),
+  getRecordViewers: vi.fn(),
 }));
 
 const fetchMeMock = vi.mocked(fetchMe);
@@ -68,6 +70,11 @@ beforeEach(() => {
   listViewsMock.mockResolvedValue([]);
   listRecordsMock.mockResolvedValue({ items: [alpha, beta], next_cursor: null });
   lookupUsersMock.mockResolvedValue([{ id: "u-2", employee_code: "E2", full_name: "Binh" }]);
+  vi.mocked(getRecordViewers).mockResolvedValue({
+    people: [],
+    workspace_name: "Workspace",
+    workspace_member_count: 1,
+  });
 });
 
 async function renderTable(role: Role | null = "editor") {

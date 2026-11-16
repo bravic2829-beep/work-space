@@ -11,6 +11,7 @@ import {
   isMemberList,
   isRecordItem,
   isRecordPage,
+  isRecordViewers,
   isTableDetail,
   isTableList,
   isViewItem,
@@ -27,6 +28,7 @@ import {
   type MemberItem,
   type RecordItem,
   type RecordPage,
+  type RecordViewers,
   type Role,
   type SortColumn,
   type TableDetail,
@@ -92,6 +94,8 @@ export type NewField = {
   type: FieldType;
   config?: Record<string, unknown>;
   is_required?: boolean;
+  /** The role of the column (the timer columns use timer_start and timer_stop). */
+  semantic?: string | null;
 };
 
 export function createField(tableId: string, field: NewField): Promise<FieldItem> {
@@ -213,12 +217,34 @@ export function reviewRecord(
   id: string,
   version: number,
   action: ReviewAction,
+  /** Required to send back (reject): what needs to change. */
+  reason?: string,
 ): Promise<RecordItem> {
   return apiRequest("POST", `${API}/records/${id}/review`, {
+    body: reason === undefined ? { action } : { action, reason },
+    guard: isRecordItem,
+    headers: { "If-Match": `"${version}"` },
+  });
+}
+
+export type TimerAction = "start" | "stop";
+
+/** Start the task timer (who gave the task) or stop it (the assignee). Sends If-Match. */
+export function timerRecord(
+  id: string,
+  version: number,
+  action: TimerAction,
+): Promise<RecordItem> {
+  return apiRequest("POST", `${API}/records/${id}/timer`, {
     body: { action },
     guard: isRecordItem,
     headers: { "If-Match": `"${version}"` },
   });
+}
+
+/** Who can see this record: the people named on it and the size of its workspace. */
+export function getRecordViewers(id: string, signal?: AbortSignal): Promise<RecordViewers> {
+  return apiRequest("GET", `${API}/records/${id}/viewers`, { guard: isRecordViewers, signal });
 }
 
 // --- comments ---

@@ -236,6 +236,46 @@ export function isCommentItem(value: unknown): value is CommentItem {
   );
 }
 
+export type ViewerReason = "creator" | "assignee" | "follower" | "field" | "sheet";
+export type RecordViewer = {
+  user_id: string;
+  full_name: string;
+  employee_code: string;
+  reasons: ViewerReason[];
+  field_names: string[];
+};
+/** Who can see one record: the people named on it, and how many people the workspace has. */
+export type RecordViewers = {
+  people: RecordViewer[];
+  workspace_name: string;
+  workspace_member_count: number;
+};
+
+const REASONS = ["creator", "assignee", "follower", "field", "sheet"];
+
+function isRecordViewer(value: unknown): value is RecordViewer {
+  return (
+    isRecord(value) &&
+    typeof value.user_id === "string" &&
+    typeof value.full_name === "string" &&
+    typeof value.employee_code === "string" &&
+    Array.isArray(value.reasons) &&
+    value.reasons.every((reason) => typeof reason === "string" && REASONS.includes(reason)) &&
+    Array.isArray(value.field_names) &&
+    value.field_names.every((name) => typeof name === "string")
+  );
+}
+
+export function isRecordViewers(value: unknown): value is RecordViewers {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.people) &&
+    value.people.every(isRecordViewer) &&
+    typeof value.workspace_name === "string" &&
+    typeof value.workspace_member_count === "number"
+  );
+}
+
 export function isCommentPage(value: unknown): value is CommentPage {
   return (
     isRecord(value) &&

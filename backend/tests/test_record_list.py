@@ -53,12 +53,8 @@ async def grid(work: Work) -> Grid:
     t = table["id"]
     points = await work.make_field(t, "Points", "number", config={"precision": 1})
     done = await work.make_field(t, "Done", "checkbox")
-    priority = await work.make_field(
-        t,
-        "Priority",
-        "single_select",
-        config={"options": [{"name": "High"}, {"name": "Medium"}, {"name": "Low"}]},
-    )
+    # The tasks template already has a Priority column: High, Medium, Low.
+    priority = next(f for f in table["fields"] if f["name"] == "Priority")
     tags = await work.make_field(
         t, "Tags", "multi_select", config={"options": [{"name": "x"}, {"name": "y"}]}
     )

@@ -1,11 +1,26 @@
 "use client";
 
-import { ArrowDown, ArrowUp, ChevronsUpDown, FileSearch, Pencil, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  ChevronsUpDown,
+  FileSearch,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 
-import { Badge, Button, DataTable, EmptyState, InlineConfirm } from "@/components/ui";
+import { Fragment } from "react";
+
+import { Avatar, Badge, Button, DataTable, EmptyState, InlineConfirm } from "@/components/ui";
+import { dueInfo, localToday, type DueTone } from "@/features/mytasks/schema";
+import { cn } from "@/lib/cn";
 
 import type { FieldItem, RecordItem, SortColumn } from "./schema";
 import { StatusBadge } from "./StatusBadge";
+import { statusKind } from "./taskWorkflow";
+import { formatMoment, isTimerField } from "./timer";
+import { TimerCell } from "./TimerCell";
 import { displayValue, isSortable, optionsOf } from "./values";
 
 type Props = {
@@ -24,7 +39,50 @@ type Props = {
   /** Only the person who created a record may delete it, so only they get a Delete button. */
   currentUserId?: string;
   onDelete?: (record: RecordItem) => void;
+  /** An organization admin may press Start and Stop on any task. */
+  isAdmin?: boolean;
+  /** A row changed on the server (a timer was started or stopped): show the new version. */
+  onRecordChanged?: (record: RecordItem) => void;
+  /** An organization admin may delete any row, not only the ones they created. */
+  canDeleteAny?: boolean;
 };
+
+const DUE_TONE: Record<DueTone, string> = {
+  overdue: "font-semibold text-danger",
+  today: "font-semibold text-primary",
+  normal: "",
+};
+
+/** A due date in words ("Today", "Overdue 2 days") with a colour and, when late, an icon. */
+function DueCell({ text, done }: { text: string; done: boolean }) {
+  const info = done ? null : dueInfo(text, localToday());
+  if (!info || info.tone === "normal") return <>{text}</>;
+  return (
+    <span className={cn("inline-flex items-center gap-1", DUE_TONE[info.tone])} title={text}>
+      {info.tone === "overdue" && <AlertTriangle className="size-3.5" aria-hidden />}
+      {info.label}
+    </span>
+  );
+}
+
+/** The people named in a user column, each with a round badge of their initials. */
+function PeopleCell({ ids, names }: { ids: unknown[]; names: ReadonlyMap<string, string> }) {
+  return (
+    <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
+      {ids
+        .filter((id): id is string => typeof id === "string")
+        .map((id) => {
+          const label = names.get(id) ?? "…";
+          return (
+            <span key={id} className="inline-flex items-center gap-1.5 whitespace-nowrap">
+              <Avatar name={label} className="size-5 text-[10px]" />
+              {label}
+            </span>
+          );
+        })}
+    </span>
+  );
+}
 
 function isWebLink(text: string): boolean {
   return /^https?:\/\//i.test(text);
@@ -64,8 +122,13 @@ export function RecordGrid({
   canEdit = false,
   currentUserId = "",
   onDelete,
+  isAdmin = false,
+  onRecordChanged,
+  canDeleteAny = false,
 }: Props) {
   const showActions = canEdit || (onDelete !== undefined && currentUserId !== "");
+  // The "Time" column (Start, the running clock, Stop) sits right after the last timer column.
+  const timerAt = fields.reduce((at, field, index) => (isTimerField(field) ? index : at), -1);
   function ariaSort(field: FieldItem): "ascending" | "descending" | "none" | undefined {
     if (!isSortable(field)) return undefined;
     const column = sort.find((s) => s.field === field.id);
@@ -83,31 +146,42 @@ export function RecordGrid({
 
   return (
     <div className="flex flex-col gap-2">
-      <DataTable dense aria-label="Records" className="[&_td]:max-w-80 [&_td]:truncate">
+      <DataTable dense sticky aria-label="Records" className="[&_td]:max-w-80 [&_td]:truncate">
         <thead>
           <tr>
-            {fields.map((field) => {
+            {fields.map((field, index) => {
               const direction = sort.find((s) => s.field === field.id)?.direction;
               const Arrow = direction === "asc" ? ArrowUp : direction === "desc" ? ArrowDown : ChevronsUpDown;
               return (
-                <th key={field.id} scope="col" aria-sort={ariaSort(field)}>
-                  {isSortable(field) ? (
-                    <button
-                      type="button"
-                      className="h-full gap-1 border-0 bg-transparent p-0 text-xs font-semibold tracking-wide text-muted uppercase hover:bg-transparent hover:text-fg"
-                      onClick={() => onSort(field)}
-                      aria-label={`Sort by ${field.name}`}
-                    >
-                      {field.name}
-                      <Arrow
-                        className={direction ? "size-3 text-primary" : "size-3 opacity-40"}
-                        aria-hidden
-                      />
-                    </button>
-                  ) : (
-                    field.name
+                <Fragment key={field.id}>
+                  <th
+                    scope="col"
+                    aria-sort={ariaSort(field)}
+                    className={index === 0 ? "min-w-64" : "whitespace-nowrap"}
+                  >
+                    {isSortable(field) ? (
+                      <button
+                        type="button"
+                        className="h-full gap-1 border-0 bg-transparent p-0 text-xs font-semibold tracking-wide text-muted uppercase hover:bg-transparent hover:text-fg"
+                        onClick={() => onSort(field)}
+                        aria-label={`Sort by ${field.name}`}
+                      >
+                        {field.name}
+                        <Arrow
+                          className={direction ? "size-3 text-primary" : "size-3 opacity-40"}
+                          aria-hidden
+                        />
+                      </button>
+                    ) : (
+                      field.name
+                    )}
+                  </th>
+                  {index === timerAt && (
+                    <th scope="col" className="whitespace-nowrap">
+                      Time
+                    </th>
                   )}
-                </th>
+                </Fragment>
               );
             })}
             {showActions && (
@@ -121,16 +195,13 @@ export function RecordGrid({
           {records.map((record) => {
             const selected = record.id === selectedId;
             return (
-              <tr
-                key={record.id}
-                aria-selected={selected}
-                className={selected ? "bg-primary-soft" : undefined}
-              >
+              <tr key={record.id} aria-selected={selected} className="group">
                 {fields.map((field, index) => {
                   const value = record.data[field.id];
                   const text = displayValue(field, value, names);
                   return (
-                    <td key={field.id}>
+                    <Fragment key={field.id}>
+                    <td className={index === 0 ? "min-w-64" : undefined}>
                       {index === 0 ? (
                         <button
                           type="button"
@@ -143,6 +214,14 @@ export function RecordGrid({
                       ) : (field.type === "status" || field.type === "single_select" || field.type === "multi_select") &&
                         text ? (
                         <Choice field={field} value={value} />
+                      ) : field.semantic === "due_date" && field.type === "date" && text ? (
+                        <DueCell text={text} done={statusKind(fields, record) === "done"} />
+                      ) : isTimerField(field) && text ? (
+                        <span className="whitespace-nowrap text-muted" title={text}>
+                          {formatMoment(value)}
+                        </span>
+                      ) : field.type === "user" && Array.isArray(value) && value.length > 0 ? (
+                        <PeopleCell ids={value} names={names} />
                       ) : field.type === "url" && isWebLink(text) ? (
                         <a href={text} target="_blank" rel="noopener noreferrer">
                           {text}
@@ -153,11 +232,23 @@ export function RecordGrid({
                         text
                       )}
                     </td>
+                    {index === timerAt && (
+                      <td className="whitespace-nowrap">
+                        <TimerCell
+                          fields={fields}
+                          record={record}
+                          currentUserId={currentUserId}
+                          isAdmin={isAdmin}
+                          onChanged={(updated) => onRecordChanged?.(updated)}
+                        />
+                      </td>
+                    )}
+                    </Fragment>
                   );
                 })}
                 {showActions && (
                   <td className="text-right whitespace-nowrap">
-                    <span className="inline-flex items-center justify-end gap-1">
+                    <span className="inline-flex items-center justify-end gap-1 transition-opacity max-md:opacity-100 md:opacity-0 md:focus-within:opacity-100 md:group-hover:opacity-100">
                       {canEdit && (
                         <Button
                           size="icon"
@@ -170,7 +261,7 @@ export function RecordGrid({
                           <Pencil className="size-4" aria-hidden />
                         </Button>
                       )}
-                      {onDelete && record.created_by === currentUserId && (
+                      {onDelete && (canDeleteAny || record.created_by === currentUserId) && (
                         <InlineConfirm
                           label="Delete"
                           icon={Trash2}

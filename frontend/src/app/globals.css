@@ -6,28 +6,28 @@
  * here only.
  */
 :root {
-  /* Syntropic Workspace palette (design/DESIGN.md): cool slate surfaces, cobalt primary. */
-  --bg: #f8f9ff;
+  /* The palette of the UI/UX design: light grey page, white content, one blue accent. */
+  --bg: #f6f7f9;
   --surface: #ffffff;
-  --surface-muted: #eff4ff;
-  --fg: #0b1c30;
-  --muted: #4a5262;
-  --line: #dde3ee;
-  --line-strong: #c2c6d6;
-  --primary: #0058be;
-  --primary-hover: #2170e4;
+  --surface-muted: #f2f4f7;
+  --fg: #1d2433;
+  --muted: #475467;
+  --line: #e4e7ec;
+  --line-strong: #d0d5dd;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
   --primary-fg: #ffffff;
-  --primary-soft: #e5eeff;
+  --primary-soft: #e8f0fe;
   --secondary: #4648d4;
   --secondary-soft: #e1e0ff;
-  --danger: #ba1a1a;
-  --danger-soft: #ffdad6;
-  --success: #006947;
-  --success-soft: #dcf7ea;
-  --warning: #a35a00;
-  --warning-soft: #fff3e0;
-  --info: #0058be;
-  --info-soft: #e5eeff;
+  --danger: #b42318;
+  --danger-soft: #fef3f2;
+  --success: #166534;
+  --success-soft: #ddf3e4;
+  --warning: #8a4b00;
+  --warning-soft: #fdf0d5;
+  --info: #1d4ed8;
+  --info-soft: #e3ecfe;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -78,7 +78,7 @@
   --color-warning-soft: var(--warning-soft);
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-be-vietnam), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
   --shadow-drawer: -8px 0 24px -4px rgb(15 28 48 / 0.12);
 }
@@ -106,7 +106,7 @@
   }
 
   h1 {
-    @apply text-2xl font-semibold tracking-tight;
+    @apply text-[22px] leading-tight font-bold tracking-tight;
     margin-block: 0 0.75rem;
   }
 

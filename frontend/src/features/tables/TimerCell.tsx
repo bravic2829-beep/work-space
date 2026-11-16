@@ -1,0 +1,103 @@
+"use client";
+
+import { Play, Square } from "lucide-react";
+import { useEffect, useState } from "react";
+
+import { Button } from "@/components/ui";
+import { ApiError } from "@/lib/api/client";
+import { cn } from "@/lib/cn";
+
+import { timerRecord, type TimerAction } from "./api";
+import type { FieldItem, RecordItem } from "./schema";
+import { elapsedMs, formatDuration, timerRights, timerState } from "./timer";
+
+type Props = {
+  fields: FieldItem[];
+  record: RecordItem;
+  currentUserId: string;
+  isAdmin: boolean;
+  onChanged: (record: RecordItem) => void;
+};
+
+/** The current time, refreshed every second while `active`. */
+function useNow(active: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [active]);
+  return now;
+}
+
+/**
+ * The task timer of one record: a Start button for the person who gave the task, the time running
+ * while the work is done, a Stop button for the assignee, and the time spent in the end.
+ */
+export function TimerCell({ fields, record, currentUserId, isAdmin, onChanged }: Props) {
+  const state = timerState(fields, record);
+  const rights = timerRights(fields, record, currentUserId, isAdmin);
+  const now = useNow(state.phase === "running");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function press(action: TimerAction) {
+    setBusy(true);
+    setMessage(null);
+    try {
+      onChanged(await timerRecord(record.id, record.version, action));
+    } catch (error) {
+      setMessage(
+        error instanceof ApiError && error.status === 412
+          ? "Somebody else changed this task. Reload the page."
+          : error instanceof ApiError
+            ? error.message
+            : "Could not change the timer.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <span className="inline-flex flex-wrap items-center gap-2">
+      {state.phase === "idle" && !rights.start && <span className="text-muted">Not started</span>}
+      {state.phase !== "idle" && (
+        <span
+          role="timer"
+          aria-label={state.phase === "running" ? "Time running" : "Time spent"}
+          className={cn(
+            "inline-flex items-center gap-1.5 font-mono text-[13px] font-semibold",
+            state.phase === "running" ? "text-primary" : "text-success",
+          )}
+        >
+          {state.phase === "running" && (
+            <span aria-hidden className="size-2 animate-pulse rounded-full bg-primary" />
+          )}
+          {formatDuration(elapsedMs(state, now))}
+        </span>
+      )}
+      {rights.start && (
+        <Button
+          size="sm"
+          variant="primary"
+          icon={Play}
+          disabled={busy}
+          onClick={() => void press("start")}
+        >
+          Start
+        </Button>
+      )}
+      {rights.stop && (
+        <Button size="sm" variant="secondary" icon={Square} disabled={busy} onClick={() => void press("stop")}>
+          Stop
+        </Button>
+      )}
+      {message && (
+        <span role="alert" className="w-full text-xs text-danger">
+          {message}
+        </span>
+      )}
+    </span>
+  );
+}

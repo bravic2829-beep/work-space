@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1 import health
+from app.modules.activity.router import router as activity_router
 from app.modules.auth.router import router as auth_router
 from app.modules.bases.router import router as bases_router
 from app.modules.comments.router import router as comments_router
@@ -10,6 +11,8 @@ from app.modules.notifications.router import router as notifications_router
 from app.modules.notifications.ws import router as notifications_ws_router
 from app.modules.organizations.router import router as departments_router
 from app.modules.records.router import router as records_router
+from app.modules.reports.router import router as reports_router
+from app.modules.sheets.router import router as sheets_router
 from app.modules.users.router import router as users_router
 from app.modules.views.router import router as views_router
 from app.modules.workspaces.router import router as workspaces_router
@@ -24,6 +27,9 @@ api_router.include_router(workspaces_router)
 api_router.include_router(bases_router)
 api_router.include_router(fields_router)
 api_router.include_router(records_router)
+api_router.include_router(sheets_router)
+api_router.include_router(activity_router)
+api_router.include_router(reports_router)
 api_router.include_router(views_router)
 api_router.include_router(notifications_router)
 api_router.include_router(comments_router)

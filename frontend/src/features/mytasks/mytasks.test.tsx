@@ -6,7 +6,7 @@ import { ApiError } from "@/lib/api/client";
 
 import { listMyTasks } from "./api";
 import { MyTasksScreen } from "./MyTasksScreen";
-import { isMyTask, isMyTaskPage, localToday } from "./schema";
+import { dueInfo, isMyTask, isMyTaskPage, localToday } from "./schema";
 import type { MyTask } from "./schema";
 
 vi.mock("next/link", () => ({
@@ -50,6 +50,19 @@ describe("my task shapes", () => {
     expect(localToday(new Date(2026, 10, 3))).toBe("2026-11-03");
     expect(localToday(new Date(2026, 0, 31))).toBe("2026-01-31");
   });
+
+  it("words a due date relative to today", () => {
+    const today = "2026-11-14";
+    expect(dueInfo(null, today)).toBeNull();
+    expect(dueInfo("2026-11-14", today)).toEqual({ label: "Today", tone: "today" });
+    expect(dueInfo("2026-11-15", today)).toEqual({ label: "Tomorrow", tone: "normal" });
+    expect(dueInfo("2026-11-21", today)).toEqual({ label: "2026-11-21", tone: "normal" });
+    expect(dueInfo("2026-11-13", today)).toEqual({ label: "Overdue 1 day", tone: "overdue" });
+    expect(dueInfo("2026-11-11", today)).toEqual({ label: "Overdue 3 days", tone: "overdue" });
+    // Across a month and a year boundary.
+    expect(dueInfo("2026-12-31", "2027-01-02")).toEqual({ label: "Overdue 2 days", tone: "overdue" });
+    expect(dueInfo("not a date", today)).toEqual({ label: "not a date", tone: "normal" });
+  });
 });
 
 describe("MyTasksScreen", () => {
@@ -58,7 +71,7 @@ describe("MyTasksScreen", () => {
       items: [
         task("a", "Call client", {
           status: { name: "In progress", kind: "in_progress" },
-          due_date: "2026-11-13",
+          due_date: "2099-01-05",
         }),
         task("b", "Fix router", { table_id: "t-2", table_name: "Ops" }),
       ],
@@ -72,7 +85,7 @@ describe("MyTasksScreen", () => {
     );
     expect(screen.getByRole("link", { name: "Fix router" })).toHaveAttribute("href", "/tables/t-2");
     expect(screen.getByText("In progress")).toBeInTheDocument();
-    expect(screen.getByText("2026-11-13")).toBeInTheDocument();
+    expect(screen.getByText("2099-01-05")).toBeInTheDocument();
     expect(listMock).toHaveBeenCalledWith("assigned", null, expect.any(AbortSignal));
   });
 
@@ -90,19 +103,48 @@ describe("MyTasksScreen", () => {
     const user = userEvent.setup();
 
     await screen.findByText("Call client");
-    expect(screen.getByRole("button", { name: "Assigned to me" })).toHaveAttribute(
-      "aria-pressed",
+    expect(screen.getByRole("tab", { name: "Assigned to me" })).toHaveAttribute(
+      "aria-selected",
       "true",
     );
-    await user.click(screen.getByRole("button", { name: "Today's tasks" }));
+    await user.click(screen.getByRole("tab", { name: "Due today" }));
 
-    expect(await screen.findByText("Due today")).toBeInTheDocument();
+    expect(await screen.findByText("Due today", { selector: "a" })).toBeInTheDocument();
     expect(screen.queryByText("Call client")).not.toBeInTheDocument();
     expect(listMock).toHaveBeenLastCalledWith("today", null, expect.any(AbortSignal));
-    expect(screen.getByRole("button", { name: "Today's tasks" })).toHaveAttribute(
-      "aria-pressed",
+    expect(screen.getByRole("tab", { name: "Due today" })).toHaveAttribute(
+      "aria-selected",
       "true",
     );
+  });
+
+  it("finds the overdue tasks among the assigned ones and warns about them", async () => {
+    listMock.mockResolvedValue({
+      items: [
+        task("a", "Late one", { due_date: "2000-01-01" }),
+        task("b", "Late but finished", {
+          due_date: "2000-01-01",
+          status: { name: "Done", kind: "done" },
+        }),
+        task("c", "Not late", { due_date: "2099-01-01" }),
+      ],
+      next_cursor: null,
+    });
+    render(<MyTasksScreen />);
+    const user = userEvent.setup();
+
+    expect(await screen.findByText("Late one")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("1 task is overdue.");
+    expect(screen.getByText(/^Overdue \d+ days$/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Show overdue" }));
+
+    expect(screen.getByRole("tab", { name: "Overdue" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("Late one")).toBeInTheDocument();
+    expect(screen.queryByText("Not late")).not.toBeInTheDocument();
+    expect(screen.queryByText("Late but finished")).not.toBeInTheDocument();
+    // The same list was reused: no second request for the overdue tab.
+    expect(listMock).toHaveBeenCalledTimes(1);
   });
 
   it("has a message for each empty list", async () => {
@@ -110,7 +152,7 @@ describe("MyTasksScreen", () => {
     render(<MyTasksScreen />);
     const user = userEvent.setup();
     expect(await screen.findByText("No tasks are assigned to you.")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Today's tasks" }));
+    await user.click(screen.getByRole("tab", { name: "Due today" }));
     expect(await screen.findByText("Nothing is due today.")).toBeInTheDocument();
   });
 

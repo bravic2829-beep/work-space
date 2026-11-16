@@ -48,6 +48,12 @@ class FieldSemantic(enum.StrEnum):
     DUE_DATE = "due_date"
     PARENT = "parent"
     SUBTASKS = "subtasks"
+    # The moment the person who gave the work pressed Start, and the moment the assignee pressed
+    # Stop (the timer endpoint writes them). The time spent is the difference.
+    TIMER_START = "timer_start"
+    TIMER_STOP = "timer_stop"
+    # What the manager says about the work. A sheet editor (the assignee) can read it, not write.
+    FEEDBACK = "feedback"
 
 
 class Field(Base):

@@ -2,7 +2,9 @@ import { apiRequest } from "@/lib/api/client";
 
 import { isMyTaskPage, localToday, type MyTaskPage } from "./schema";
 
-export type Scope = "assigned" | "today";
+/** assigned: given to me. today: given to me, due today. review: waiting for my review.
+ * following: I am a follower. */
+export type Scope = "assigned" | "today" | "review" | "following";
 
 export function listMyTasks(
   scope: Scope,

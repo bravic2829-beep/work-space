@@ -51,14 +51,18 @@ export function reviewSteps(
   fields: FieldItem[],
   record: RecordItem,
   currentUserId: string,
+  reviewer = false,
+  /** An organization admin: every step, on every task. */
+  admin = false,
 ): ReviewStep[] {
   const kind = statusKind(fields, record);
   if (kind === null) return [];
   const steps: ReviewStep[] = [];
-  if (assigneeIds(fields, record).includes(currentUserId) && kind !== "review" && kind !== "done") {
+  const assigned = assigneeIds(fields, record).includes(currentUserId);
+  if ((assigned || admin) && kind !== "review" && kind !== "done") {
     steps.push({ action: "submit", label: "Report as done" });
   }
-  if (record.created_by === currentUserId && kind === "review") {
+  if ((record.created_by === currentUserId || reviewer || admin) && kind === "review") {
     steps.push({ action: "approve", label: "Approve" });
     steps.push({ action: "reject", label: "Send back" });
   }

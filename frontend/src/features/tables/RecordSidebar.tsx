@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, RefreshCw, Save } from "lucide-react";
+import { Plus, RefreshCw, Save, Timer } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -14,11 +14,18 @@ import {
 import { ApiError } from "@/lib/api/client";
 
 import { createRecord, deleteRecord, updateRecord } from "./api";
+import { ActivityPanel } from "./ActivityPanel";
 import { CommentsPanel } from "./CommentsPanel";
 import { FieldEditor } from "./FieldEditor";
+import { HandoverForm } from "./HandoverForm";
+import { RecordViewersPanel } from "./RecordViewersPanel";
 import { ReviewActions } from "./ReviewActions";
 import type { FieldItem, RecordItem } from "./schema";
+import { StatusStepper } from "./StatusStepper";
 import { SubtaskForm } from "./SubtaskForm";
+import { assigneeIds, fieldBySemantic } from "./taskWorkflow";
+import { isTimerField, timerFields } from "./timer";
+import { TimerCell } from "./TimerCell";
 import { useUserNames } from "./useUserNames";
 import {
   canEditField,
@@ -43,6 +50,19 @@ type Props = {
   onClose: () => void;
   /** A subtask was added under this record (the list may want to reload). */
   onSubtaskCreated?: (subtask: RecordItem) => void;
+  /** An organization admin may press Start and Stop on any task. */
+  isAdmin?: boolean;
+  /** Writes a new record somewhere else than the table (a sheet adds the task for its owner). */
+  onCreate?: (data: Record<string, unknown>) => Promise<RecordItem>;
+  /** The person reviews the work of this record (a manager of its sheet), not only its creator. */
+  reviewer?: boolean;
+  /**
+   * An editor of the whole table (a workspace editor), who may hand any task over. Defaults to
+   * `canCreate`; on a sheet, editing the sheet does not give that right.
+   */
+  tableEditor?: boolean;
+  /** An organization admin: every right on every task (delete, review, comments). */
+  admin?: boolean;
 };
 
 const FORM_ID = "record-form";
@@ -67,6 +87,11 @@ export function RecordSidebar({
   onReload,
   onClose,
   onSubtaskCreated,
+  isAdmin = false,
+  onCreate,
+  reviewer = false,
+  tableEditor = canCreate,
+  admin = false,
 }: Props) {
   // The parent gives this component a new key per record and version, so the drafts start fresh.
   const [drafts, setDrafts] = useState(() => initialDrafts(fields, record));
@@ -80,6 +105,15 @@ export function RecordSidebar({
   const shown = fields.filter((field) => !(isNew && isComputed(field)));
   const editable = shown.some(canEditField);
   const isCreator = record?.created_by === currentUserId;
+  // The server decides; this only hides a button that is certain to be refused.
+  const canHandOver =
+    record !== null &&
+    fieldBySemantic(fields, "assignee") !== undefined &&
+    (isCreator ||
+      tableEditor ||
+      isAdmin ||
+      reviewer ||
+      assigneeIds(fields, record).includes(currentUserId));
   const { changes } = changesFor(fields, record, drafts);
   const dirty = Object.keys(changes).length > 0;
 
@@ -95,7 +129,9 @@ export function RecordSidebar({
     try {
       const saved = record
         ? await updateRecord(record.id, record.version, checked.changes)
-        : await createRecord(tableId, checked.changes);
+        : onCreate
+          ? await onCreate(checked.changes)
+          : await createRecord(tableId, checked.changes);
       onSaved(saved, isNew);
     } catch (error) {
       if (!(error instanceof ApiError)) {
@@ -144,11 +180,12 @@ export function RecordSidebar({
   }
 
   const showSave = editable && !conflict;
-  const showDelete = record !== null && isCreator;
+  const showDelete = record !== null && (isCreator || admin);
 
   return (
-    <Drawer open title={title} onClose={onClose}>
+    <Drawer open title={title} onClose={onClose} wide>
       <DrawerBody>
+        {record && <StatusStepper fields={fields} record={record} />}
         <form id={FORM_ID} onSubmit={(event) => void save(event)} className="flex flex-col gap-3">
           {shown.map((field) => (
             <FieldEditor
@@ -157,7 +194,7 @@ export function RecordSidebar({
               draft={drafts[field.id] ?? ""}
               value={record?.data[field.id]}
               names={names}
-              disabled={busy || !canEditField(field)}
+              disabled={busy || !canEditField(field) || isTimerField(field)}
               error={errors[field.id]}
               onChange={(draft) => setDrafts((current) => ({ ...current, [field.id]: draft }))}
             />
@@ -174,12 +211,37 @@ export function RecordSidebar({
         </form>
         {record && (
           <div className="grid gap-5 border-t border-line pt-4">
+            {timerFields(fields) && (
+              <section aria-label="Time" className="grid gap-2">
+                <h3 className="m-0 flex items-center gap-1.5 text-sm">
+                  <Timer className="size-4 text-muted" aria-hidden />
+                  Time spent
+                </h3>
+                <TimerCell
+                  fields={fields}
+                  record={record}
+                  currentUserId={currentUserId}
+                  isAdmin={isAdmin}
+                  onChanged={(updated) => onSaved(updated, false)}
+                />
+              </section>
+            )}
             <ReviewActions
               fields={fields}
               record={record}
               currentUserId={currentUserId}
+              reviewer={reviewer}
+              admin={admin}
               onChanged={(updated) => onSaved(updated, false)}
               onReload={onReload}
+            />
+            {canHandOver && (
+              <HandoverForm record={record} onChanged={(updated) => onSaved(updated, false)} />
+            )}
+            <RecordViewersPanel
+              fields={fields}
+              record={record}
+              onChanged={(updated) => onSaved(updated, false)}
             />
             <SubtaskForm
               tableId={tableId}
@@ -189,7 +251,8 @@ export function RecordSidebar({
               canCreate={canCreate}
               onCreated={(subtask) => onSubtaskCreated?.(subtask)}
             />
-            <CommentsPanel recordId={record.id} currentUserId={currentUserId} />
+            <CommentsPanel recordId={record.id} currentUserId={currentUserId} admin={admin} />
+            <ActivityPanel recordId={record.id} version={record.version} fields={fields} />
           </div>
         )}
       </DrawerBody>

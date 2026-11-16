@@ -13,6 +13,8 @@ type Props = {
   /** A line under the title, for example the employee code. */
   subtitle?: string;
   onClose: () => void;
+  /** 480px instead of 380px, for a panel with a lot in it (a record with comments). */
+  wide?: boolean;
   children: React.ReactNode;
 };
 
@@ -23,7 +25,7 @@ const FIRST_FIELD = "input:not([disabled]):not([type=hidden]), select:not([disab
  * thing without leaving the list. The list behind it stays usable on a wide screen. Escape and the
  * close button close it, the first field gets the focus, and the focus goes back to where it was.
  */
-export function Drawer({ open, title, subtitle, onClose, children }: Props) {
+export function Drawer({ open, title, subtitle, onClose, wide = false, children }: Props) {
   const titleId = useId();
   const panel = useRef<HTMLElement>(null);
   const onCloseRef = useRef(onClose);
@@ -65,7 +67,10 @@ export function Drawer({ open, title, subtitle, onClose, children }: Props) {
         role="dialog"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="fixed inset-y-0 right-0 z-40 flex w-full max-w-[380px] flex-col border-l border-line bg-surface shadow-drawer outline-none"
+        className={cn(
+          "fixed inset-y-0 right-0 z-40 flex w-full flex-col border-l border-line bg-surface shadow-drawer outline-none",
+          wide ? "max-w-[480px]" : "max-w-[380px]",
+        )}
       >
         <header className="flex items-start justify-between gap-2 border-b border-line px-4 py-3">
           <div className="min-w-0">

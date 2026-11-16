@@ -320,6 +320,35 @@ async def create_template_fields(session: AsyncSession, table: Table, template: 
         grants_view=False,
         is_required=False,
     )
+    await _insert(
+        session,
+        table,
+        name="Priority",
+        field_type=FieldType.SINGLE_SELECT,
+        config=normalize_config(
+            FieldType.SINGLE_SELECT,
+            {"options": [{"name": "High"}, {"name": "Medium"}, {"name": "Low"}]},
+        ),
+        semantic=None,
+        grants_view=False,
+        is_required=False,
+    )
+    await add_timer_fields(session, table)
+    for name, semantic in (
+        ("Progress update", None),
+        ("Result", None),
+        ("Manager feedback", FieldSemantic.FEEDBACK),
+    ):
+        await _insert(
+            session,
+            table,
+            name=name,
+            field_type=FieldType.LONG_TEXT,
+            config={},
+            semantic=semantic,
+            grants_view=False,
+            is_required=False,
+        )
     await _insert_link_pair(
         session,
         table,
@@ -331,6 +360,24 @@ async def create_template_fields(session: AsyncSession, table: Table, template: 
         grants_view=False,
         is_required=False,
     )
+
+
+async def add_timer_fields(session: AsyncSession, table: Table) -> None:
+    """The two columns of the task timer: when it was started and when it was stopped."""
+    for name, semantic in (
+        ("Started at", FieldSemantic.TIMER_START),
+        ("Finished at", FieldSemantic.TIMER_STOP),
+    ):
+        await _insert(
+            session,
+            table,
+            name=name,
+            field_type=FieldType.DATE,
+            config={"include_time": True},
+            semantic=semantic,
+            grants_view=False,
+            is_required=False,
+        )
 
 
 async def get_field(session: AsyncSession, actor: User, field_id: uuid.UUID) -> FieldPublic:

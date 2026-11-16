@@ -3,6 +3,7 @@
     uv run python -m app.cli seed-superadmin --employee-code ADMIN001 --full-name "Admin"
     uv run python -m app.cli rebuild-record-viewers [--table-id <uuid>]
     uv run python -m app.cli purge-trash
+    SEED_DEMO_PASSWORD=... uv run python -m app.cli seed-demo
 
 The password is read from the SEED_ADMIN_PASSWORD environment variable, or asked on the
 terminal. It is never accepted as an argument (it would end up in the shell history).
@@ -19,9 +20,11 @@ from sqlalchemy import select
 
 from app.core.config import get_settings
 from app.core.db import create_engine, create_sessionmaker
+from app.demo_seed import seed_demo
 from app.modules.bases.models import Table
 from app.modules.fields import repository as fields_repository
 from app.modules.records import trash, visibility
+from app.modules.users.models import OrgRole, User
 from app.modules.users.service import (
     InvalidSuperAdminInputError,
     OwnerAlreadyExistsError,
@@ -124,6 +127,37 @@ async def _purge_trash(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+async def _seed_demo(args: argparse.Namespace) -> int:
+    """Add the Vietnamese sample (employees, a task table, their sheets). Needs an owner."""
+    database_url = get_settings().database_url
+    if not database_url:
+        print("DATABASE_URL is not set. Copy .env.example to .env first.", file=sys.stderr)
+        return EXIT_REFUSED
+    password = os.environ.get("SEED_DEMO_PASSWORD") or getpass.getpass(
+        "Password for the sample employees: "
+    )
+    if len(password) < 8:
+        print("Refused: the password needs at least 8 characters.", file=sys.stderr)
+        return EXIT_REFUSED
+    engine = create_engine(database_url)
+    try:
+        async with create_sessionmaker(engine)() as session, session.begin():
+            owner = (
+                await session.execute(select(User).where(User.org_role == OrgRole.OWNER))
+            ).scalar_one_or_none()
+            if owner is None:
+                print("Refused: create the Super Admin first (seed-superadmin).", file=sys.stderr)
+                return EXIT_REFUSED
+            result = await seed_demo(session, owner, password)
+    finally:
+        await engine.dispose()
+    if not result.created:
+        print("The sample workspace already exists. Nothing was added.")
+    else:
+        print(f"Sample ready: {result.people} employees, {result.tasks} tasks, 3 sheets.")
+    return EXIT_OK
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -144,6 +178,11 @@ def main(argv: list[str] | None = None) -> int:
         "purge-trash", help="Delete records that have been in the trash for over 30 days"
     )
     purge.set_defaults(run=_purge_trash)
+
+    demo = commands.add_parser(
+        "seed-demo", help="Add Vietnamese sample employees, tasks and sheets (password from env)"
+    )
+    demo.set_defaults(run=_seed_demo)
 
     args = parser.parse_args(argv)
     exit_code: int = asyncio.run(args.run(args))

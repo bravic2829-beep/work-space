@@ -452,7 +452,11 @@ async def test_a_column_that_is_read_only_for_you_cannot_be_written(board: Board
     assert (await board.patch(record, "editor", **{"Due date": "2026-12-01"})).status_code == 200
 
 
-async def test_an_edit_override_lets_an_assignee_change_one_column(board: Board) -> None:
+async def test_a_column_rule_never_lets_an_assignee_write_but_a_sheet_does(
+    board: Board,
+) -> None:
+    """Column rules only narrow. An assignee who only reads the task stays read-only even with
+    "edit" on a column; giving them a sheet (editor) is how they get to write."""
     work = board.work
     record = await board.create(Name="Draft", Assignee=[board.user("member")])
     await work.api(
@@ -460,8 +464,21 @@ async def test_an_edit_override_lets_an_assignee_change_one_column(board: Board)
         f"/fields/{board.f['Due date']}/access/{board.user('member')}",
         json={"access": "edit"},
     )
+    assert_problem(await board.patch(record, "member", **{"Due date": "2026-12-01"}), 403)
+
+    sheet = await work.api(
+        "POST", f"/tables/{board.id}/sheets", json={"owner_id": board.user("member")}
+    )
+    assert sheet.status_code == 201, sheet.text
     assert (await board.patch(record, "member", **{"Due date": "2026-12-01"})).status_code == 200
-    assert_problem(await board.patch(record, "member", Name="Nope"), 403)
+    # A rule still narrows the sheet: "read" on Name stops the editor there.
+    await work.api(
+        "PUT",
+        f"/fields/{board.f['Name']}/access/{board.user('member')}",
+        json={"access": "read"},
+    )
+    fresh = (await work.api("GET", f"/records/{record['id']}", "member")).json()
+    assert_problem(await board.patch(fresh, "member", Name="Nope"), 403)
 
 
 async def test_the_creator_edits_their_own_record_even_when_not_a_workspace_member(
@@ -490,8 +507,9 @@ async def test_only_the_creator_deletes_a_record(board: Board, migrated_database
     work = board.work
     record = await board.create("editor", Name="Mine", Assignee=[board.user("member")])
     url = f"/records/{record['id']}"
-    # Not even an admin, a workspace admin or the assignee (docs/usecases.md 3.2).
-    for who in ("admin", "wsadmin", "member", "viewer", "member2"):
+    # Not a workspace admin, nor the assignee (docs/usecases.md 3.2). The organization admin
+    # may: see test_the_organization_admin_deletes_any_record.
+    for who in ("wsadmin", "member", "viewer", "member2"):
         assert_problem(await work.api("DELETE", url, who), 403)
     assert_problem(await work.api("DELETE", url, "other_admin"), 404)
     assert (await work.api("DELETE", url, "editor")).status_code == 204
@@ -502,6 +520,11 @@ async def test_only_the_creator_deletes_a_record(board: Board, migrated_database
         migrated_database_url, "SELECT id FROM records WHERE id = $1", uuid.UUID(record["id"])
     )
     assert rows == []
+
+
+async def test_the_organization_admin_deletes_any_record(board: Board) -> None:
+    record = await board.create("editor", Name="Not the admin's")
+    assert (await board.work.api("DELETE", f"/records/{record['id']}", "admin")).status_code == 204
 
 
 async def test_a_deleted_record_cannot_be_changed(board: Board) -> None:

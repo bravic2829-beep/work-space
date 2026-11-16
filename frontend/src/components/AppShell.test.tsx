@@ -88,6 +88,31 @@ describe("AppShell", () => {
     expect(button).toHaveAttribute("aria-expanded", "false");
   });
 
+  it("collapses the sidebar to icons and remembers the choice", async () => {
+    window.localStorage.clear();
+    fetchMeMock.mockResolvedValue(sampleUser());
+    const first = renderShell();
+    await screen.findByText("page content");
+
+    const sidebar = screen.getByRole("complementary", { name: "Sidebar" });
+    expect(sidebar).toHaveClass("md:w-60");
+    await userEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+    expect(sidebar).toHaveClass("md:w-16");
+    // The links keep their names for screen readers and show them as a tooltip.
+    expect(within(sidebar).getByRole("link", { name: "My tasks" })).toBeInTheDocument();
+    expect(window.localStorage.getItem("workbase.sidebar.collapsed")).toBe("1");
+
+    // A later visit starts collapsed, and one click opens it again.
+    first.unmount();
+    renderShell();
+    await screen.findByText("page content");
+    const again = screen.getByRole("complementary", { name: "Sidebar" });
+    expect(again).toHaveClass("md:w-16");
+    await userEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
+    expect(again).toHaveClass("md:w-60");
+    window.localStorage.clear();
+  });
+
   it("hides the HR link from an employee", async () => {
     fetchMeMock.mockResolvedValue(sampleUser());
     renderShell();

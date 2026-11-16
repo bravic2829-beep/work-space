@@ -1,6 +1,6 @@
 # WorkBase (tên tạm)
 
-Nền tảng quản lý công việc và dữ liệu nội bộ (kiểu Notion + Feishu Base). Đã xong **Phase 1 (nền móng), Phase 2 (xác thực, nhân sự, workspace) và Phase 3 (base, table, field, record)**. Giao việc, duyệt và thông báo (Phase 4) chưa làm. Tình trạng chi tiết: [`docs/STATUS.md`](docs/STATUS.md).
+Nền tảng quản lý công việc và dữ liệu nội bộ (kiểu Notion + Feishu Base). Đã có: xác thực, nhân sự, workspace và bảng dữ liệu, sheet theo từng nhân viên có phân quyền riêng, giao việc, duyệt (kèm lý do khi trả lại), bấm giờ, bàn giao, lịch sử, thông báo, My tasks và báo cáo tổng quan. Thiết kế, ma trận quyền, API và phần còn thiếu: [`docs/DESIGN.md`](docs/DESIGN.md).
 
 - Frontend: Next.js (App Router) + TypeScript
 - Backend: Python 3.12 + FastAPI (async) + SQLAlchemy 2.x + Alembic
@@ -49,6 +49,16 @@ docker compose exec backend python -m app.cli seed-superadmin --employee-code AD
 Lệnh sẽ hỏi mật khẩu (tối thiểu 8 ký tự). Có thể đặt biến `SEED_ADMIN_PASSWORD` thay vì nhập tay. Mật khẩu **không** nhận qua tham số vì sẽ nằm lại trong lịch sử shell. Nếu đã có owner thì lệnh từ chối và không đổi gì.
 
 Sau đó mở http://localhost:3000/login và đăng nhập bằng mã nhân viên và mật khẩu vừa đặt. Super Admin vào được mục **Human resources** để tạo phòng ban và nhân viên. Mỗi nhân viên được tạo đều có tài khoản và workspace cá nhân riêng. Chưa có đổi mật khẩu hay quên mật khẩu trong MVP.
+
+### Dữ liệu mẫu (tiếng Việt)
+
+Sau khi có Super Admin, thêm 4 nhân viên (QL01 quản lý sheet của NV101, NV102, NV103), bảng "Vận hành / Thương mại điện tử / Công việc" và 6 công việc mẫu:
+
+```bash
+docker compose exec -e SEED_DEMO_PASSWORD=<mat-khau-it-nhat-8-ky-tu> backend python -m app.cli seed-demo
+```
+
+Chạy lại lần nữa sẽ không thêm gì. Đăng nhập bằng mã nhân viên (ví dụ `NV101`) và mật khẩu vừa đặt.
 
 ## Phát triển và kiểm thử
 

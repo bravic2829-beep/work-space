@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/lib/api/client";
 
-import { createRecord, deleteRecord, lookupUsers, updateRecord } from "./api";
+import { createRecord, deleteRecord, getRecordViewers, lookupUsers, updateRecord } from "./api";
 import { DUE, FIELDS, NAME, POINTS, makeField, makeRecord } from "./fixtures";
 import { RecordSidebar } from "./RecordSidebar";
 import { resetUserNames } from "./useUserNames";
@@ -17,6 +17,7 @@ vi.mock("./api", () => ({
   searchDirectory: vi.fn(),
   getTable: vi.fn(),
   listRecords: vi.fn(),
+  getRecordViewers: vi.fn(),
 }));
 
 const createRecordMock = vi.mocked(createRecord);
@@ -53,6 +54,11 @@ beforeEach(() => {
   vi.resetAllMocks();
   resetUserNames();
   lookupUsersMock.mockResolvedValue([{ id: "u-2", employee_code: "E2", full_name: "Binh" }]);
+  vi.mocked(getRecordViewers).mockResolvedValue({
+    people: [],
+    workspace_name: "Workspace",
+    workspace_member_count: 1,
+  });
 });
 
 describe("showing a record", () => {

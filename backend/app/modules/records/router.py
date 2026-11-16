@@ -6,8 +6,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_session
 from app.core.pagination import DEFAULT_PAGE_SIZE, Page
 from app.modules.auth.dependencies import get_current_user
-from app.modules.records import review, service, trash
-from app.modules.records.schemas import RecordCreate, RecordPublic, RecordUpdate, ReviewAction
+from app.modules.records import handover, review, service, sharing, timer, trash
+from app.modules.records.schemas import (
+    RecordCreate,
+    RecordPublic,
+    RecordUpdate,
+    ReviewAction,
+    TimerAction,
+)
 from app.modules.users.models import User
 
 router = APIRouter(tags=["records"])
@@ -57,6 +63,16 @@ async def get_record(
     return public
 
 
+@router.get("/records/{record_id}/viewers", response_model=sharing.RecordViewers)
+async def get_record_viewers(
+    record_id: uuid.UUID,
+    actor: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> sharing.RecordViewers:
+    """Who can see this record: the people named on it, and the size of the workspace."""
+    return await service.record_viewers(session, actor, record_id)
+
+
 @router.patch("/records/{record_id}", response_model=RecordPublic)
 async def update_record(
     record_id: uuid.UUID,
@@ -92,7 +108,41 @@ async def review_record(
     session: AsyncSession = Depends(get_session),
 ) -> RecordPublic:
     """Report done (`submit`), approve or reject. Needs `If-Match` like a change does."""
-    record, public = await review.review_record(session, actor, record_id, body.action, if_match)
+    record, public = await review.review_record(
+        session, actor, record_id, body.action, if_match, body.reason
+    )
+    await session.commit()
+    response.headers["ETag"] = service.etag(record)
+    return public
+
+
+@router.post("/records/{record_id}/handover", response_model=RecordPublic)
+async def hand_over(
+    record_id: uuid.UUID,
+    body: handover.HandoverRequest,
+    response: Response,
+    if_match: str | None = Header(default=None),
+    actor: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> RecordPublic:
+    """Pass the task to someone who can already open the table, with the result and documents."""
+    record, public = await handover.hand_over(session, actor, record_id, body, if_match)
+    await session.commit()
+    response.headers["ETag"] = service.etag(record)
+    return public
+
+
+@router.post("/records/{record_id}/timer", response_model=RecordPublic)
+async def timer_record(
+    record_id: uuid.UUID,
+    body: TimerAction,
+    response: Response,
+    if_match: str | None = Header(default=None),
+    actor: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> RecordPublic:
+    """Start the task timer (who gave the task) or stop it (the assignee). Needs `If-Match`."""
+    record, public = await timer.timer_record(session, actor, record_id, body.action, if_match)
     await session.commit()
     response.headers["ETag"] = service.etag(record)
     return public

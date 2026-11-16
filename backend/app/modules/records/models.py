@@ -51,9 +51,12 @@ class Record(Base):
 class ViewerReason(enum.StrEnum):
     CREATOR = "creator"
     FIELD = "field"
+    # A member of a sheet that shows the record (the assignee's sheet).
+    SHEET = "sheet"
 
 
 CREATOR_SOURCE = "creator"
+SHEET_SOURCE_PREFIX = "sheet:"
 
 
 class RecordViewer(Base):

@@ -10,8 +10,11 @@ from app.core.errors import ProblemError
 from app.core.pagination import MAX_PAGE_SIZE, Page, decode_cursor, encode_cursor
 from app.modules.comments.models import Comment
 from app.modules.comments.schemas import CommentAuthor, CommentCreate, CommentPublic
-from app.modules.permissions.service import role_at_least
+from app.modules.fields import repository as fields_repo
+from app.modules.permissions.service import is_org_admin, role_at_least
 from app.modules.records import service as records
+from app.modules.sheets import access as sheet_access
+from app.modules.sheets.models import SheetRole
 from app.modules.users.models import User
 from app.modules.workspaces.models import WorkspaceRole
 
@@ -84,6 +87,15 @@ async def create_comment(
     record, context = await records._load(session, actor, record_id)
     if context.role is not None and not role_at_least(context.role, WorkspaceRole.COMMENTER):
         raise ProblemError(403, FORBIDDEN)
+    if context.role is None and record.created_by != actor.id:
+        # Outside the workspace and seeing the task only through a sheet as a viewer: read only.
+        columns = await fields_repo.list_fields(session, table_id=context.table.id)
+        if actor.id not in sheet_access.owners_of(record, columns):
+            if (
+                await sheet_access.role_for_record(session, actor, record, columns)
+                == SheetRole.VIEWER
+            ):
+                raise ProblemError(403, FORBIDDEN)
     if "\x00" in data.body:
         raise ProblemError(422, "The comment contains a character that is not allowed.")
     comment = Comment(record_id=record.id, author_id=actor.id, body=data.body)
@@ -94,7 +106,8 @@ async def create_comment(
 
 
 async def delete_comment(session: AsyncSession, actor: User, comment_id: uuid.UUID) -> None:
-    """Only the author deletes a comment. Somebody who cannot see the record gets a 404."""
+    """The author, or an organization admin, deletes a comment. Somebody who cannot see the
+    record gets a 404."""
     comment = await session.get(Comment, comment_id)
     if comment is None:
         raise ProblemError(404, "The comment does not exist.")
@@ -102,7 +115,7 @@ async def delete_comment(session: AsyncSession, actor: User, comment_id: uuid.UU
         await records._load(session, actor, comment.record_id)
     except ProblemError:
         raise ProblemError(404, "The comment does not exist.") from None
-    if comment.author_id != actor.id:
-        raise ProblemError(403, "Only the author can delete a comment.")
+    if comment.author_id != actor.id and not is_org_admin(actor):
+        raise ProblemError(403, "Only the author, or an admin, can delete a comment.")
     await session.delete(comment)
     await session.flush()

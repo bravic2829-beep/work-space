@@ -14,13 +14,15 @@ type State =
   | { kind: "error"; message: string }
   | { kind: "ready"; items: CommentItem[]; nextCursor: string | null };
 
-/** The comments of one record: read them, add one, delete your own. */
+/** The comments of one record: read them, add one, delete your own (an admin: any). */
 export function CommentsPanel({
   recordId,
   currentUserId,
+  admin = false,
 }: {
   recordId: string;
   currentUserId: string;
+  admin?: boolean;
 }) {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [text, setText] = useState("");
@@ -123,7 +125,7 @@ export function CommentsPanel({
                         <strong>{comment.author.full_name}</strong>{" "}
                         <small>{new Date(comment.created_at).toLocaleString()}</small>
                       </span>
-                      {comment.author.id === currentUserId && (
+                      {(comment.author.id === currentUserId || admin) && (
                         <Button
                           variant="ghost"
                           size="icon"

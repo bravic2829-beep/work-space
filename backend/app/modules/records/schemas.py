@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class RecordPublic(BaseModel):
@@ -37,3 +37,13 @@ class ReviewAction(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     action: Literal["submit", "approve", "reject"]
+    # Required to send back (reject): what needs to change.
+    reason: str | None = Field(default=None, max_length=2000)
+
+
+class TimerAction(BaseModel):
+    """start: the person who gave the task begins the clock. stop: the assignee ends it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal["start", "stop"]
