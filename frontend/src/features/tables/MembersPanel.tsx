@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 
 import { Alert, Button, Card, Input, Select } from "@/components/ui";
-import { ApiError } from "@/lib/api/client";
 
 import { addMember, changeMemberRole, listMembers, removeMember, searchDirectory } from "./api";
 import type { DirectoryUser, MemberItem, Role } from "./schema";
+import { errorMessage } from "@/lib/api/errors";
 
 const ROLES: Role[] = ["viewer", "commenter", "editor", "admin"];
 
@@ -45,7 +45,7 @@ export function MembersPanel({ workspaceId, canManage, currentUserId }: Props) {
         setLoadError(null);
       } catch (caught) {
         if (controller.signal.aborted) return;
-        setLoadError(caught instanceof ApiError ? caught.message : "Could not load the members.");
+        setLoadError(errorMessage(caught, "Could not load the members."));
       }
     }
     void load();
@@ -75,7 +75,7 @@ export function MembersPanel({ workspaceId, canManage, currentUserId }: Props) {
       await action();
       setReload((n) => n + 1);
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : fallback);
+      setError(errorMessage(caught, fallback));
     } finally {
       setBusy(false);
     }

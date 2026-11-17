@@ -14,10 +14,10 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { Alert, Avatar, EmptyState, LoadingState, PageHeader, Select } from "@/components/ui";
-import { ApiError } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
 
 import { getOverview, listReportTables, type Overview, type ReportTable } from "./api";
+import { errorMessage } from "@/lib/api/errors";
 
 type Tables =
   | { kind: "loading" }
@@ -37,10 +37,6 @@ const KIND_BAR: Record<string, string> = {
   done: "bg-success",
 };
 
-function message(error: unknown, fallback: string): string {
-  return error instanceof ApiError ? error.message : fallback;
-}
-
 /**
  * Reports: for one task table, what is late, what waits for review, and who carries what. Every
  * number counts only the tasks the person may open; a number that needs a column hidden from them
@@ -58,7 +54,7 @@ export function ReportsScreen() {
         setTables({ kind: "ready", items: await listReportTables(controller.signal) });
       } catch (error) {
         if (!controller.signal.aborted) {
-          setTables({ kind: "error", message: message(error, "Could not load the tables.") });
+          setTables({ kind: "error", message: errorMessage(error, "Could not load the tables.") });
         }
       }
     }
@@ -77,7 +73,7 @@ export function ReportsScreen() {
         setReport({ kind: "ready", data: await getOverview(id, controller.signal) });
       } catch (error) {
         if (!controller.signal.aborted) {
-          setReport({ kind: "error", message: message(error, "Could not load the report.") });
+          setReport({ kind: "error", message: errorMessage(error, "Could not load the report.") });
         }
       }
     }

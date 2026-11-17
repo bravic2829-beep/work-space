@@ -1,3 +1,5 @@
+import { isRecord, pageOf } from "@/lib/api/guards";
+
 export type NotificationType = "task_assigned" | "review_requested" | "changes_requested";
 
 const TYPES: string[] = ["task_assigned", "review_requested", "changes_requested"];
@@ -16,10 +18,6 @@ export type Notification = {
 
 export type NotificationPage = { items: Notification[]; next_cursor: string | null };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 export function isNotification(value: unknown): value is Notification {
   return (
     isRecord(value) &&
@@ -37,14 +35,7 @@ export function isNotification(value: unknown): value is Notification {
   );
 }
 
-export function isNotificationPage(value: unknown): value is NotificationPage {
-  return (
-    isRecord(value) &&
-    Array.isArray(value.items) &&
-    value.items.every(isNotification) &&
-    (value.next_cursor === null || typeof value.next_cursor === "string")
-  );
-}
+export const isNotificationPage = pageOf(isNotification);
 
 export function isUnreadCount(value: unknown): value is { unread: number } {
   return (

@@ -42,6 +42,7 @@ import { timerColumns } from "./timer";
 import { useHiddenColumns } from "./useHiddenColumns";
 import { useUserNames } from "./useUserNames";
 import { userIdsIn } from "./values";
+import { errorMessage } from "@/lib/api/errors";
 
 type TableState =
   | { kind: "loading" }
@@ -242,7 +243,7 @@ export function TableScreen({ tableId, sheet, addTaskSignal = 0 }: Props) {
       setTableKey((n) => n + 1);
       reloadRecords();
     } catch (error) {
-      setNotice(error instanceof ApiError ? error.message : "Could not add the timer.");
+      setNotice(errorMessage(error, "Could not add the timer."));
     } finally {
       setAddingTimer(false);
     }
@@ -286,7 +287,7 @@ export function TableScreen({ tableId, sheet, addTaskSignal = 0 }: Props) {
           : current,
       );
     } catch (error) {
-      setNotice(error instanceof ApiError ? error.message : "Could not delete the record.");
+      setNotice(errorMessage(error, "Could not delete the record."));
     }
   }
 
@@ -314,7 +315,7 @@ export function TableScreen({ tableId, sheet, addTaskSignal = 0 }: Props) {
       setSavingView(false);
       setViewName("");
     } catch (error) {
-      setNotice(error instanceof ApiError ? error.message : "Could not save the view.");
+      setNotice(errorMessage(error, "Could not save the view."));
     }
   }
 
@@ -325,7 +326,7 @@ export function TableScreen({ tableId, sheet, addTaskSignal = 0 }: Props) {
       setViews((current) => current.filter((v) => v.id !== activeView));
       setActiveView("");
     } catch (error) {
-      setNotice(error instanceof ApiError ? error.message : "Could not delete the view.");
+      setNotice(errorMessage(error, "Could not delete the view."));
     }
   }
 

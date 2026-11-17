@@ -4,10 +4,10 @@ import { MessageSquare, Send, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Alert, Avatar, Button, LoadingState, Textarea } from "@/components/ui";
-import { ApiError } from "@/lib/api/client";
 
 import { createComment, deleteComment, listComments } from "./api";
 import type { CommentItem } from "./schema";
+import { errorMessage, hasStatus } from "@/lib/api/errors";
 
 type State =
   | { kind: "loading" }
@@ -40,7 +40,7 @@ export function CommentsPanel({
         if (controller.signal.aborted) return;
         setState({
           kind: "error",
-          message: error instanceof ApiError ? error.message : "Could not load the comments.",
+          message: errorMessage(error, "Could not load the comments."),
         });
       }
     }
@@ -77,11 +77,9 @@ export function CommentsPanel({
       setText("");
     } catch (error) {
       setMessage(
-        error instanceof ApiError && error.status === 403
+        hasStatus(error, 403)
           ? "You can read this discussion but not write in it."
-          : error instanceof ApiError
-            ? error.message
-            : "Could not add the comment.",
+          : errorMessage(error, "Could not add the comment."),
       );
     } finally {
       setBusy(false);
@@ -96,7 +94,7 @@ export function CommentsPanel({
       await deleteComment(comment.id);
       setState({ ...state, items: state.items.filter((item) => item.id !== comment.id) });
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : "Could not delete the comment.");
+      setMessage(errorMessage(error, "Could not delete the comment."));
     } finally {
       setBusy(false);
     }

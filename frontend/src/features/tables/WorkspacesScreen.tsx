@@ -7,10 +7,10 @@ import { useEffect, useState } from "react";
 import { Alert, Badge, Button, EmptyState, Input, LoadingState, PageHeader } from "@/components/ui";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { isOrgAdmin } from "@/features/auth/schema";
-import { ApiError } from "@/lib/api/client";
 
 import { createWorkspace, listWorkspaces } from "./api";
 import type { WorkspaceItem } from "./schema";
+import { errorMessage } from "@/lib/api/errors";
 
 type State =
   | { kind: "loading" }
@@ -36,7 +36,7 @@ export function WorkspacesScreen() {
         if (controller.signal.aborted) return;
         setState({
           kind: "error",
-          message: caught instanceof ApiError ? caught.message : "Could not load workspaces.",
+          message: errorMessage(caught, "Could not load workspaces."),
         });
       }
     }
@@ -53,7 +53,7 @@ export function WorkspacesScreen() {
       setName("");
       setReload((n) => n + 1);
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "Could not create the workspace.");
+      setError(errorMessage(caught, "Could not create the workspace."));
     } finally {
       setSaving(false);
     }

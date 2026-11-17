@@ -4,13 +4,13 @@ import { Eye, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Alert, Avatar, Badge, Button, LoadingState, type Tone } from "@/components/ui";
-import { ApiError } from "@/lib/api/client";
 
 import { getRecordViewers, updateRecord } from "./api";
 import type { FieldItem, RecordItem, RecordViewers, ViewerReason } from "./schema";
 import { fieldBySemantic } from "./taskWorkflow";
 import { UserPicker } from "./UserPicker";
 import { canEditField } from "./values";
+import { errorMessage, hasStatus } from "@/lib/api/errors";
 
 type Props = {
   fields: FieldItem[];
@@ -76,11 +76,9 @@ export function RecordViewersPanel({ fields, record, onChanged }: Props) {
       onChanged(await updateRecord(record.id, record.version, { [follower.id]: next }));
     } catch (error) {
       setMessage(
-        error instanceof ApiError && error.status === 412
+        hasStatus(error, 412)
           ? "Somebody else changed this task. Close it and open it again."
-          : error instanceof ApiError
-            ? error.message
-            : "Could not change who can see this task.",
+          : errorMessage(error, "Could not change who can see this task."),
       );
     } finally {
       setBusy(false);

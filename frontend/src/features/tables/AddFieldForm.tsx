@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 
 import { Alert, Button, Checkbox, FormField, Input, Select, Textarea } from "@/components/ui";
-import { ApiError } from "@/lib/api/client";
 
 import { createField, listTables } from "./api";
 import { FIELD_TYPES, type FieldItem, type FieldType, type TableSummary } from "./schema";
+import { errorMessage } from "@/lib/api/errors";
 
 export const LABELS: Record<FieldType, string> = {
   text: "Text",
@@ -120,7 +120,7 @@ export function AddFieldForm({ tableId, baseId, existing = [], onCreated }: Prop
       setOptions("");
       onCreated(field);
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "Could not add the field.");
+      setError(errorMessage(caught, "Could not add the field."));
     } finally {
       setSaving(false);
     }

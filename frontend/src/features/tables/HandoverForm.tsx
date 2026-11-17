@@ -4,11 +4,11 @@ import { ArrowRightLeft } from "lucide-react";
 import { useState } from "react";
 
 import { Alert, Button, FormField, Input, Textarea } from "@/components/ui";
-import { ApiError } from "@/lib/api/client";
 
 import { handOver } from "./activity";
 import type { RecordItem } from "./schema";
 import { UserPicker } from "./UserPicker";
+import { errorMessage, hasStatus } from "@/lib/api/errors";
 
 type Props = {
   record: RecordItem;
@@ -55,11 +55,9 @@ export function HandoverForm({ record, onChanged }: Props) {
     } catch (error) {
       // What was typed stays, so it can be sent again.
       setMessage(
-        error instanceof ApiError && error.status === 412
+        hasStatus(error, 412)
           ? "Somebody else changed this task. Close it and open it again."
-          : error instanceof ApiError
-            ? error.message
-            : "Could not hand the task over.",
+          : errorMessage(error, "Could not hand the task over."),
       );
     } finally {
       setBusy(false);

@@ -8,13 +8,13 @@ import { Alert, Button, EmptyState, LoadingState, Select } from "@/components/ui
 import { useAuth } from "@/features/auth/AuthProvider";
 import { isOrgAdmin } from "@/features/auth/schema";
 import { TableScreen } from "@/features/tables/TableScreen";
-import { ApiError } from "@/lib/api/client";
 
 import { listSheets } from "./api";
 import { CreateSheetDrawer } from "./CreateSheetDrawer";
 import type { SheetItem } from "./schema";
 import { ShareSheetDrawer } from "./ShareSheetDrawer";
 import { ALL_TASKS, SheetTabs } from "./SheetTabs";
+import { errorMessage } from "@/lib/api/errors";
 
 type State =
   | { kind: "loading" }
@@ -89,7 +89,7 @@ export function WorkScreen() {
         if (controller.signal.aborted) return;
         setState({
           kind: "error",
-          message: error instanceof ApiError ? error.message : "Could not load the sheets.",
+          message: errorMessage(error, "Could not load the sheets."),
         });
       }
     }

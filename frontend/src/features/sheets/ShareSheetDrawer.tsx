@@ -16,7 +16,6 @@ import {
   Select,
 } from "@/components/ui";
 import { UserPicker } from "@/features/tables/UserPicker";
-import { ApiError } from "@/lib/api/client";
 
 import {
   archiveSheet,
@@ -32,6 +31,7 @@ import {
   type SheetMemberItem,
   type SheetRole,
 } from "./schema";
+import { errorMessage } from "@/lib/api/errors";
 
 type Props = {
   sheet: SheetItem;
@@ -64,10 +64,6 @@ type Members =
   | { kind: "loading" }
   | { kind: "error" }
   | { kind: "ready"; items: SheetMemberItem[] };
-
-function describe(error: unknown, fallback: string): string {
-  return error instanceof ApiError ? error.message : fallback;
-}
 
 /**
  * "Share": who is on the sheet and what each person may do, from two levels: system admins see
@@ -103,7 +99,7 @@ export function ShareSheetDrawer({ sheet, onRenamed, onArchived, onMembersChange
     try {
       await action();
     } catch (error) {
-      setMessage(describe(error, failure));
+      setMessage(errorMessage(error, failure));
     } finally {
       setBusy(false);
     }

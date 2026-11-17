@@ -4,11 +4,11 @@ import { Check, RefreshCw, Send, Undo2, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 
 import { Alert, Button, Textarea, type ButtonProps } from "@/components/ui";
-import { ApiError } from "@/lib/api/client";
 
 import { reviewRecord, type ReviewAction } from "./api";
 import type { FieldItem, RecordItem } from "./schema";
 import { reviewSteps } from "./taskWorkflow";
+import { errorMessage, hasStatus } from "@/lib/api/errors";
 
 type Props = {
   fields: FieldItem[];
@@ -60,12 +60,12 @@ export function ReviewActions({
           : await reviewRecord(record.id, record.version, action),
       );
     } catch (error) {
-      if (error instanceof ApiError && error.status === 412) {
+      if (hasStatus(error, 412)) {
         setConflict(true);
         setMessage("Somebody else changed this task. Reload it and try again.");
       } else {
         // The reason stays in the box, so nothing typed is lost.
-        setMessage(error instanceof ApiError ? error.message : "Could not update the task.");
+        setMessage(errorMessage(error, "Could not update the task."));
       }
     } finally {
       setBusy(false);

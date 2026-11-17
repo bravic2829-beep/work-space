@@ -4,13 +4,13 @@ import { ListPlus } from "lucide-react";
 import { useState } from "react";
 
 import { Alert, Button, FormField, Input } from "@/components/ui";
-import { ApiError } from "@/lib/api/client";
 
 import { createRecord } from "./api";
 import type { FieldItem, RecordItem } from "./schema";
 import { assigneeIds, fieldBySemantic, titleField } from "./taskWorkflow";
 import { UserPicker } from "./UserPicker";
 import { createdDateValue } from "./values";
+import { errorMessage, hasStatus } from "@/lib/api/errors";
 
 type Props = {
   tableId: string;
@@ -70,11 +70,9 @@ export function SubtaskForm({
       onCreated(created);
     } catch (error) {
       setMessage(
-        error instanceof ApiError && error.status === 403
+        hasStatus(error, 403)
           ? "Only an editor, or a department head assigned to this task, can add subtasks."
-          : error instanceof ApiError
-            ? error.message
-            : "Could not add the subtask.",
+          : errorMessage(error, "Could not add the subtask."),
       );
     } finally {
       setBusy(false);

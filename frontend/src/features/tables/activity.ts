@@ -1,6 +1,7 @@
 import { apiRequest } from "@/lib/api/client";
 
 import { isRecordItem, type RecordItem } from "./schema";
+import { isRecord } from "@/lib/api/guards";
 
 export type ActivityAction =
   | "created"
@@ -39,13 +40,9 @@ export type ActivityItem = {
   note: string | null;
 };
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function isChange(value: unknown): value is ActivityChange {
   return (
-    isObject(value) &&
+    isRecord(value) &&
     typeof value.field_id === "string" &&
     typeof value.field_name === "string" &&
     "before" in value &&
@@ -55,11 +52,11 @@ function isChange(value: unknown): value is ActivityChange {
 
 export function isActivityItem(value: unknown): value is ActivityItem {
   return (
-    isObject(value) &&
+    isRecord(value) &&
     typeof value.id === "string" &&
     typeof value.action === "string" &&
     ACTIONS.includes(value.action) &&
-    isObject(value.actor) &&
+    isRecord(value.actor) &&
     typeof value.actor.id === "string" &&
     typeof value.actor.full_name === "string" &&
     typeof value.created_at === "string" &&

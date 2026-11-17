@@ -4,12 +4,12 @@ import { Play, Square } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui";
-import { ApiError } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
 
 import { timerRecord, type TimerAction } from "./api";
 import type { FieldItem, RecordItem } from "./schema";
 import { elapsedMs, formatDuration, timerRights, timerState } from "./timer";
+import { errorMessage, hasStatus } from "@/lib/api/errors";
 
 type Props = {
   /** All the columns of the table (who is assigned is read from them). */
@@ -51,11 +51,9 @@ export function TimerCell({ fields, field, record, currentUserId, isAdmin, onCha
       onChanged(await timerRecord(record.id, record.version, action, field.id));
     } catch (error) {
       setMessage(
-        error instanceof ApiError && error.status === 412
+        hasStatus(error, 412)
           ? "Somebody else changed this task. Reload the page."
-          : error instanceof ApiError
-            ? error.message
-            : "Could not change the timer.",
+          : errorMessage(error, "Could not change the timer."),
       );
     } finally {
       setBusy(false);

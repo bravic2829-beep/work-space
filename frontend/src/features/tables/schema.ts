@@ -1,3 +1,5 @@
+import { isArrayOf, isRecord, pageOf } from "@/lib/api/guards";
+
 /** Shapes of what the tables API returns, with guards (data from the network is never trusted). */
 
 export type Role = "viewer" | "commenter" | "editor" | "admin";
@@ -84,16 +86,8 @@ export type ViewItem = { id: string; table_id: string; name: string; config: Vie
 
 export type DirectoryUser = { id: string; employee_code: string; full_name: string };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function isRole(value: unknown): value is Role {
   return value === "viewer" || value === "commenter" || value === "editor" || value === "admin";
-}
-
-function isArrayOf<T>(guard: (value: unknown) => value is T) {
-  return (value: unknown): value is T[] => Array.isArray(value) && value.every(guard);
 }
 
 export function isFieldItem(value: unknown): value is FieldItem {
@@ -179,14 +173,7 @@ export function isRecordItem(value: unknown): value is RecordItem {
   );
 }
 
-export function isRecordPage(value: unknown): value is RecordPage {
-  return (
-    isRecord(value) &&
-    Array.isArray(value.items) &&
-    value.items.every(isRecordItem) &&
-    (value.next_cursor === null || typeof value.next_cursor === "string")
-  );
-}
+export const isRecordPage = pageOf(isRecordItem);
 
 function isCondition(value: unknown): value is Condition {
   return isRecord(value) && typeof value.field === "string" && typeof value.op === "string";
@@ -277,11 +264,4 @@ export function isRecordViewers(value: unknown): value is RecordViewers {
   );
 }
 
-export function isCommentPage(value: unknown): value is CommentPage {
-  return (
-    isRecord(value) &&
-    Array.isArray(value.items) &&
-    value.items.every(isCommentItem) &&
-    (value.next_cursor === null || typeof value.next_cursor === "string")
-  );
-}
+export const isCommentPage = pageOf(isCommentItem);

@@ -13,10 +13,10 @@ import {
   LoadingState,
   PageHeader,
 } from "@/components/ui";
-import { ApiError } from "@/lib/api/client";
 
 import { deleteForever, listTrash, restoreRecord } from "./api";
 import type { TrashItem } from "./schema";
+import { errorMessage } from "@/lib/api/errors";
 
 type State =
   | { kind: "loading" }
@@ -41,7 +41,7 @@ export function TrashScreen() {
         if (controller.signal.aborted) return;
         setState({
           kind: "error",
-          message: error instanceof ApiError ? error.message : "Could not load the trash.",
+          message: errorMessage(error, "Could not load the trash."),
         });
       }
     }
@@ -60,7 +60,7 @@ export function TrashScreen() {
       setState({ ...state, items: state.items.filter((other) => other.id !== item.id) });
       setNotice(`Restored "${item.name ?? "a record"}" to ${item.table_name}.`);
     } catch (error) {
-      setProblem(error instanceof ApiError ? error.message : "Could not restore the record.");
+      setProblem(errorMessage(error, "Could not restore the record."));
     } finally {
       setBusyId(null);
     }
@@ -80,9 +80,7 @@ export function TrashScreen() {
       setNotice(`Removed "${item.name ?? "a record"}" for good.`);
     } catch (error) {
       setProblem(
-        error instanceof ApiError
-          ? error.message
-          : "Could not remove the record.",
+        errorMessage(error, "Could not remove the record."),
       );
     } finally {
       setBusyId(null);

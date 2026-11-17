@@ -1,4 +1,4 @@
-import { apiRequest } from "@/lib/api/client";
+import { API, apiRequest } from "@/lib/api/client";
 
 import {
   isBaseItem,
@@ -37,8 +37,6 @@ import {
   type ViewItem,
   type WorkspaceItem,
 } from "./schema";
-
-const API = "/api/v1";
 
 // --- workspaces, bases, tables ---
 
