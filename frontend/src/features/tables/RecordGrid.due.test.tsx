@@ -51,12 +51,12 @@ describe("the due date column of a task table", () => {
 
   it("does not call a finished task late", () => {
     renderGrid({ "f-due": "2000-01-01", "f-status": "s-done" });
-    expect(screen.getByText("2000-01-01")).toBeInTheDocument();
+    expect(screen.getByText("Jan 1, 2000")).toBeInTheDocument();
     expect(screen.queryByText(/Overdue/)).not.toBeInTheDocument();
   });
 
-  it("leaves a date far away as the plain date", () => {
+  it("writes a date far away as a short day, with the year when it is not this year", () => {
     renderGrid({ "f-due": "2099-05-06", "f-status": "s-todo" });
-    expect(screen.getByText("2099-05-06")).toBeInTheDocument();
+    expect(screen.getByText("May 6, 2099")).toBeInTheDocument();
   });
 });

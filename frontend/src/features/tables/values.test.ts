@@ -21,6 +21,7 @@ import {
   createdDateValue,
   describeCondition,
   displayValue,
+  emptyColumnIds,
   draftFromValue,
   isSortable,
   newRecordDraft,
@@ -249,5 +250,20 @@ describe("a date column filled when the record is created", () => {
     const drafts = { [auto.id]: newRecordDraft(auto) };
     const { changes } = changesFor([auto], null, drafts);
     expect(changes[auto.id]).toBe(createdDateValue(auto));
+  });
+});
+
+describe("emptyColumnIds", () => {
+  const timer = makeField("f-timer", "Timer", "timer");
+  const fields = [NAME, POINTS, PRIORITY, timer];
+
+  it("lists the columns that have no value in any row", () => {
+    const rows = [makeRecord("a", { "f-name": "A", "f-points": 3 }), makeRecord("b", { "f-name": "B", "f-priority": "" })];
+    expect(emptyColumnIds(fields, rows)).toEqual(["f-priority"]);
+  });
+
+  it("keeps the first column and the timers, and says nothing without rows", () => {
+    expect(emptyColumnIds(fields, [makeRecord("a", {})])).toEqual(["f-points", "f-priority"]);
+    expect(emptyColumnIds(fields, [])).toEqual([]);
   });
 });

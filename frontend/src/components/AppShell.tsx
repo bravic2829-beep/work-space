@@ -20,7 +20,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { Alert } from "@/components/ui";
+import { Alert, ToastProvider } from "@/components/ui";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/features/auth/AuthProvider";
@@ -74,7 +74,9 @@ function readCollapsed(): boolean {
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <BreadcrumbProvider>
-      <Shell>{children}</Shell>
+      <ToastProvider>
+        <Shell>{children}</Shell>
+      </ToastProvider>
     </BreadcrumbProvider>
   );
 }

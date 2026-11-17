@@ -10,6 +10,7 @@ import {
   DrawerBody,
   DrawerFooter,
   InlineConfirm,
+  Tabs,
 } from "@/components/ui";
 import { ApiError } from "@/lib/api/client";
 
@@ -20,17 +21,18 @@ import { CommentsPanel } from "./CommentsPanel";
 import { FieldEditor } from "./FieldEditor";
 import { HandoverForm } from "./HandoverForm";
 import { RecordViewersPanel } from "./RecordViewersPanel";
-import { ReviewActions } from "./ReviewActions";
 import type { FieldItem, RecordItem } from "./schema";
-import { StatusStepper } from "./StatusStepper";
 import { SubtaskForm } from "./SubtaskForm";
-import { assigneeIds, fieldBySemantic } from "./taskWorkflow";
+import { assigneeIds, fieldBySemantic, titleField } from "./taskWorkflow";
 import { isTimerField, timerColumns } from "./timer";
 import { TimerCell } from "./TimerCell";
+import { RECORD_TABS, type RecordTab } from "./recordTabs";
+import { TaskSummary } from "./TaskSummary";
 import { useUserNames } from "./useUserNames";
 import {
   canEditField,
   changesFor,
+  displayValue,
   draftFromValue,
   isComputed,
   newRecordDraft,
@@ -70,9 +72,16 @@ type Props = {
    * on), so the form leaves out the people columns and says who gets it.
    */
   givenTo?: string;
+  /**
+   * The section of the panel that is open, and how to change it. The parent keeps it, because the
+   * panel is made again after every change of the record. Without them the panel remembers it.
+   */
+  tab?: RecordTab;
+  onTabChange?: (tab: RecordTab) => void;
 };
 
 const FORM_ID = "record-form";
+const TABS_ID = "record";
 
 function initialDrafts(fields: FieldItem[], record: RecordItem | null): Record<string, Draft> {
   const drafts: Record<string, Draft> = {};
@@ -100,7 +109,12 @@ export function RecordSidebar({
   tableEditor = canCreate,
   admin = false,
   givenTo,
+  tab: tabFromParent,
+  onTabChange,
 }: Props) {
+  const [ownTab, setOwnTab] = useState<RecordTab>("details");
+  const tab = tabFromParent ?? ownTab;
+  const setTab = onTabChange ?? setOwnTab;
   // The parent gives this component a new key per record and version, so the drafts start fresh.
   const [drafts, setDrafts] = useState(() => initialDrafts(fields, record));
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -179,7 +193,7 @@ export function RecordSidebar({
     }
   }
 
-  const title = isNew ? "New record" : "Record";
+  const title = "New record";
 
   if (isNew && !canCreate) {
     return (
@@ -197,122 +211,148 @@ export function RecordSidebar({
   const showSave = editable && !conflict;
   const showDelete = record !== null && (isCreator || admin);
 
-  return (
-    <Drawer open title={title} onClose={onClose} wide>
-      <DrawerBody>
-        {record && <StatusStepper fields={fields} record={record} />}
-        <form id={FORM_ID} onSubmit={(event) => void save(event)} className="flex flex-col gap-3">
-          {isNew && givenTo !== undefined && (
-            <p className="m-0 text-sm text-muted">
-              This task will be given to <strong className="text-fg">{givenTo}</strong>.
-            </p>
-          )}
-          {shown.map((field) =>
-            field.type === "attachment" ? (
-              <AttachmentsField
-                key={field.id}
-                field={field}
-                record={record}
-                canEdit={field.access === "edit"}
-                onChanged={(updated) => onSaved(updated, false)}
-              />
-            ) : (
-            <FieldEditor
-              key={field.id}
-              field={field}
-              draft={drafts[field.id] ?? ""}
-              value={record?.data[field.id]}
-              names={names}
-              disabled={busy || !canEditField(field)}
-              error={errors[field.id]}
-              onChange={(draft) => setDrafts((current) => ({ ...current, [field.id]: draft }))}
-            />
-            ),
-          )}
-          {message && <Alert>{message}</Alert>}
-          {conflict && (
-            <Button icon={RefreshCw} onClick={onReload}>
-              Reload the latest version
-            </Button>
-          )}
-          {!editable && !isNew && (
-            <p className="m-0 text-sm text-muted">You can read this record but not change it.</p>
-          )}
-        </form>
-        {record && (
-          <div className="grid gap-5 border-t border-line pt-4">
-            {timers.map((timer) => (
-              <section key={timer.id} aria-label={timers.length > 1 ? timer.name : "Time"} className="grid gap-2">
-                <h3 className="m-0 flex items-center gap-1.5 text-sm">
-                  <Timer className="size-4 text-muted" aria-hidden />
-                  {timers.length > 1 ? timer.name : "Time spent"}
-                </h3>
-                <TimerCell
-                  fields={fields}
-                  field={timer}
-                  record={record}
-                  currentUserId={currentUserId}
-                  isAdmin={isAdmin}
-                  onChanged={(updated) => onSaved(updated, false)}
-                />
-              </section>
-            ))}
-            <ReviewActions
-              fields={fields}
-              record={record}
-              currentUserId={currentUserId}
-              reviewer={reviewer}
-              admin={admin}
-              onChanged={(updated) => onSaved(updated, false)}
-              onReload={onReload}
-            />
-            {canHandOver && (
-              <HandoverForm record={record} onChanged={(updated) => onSaved(updated, false)} />
-            )}
-            <RecordViewersPanel
-              fields={fields}
-              record={record}
-              onChanged={(updated) => onSaved(updated, false)}
-            />
-            <SubtaskForm
-              tableId={tableId}
-              fields={fields}
-              parent={record}
-              currentUserId={currentUserId}
-              canCreate={canCreate}
-              onCreated={(subtask) => onSubtaskCreated?.(subtask)}
-            />
-            <CommentsPanel recordId={record.id} currentUserId={currentUserId} admin={admin} />
-            <ActivityPanel recordId={record.id} version={record.version} fields={fields} />
-          </div>
-        )}
-      </DrawerBody>
-      {(showSave || showDelete) && (
-        <DrawerFooter>
-          {showSave && (
-            <Button
-              type="submit"
-              form={FORM_ID}
-              variant="primary"
-              icon={isNew ? Plus : Save}
-              disabled={busy || (!isNew && !dirty)}
-            >
-              {busy ? "Saving…" : isNew ? "Create record" : "Save changes"}
-            </Button>
-          )}
-          {showDelete && (
-            <span className="ml-auto">
-              <InlineConfirm
-                label="Delete record"
-                prompt="Delete this record for good?"
-                confirmLabel="Yes, delete"
-                disabled={busy}
-                onConfirm={() => void remove()}
-              />
-            </span>
-          )}
-        </DrawerFooter>
+  const form = (
+    <form id={FORM_ID} onSubmit={(event) => void save(event)} className="flex flex-col gap-3">
+      {isNew && givenTo !== undefined && (
+        <p className="m-0 text-sm text-muted">
+          This task will be given to <strong className="text-fg">{givenTo}</strong>.
+        </p>
       )}
+      {shown.map((field) =>
+        field.type === "attachment" ? (
+          <AttachmentsField
+            key={field.id}
+            field={field}
+            record={record}
+            canEdit={field.access === "edit"}
+            onChanged={(updated) => onSaved(updated, false)}
+          />
+        ) : (
+          <FieldEditor
+            key={field.id}
+            field={field}
+            draft={drafts[field.id] ?? ""}
+            value={record?.data[field.id]}
+            names={names}
+            disabled={busy || !canEditField(field)}
+            error={errors[field.id]}
+            onChange={(draft) => setDrafts((current) => ({ ...current, [field.id]: draft }))}
+          />
+        ),
+      )}
+      {message && <Alert>{message}</Alert>}
+      {conflict && (
+        <Button icon={RefreshCw} onClick={onReload}>
+          Reload the latest version
+        </Button>
+      )}
+      {!editable && !isNew && (
+        <p className="m-0 text-sm text-muted">You can read this record but not change it.</p>
+      )}
+    </form>
+  );
+
+  const footer = (showSave || showDelete) && (
+    <DrawerFooter>
+      {showSave && (
+        <Button
+          type="submit"
+          form={FORM_ID}
+          variant="primary"
+          icon={isNew ? Plus : Save}
+          disabled={busy || (!isNew && !dirty)}
+        >
+          {busy ? "Saving…" : isNew ? "Create record" : "Save changes"}
+        </Button>
+      )}
+      {showDelete && (
+        <span className="ml-auto">
+          <InlineConfirm
+            label="Delete record"
+            prompt="Delete this record for good?"
+            confirmLabel="Yes, delete"
+            disabled={busy}
+            onConfirm={() => void remove()}
+          />
+        </span>
+      )}
+    </DrawerFooter>
+  );
+
+  if (record === null) {
+    return (
+      <Drawer open title={title} onClose={onClose} wide>
+        <DrawerBody>{form}</DrawerBody>
+        {footer}
+      </Drawer>
+    );
+  }
+
+  const saved = (updated: RecordItem) => onSaved(updated, false);
+  const nameField = titleField(fields) ?? fields[0];
+  const taskName = displayValue(nameField, record.data[nameField.id], names);
+
+  return (
+    <Drawer open title={taskName || "(untitled)"} onClose={onClose} wide>
+      <TaskSummary
+        fields={fields}
+        record={record}
+        names={names}
+        currentUserId={currentUserId}
+        reviewer={reviewer}
+        admin={admin}
+        onChanged={saved}
+        onReload={onReload}
+      />
+      <div className="px-4 pt-2">
+        <Tabs label="Task sections" idPrefix={TABS_ID} tabs={RECORD_TABS} value={tab} onChange={setTab} />
+      </div>
+      <DrawerBody role="tabpanel" id={`${TABS_ID}-panel-${tab}`} aria-labelledby={`${TABS_ID}-tab-${tab}`}>
+        {tab === "details" && (
+          <>
+            {form}
+            <div className="grid gap-5 border-t border-line pt-4">
+              {timers.map((timer) => (
+                <section
+                  key={timer.id}
+                  aria-label={timers.length > 1 ? timer.name : "Time"}
+                  className="grid gap-2"
+                >
+                  <h3 className="m-0 flex items-center gap-1.5 text-sm">
+                    <Timer className="size-4 text-muted" aria-hidden />
+                    {timers.length > 1 ? timer.name : "Time spent"}
+                  </h3>
+                  <TimerCell
+                    fields={fields}
+                    field={timer}
+                    record={record}
+                    currentUserId={currentUserId}
+                    isAdmin={isAdmin}
+                    onChanged={saved}
+                  />
+                </section>
+              ))}
+              <SubtaskForm
+                tableId={tableId}
+                fields={fields}
+                parent={record}
+                currentUserId={currentUserId}
+                canCreate={canCreate}
+                onCreated={(subtask) => onSubtaskCreated?.(subtask)}
+              />
+              {canHandOver && <HandoverForm record={record} onChanged={saved} />}
+            </div>
+          </>
+        )}
+        {tab === "comments" && (
+          <CommentsPanel recordId={record.id} currentUserId={currentUserId} admin={admin} />
+        )}
+        {tab === "history" && (
+          <ActivityPanel recordId={record.id} version={record.version} fields={fields} />
+        )}
+        {tab === "access" && <RecordViewersPanel fields={fields} record={record} onChanged={saved} />}
+      </DrawerBody>
+      {tab === "details" && footer}
     </Drawer>
   );
 }

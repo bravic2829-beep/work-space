@@ -153,6 +153,34 @@ async def test_cannot_delete_a_department_that_is_still_in_use(
     assert len(still_there.json()) == 2
 
 
+async def test_a_department_says_how_many_employees_it_has(
+    client: AsyncClient, admin_headers: dict[str, str], migrated_database_url: str
+) -> None:
+    division = await create(client, admin_headers, "Sales", "division")
+    team = await create(client, admin_headers, "Team A", "department", division["id"])
+    assert team["member_count"] == 0
+    for code, status in (("E1", UserStatus.ACTIVE), ("E2", UserStatus.DISABLED)):
+        await create_user(
+            migrated_database_url,
+            employee_code=code,
+            status=status,
+            department_id=uuid.UUID(team["id"]),
+        )
+
+    listing = (await client.get("/api/v1/departments", headers=admin_headers)).json()
+    counts = {d["name"]: d["member_count"] for d in listing}
+    # Disabled employees still belong to the department, so they are counted. The division has
+    # no employees of its own.
+    assert counts == {"Sales": 0, "Team A": 2}
+
+    got = await client.get(f"/api/v1/departments/{team['id']}", headers=admin_headers)
+    assert got.json()["member_count"] == 2
+    renamed = await client.patch(
+        f"/api/v1/departments/{team['id']}", json={"name": "Team B"}, headers=admin_headers
+    )
+    assert renamed.json()["member_count"] == 2
+
+
 async def test_departments_of_another_organization_are_invisible(
     client: AsyncClient, admin_headers: dict[str, str], migrated_database_url: str
 ) -> None:

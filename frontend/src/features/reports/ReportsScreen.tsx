@@ -11,12 +11,11 @@ import {
   OctagonAlert,
   Pause,
   UserX,
-  type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { Alert, Avatar, EmptyState, LoadingState, PageHeader, Select } from "@/components/ui";
+import { Alert, Avatar, StatCard, EmptyState, LoadingState, PageHeader, Select } from "@/components/ui";
 import { cn } from "@/lib/cn";
 
 import type { Preset } from "@/features/tables/presets";
@@ -129,64 +128,7 @@ export function ReportsScreen() {
   );
 }
 
-function Stat({
-  label,
-  value,
-  icon: Icon,
-  tone = "neutral",
-  href,
-}: {
-  label: string;
-  value: number | null;
-  icon: LucideIcon;
-  tone?: "neutral" | "danger" | "warning" | "success" | "info";
-  /** Where a click leads: the tasks that were counted. Not a link when the number is hidden. */
-  href?: string;
-}) {
-  const hidden = value === null;
-  const body = (
-    <>
-      <span
-        className={cn(
-          "flex size-9 shrink-0 items-center justify-center rounded-md",
-          tone === "danger" && "bg-danger-soft text-danger",
-          tone === "warning" && "bg-warning-soft text-warning",
-          tone === "success" && "bg-success-soft text-success",
-          tone === "info" && "bg-primary-soft text-primary",
-          tone === "neutral" && "bg-surface-muted text-muted",
-        )}
-      >
-        <Icon className="size-4" aria-hidden />
-      </span>
-      <span className="flex flex-col leading-tight">
-        <span className="text-xl font-bold tabular-nums">{hidden ? "—" : value}</span>
-        <span className="text-[13px] text-muted">{label}</span>
-      </span>
-    </>
-  );
-  const frame = "flex items-center gap-3 rounded-lg border border-line bg-surface px-4 py-3";
-  if (href && !hidden) {
-    return (
-      <li>
-        <Link
-          href={href}
-          aria-label={`${label}: ${value}. Show these tasks`}
-          className={cn(frame, "text-fg no-underline transition-colors hover:border-primary hover:bg-surface-muted")}
-        >
-          {body}
-        </Link>
-      </li>
-    );
-  }
-  return (
-    <li
-      className={frame}
-      title={hidden ? "A column this number needs is hidden from you" : undefined}
-    >
-      {body}
-    </li>
-  );
-}
+const HIDDEN_HINT = "A column this number needs is hidden from you";
 
 /** A number in the per-person table: a link to that person's tasks when there are any. */
 function Count({ value, href, className }: { value: number; href: string; className?: string }) {
@@ -204,14 +146,14 @@ function OverviewView({ data }: { data: Overview }) {
   return (
     <div className="grid gap-5">
       <ul aria-label="Totals" className="m-0 grid list-none grid-cols-2 gap-3 p-0 md:grid-cols-4">
-        <Stat label="Open" value={data.open} icon={ListTodo} tone="info" href={link("open")} />
-        <Stat label="Overdue" value={data.overdue} icon={AlertTriangle} tone="danger" href={link("overdue")} />
-        <Stat label="Due today" value={data.due_today} icon={CalendarDays} tone="info" href={link("due_today")} />
-        <Stat label="Waiting for review" value={data.in_review} icon={ClipboardCheck} tone="warning" href={link("review")} />
-        <Stat label="Blocked" value={data.blocked} icon={OctagonAlert} tone="danger" href={link("blocked")} />
-        <Stat label="Paused" value={data.paused} icon={Pause} href={link("paused")} />
-        <Stat label="Done" value={data.done} icon={CheckCircle2} tone="success" href={link("done")} />
-        <Stat label="Unassigned" value={data.unassigned} icon={UserX} href={link("unassigned")} />
+        <StatCard unavailableHint={HIDDEN_HINT} label="Open" value={data.open} icon={ListTodo} tone="info" href={link("open")} />
+        <StatCard unavailableHint={HIDDEN_HINT} label="Overdue" value={data.overdue} icon={AlertTriangle} tone="danger" href={link("overdue")} />
+        <StatCard unavailableHint={HIDDEN_HINT} label="Due today" value={data.due_today} icon={CalendarDays} tone="info" href={link("due_today")} />
+        <StatCard unavailableHint={HIDDEN_HINT} label="Waiting for review" value={data.in_review} icon={ClipboardCheck} tone="warning" href={link("review")} />
+        <StatCard unavailableHint={HIDDEN_HINT} label="Blocked" value={data.blocked} icon={OctagonAlert} tone="danger" href={link("blocked")} />
+        <StatCard unavailableHint={HIDDEN_HINT} label="Paused" value={data.paused} icon={Pause} href={link("paused")} />
+        <StatCard unavailableHint={HIDDEN_HINT} label="Done" value={data.done} icon={CheckCircle2} tone="success" href={link("done")} />
+        <StatCard unavailableHint={HIDDEN_HINT} label="Unassigned" value={data.unassigned} icon={UserX} href={link("unassigned")} />
       </ul>
 
       {data.by_status && statusTotal > 0 && (

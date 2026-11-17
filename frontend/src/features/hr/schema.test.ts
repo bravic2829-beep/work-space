@@ -10,6 +10,7 @@ const division = {
   kind: "division",
   parent_id: null,
   head_user_id: null,
+  member_count: 0,
 };
 
 describe("isDepartment", () => {

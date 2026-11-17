@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ToastProvider } from "@/components/ui";
 import { fetchMe } from "@/features/auth/api";
 import { AuthProvider } from "@/features/auth/AuthProvider";
 import { ApiError } from "@/lib/api/client";
@@ -16,7 +17,7 @@ import {
   listDepartments,
   listUsers,
   resetPassword,
-  setDepartmentHead,
+  updateDepartment,
   updateUser,
 } from "./api";
 import { DepartmentsPanel } from "./DepartmentsPanel";
@@ -38,7 +39,7 @@ vi.mock("./api", () => ({
   listDepartments: vi.fn(),
   createDepartment: vi.fn(),
   deleteDepartment: vi.fn(),
-  setDepartmentHead: vi.fn(),
+  updateDepartment: vi.fn(),
 }));
 vi.mock("@/features/tables/api", () => ({
   searchDirectory: vi.fn(),
@@ -53,7 +54,7 @@ const resetPasswordMock = vi.mocked(resetPassword);
 const listDepartmentsMock = vi.mocked(listDepartments);
 const createDepartmentMock = vi.mocked(createDepartment);
 const deleteDepartmentMock = vi.mocked(deleteDepartment);
-const setHeadMock = vi.mocked(setDepartmentHead);
+const updateDepartmentMock = vi.mocked(updateDepartment);
 const searchMock = vi.mocked(searchDirectory);
 const lookupMock = vi.mocked(lookupUsers);
 const ann = { id: "u-ann", employee_code: "A1", full_name: "Ann" };
@@ -64,6 +65,7 @@ const sales: Department = {
   kind: "division",
   parent_id: null,
   head_user_id: null,
+  member_count: 0,
 };
 const teamA: Department = {
   id: "d-2",
@@ -71,6 +73,7 @@ const teamA: Department = {
   kind: "department",
   parent_id: "d-1",
   head_user_id: null,
+  member_count: 1,
 };
 const departments = [sales, teamA];
 
@@ -99,9 +102,25 @@ beforeEach(() => {
 function renderUsers(deps: Department[] = departments) {
   return render(
     <AuthProvider>
-      <UsersPanel departments={deps} />
+      <ToastProvider>
+        <UsersPanel
+          departments={deps}
+          departmentId=""
+          onDepartmentChange={vi.fn()}
+          onChanged={vi.fn()}
+        />
+      </ToastProvider>
     </AuthProvider>,
   );
+}
+
+/** Opens the "..." menu of an employee's row. */
+async function openMenu(code: string) {
+  await userEvent.click(within(row(code)).getByRole("button", { name: /^Actions for/ }));
+}
+
+async function choose(name: string) {
+  await userEvent.click(screen.getByRole("menuitem", { name }));
 }
 
 function row(code: string): HTMLElement {
@@ -117,14 +136,16 @@ describe("UsersPanel: listing", () => {
   it("shows a loading state, then the employees with their department names", async () => {
     listUsersMock.mockResolvedValue({ items: [employee], next_cursor: null });
     renderUsers();
-    expect(screen.getByRole("status")).toHaveTextContent("Loading employees");
+    expect(screen.getByText("Loading employees…")).toBeInTheDocument();
 
     expect(await screen.findByText("Tran Thi B")).toBeInTheDocument();
     const cells = within(row("E002")).getAllByRole("cell");
     expect(cells[0]).toHaveTextContent("E002");
-    expect(cells[1]).toHaveTextContent("Tran Thi B");
-    expect(cells[2]).toHaveTextContent("Employee");
-    expect(cells[3]).toHaveTextContent("Team A");
+    expect(cells[0]).toHaveTextContent("Tran Thi B");
+    expect(cells[1]).toHaveTextContent("Employee");
+    // The department, and the division it is in, quietly after it.
+    expect(cells[2]).toHaveTextContent("Team A · Sales");
+    expect(cells[3]).toHaveTextContent("—");
     expect(cells[4]).toHaveTextContent("Active");
     expect(screen.getByText("1 employee")).toBeInTheDocument();
   });
@@ -155,7 +176,7 @@ describe("UsersPanel: listing", () => {
 
     await waitFor(() =>
       expect(listUsersMock).toHaveBeenLastCalledWith(
-        { q: "mai", status: "disabled" },
+        { q: "mai", status: "disabled", departmentId: "" },
         null,
         expect.anything(),
       ),
@@ -192,7 +213,7 @@ describe("UsersPanel: listing", () => {
 
     expect(await screen.findByText("Le Van C")).toBeInTheDocument();
     expect(screen.getByText("Tran Thi B")).toBeInTheDocument();
-    expect(listUsersMock).toHaveBeenLastCalledWith({ q: "", status: "" }, "CURSOR1");
+    expect(listUsersMock).toHaveBeenLastCalledWith({ q: "", status: "", departmentId: "" }, "CURSOR1");
     expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument();
   });
 
@@ -224,11 +245,15 @@ describe("UsersPanel: row actions", () => {
     await screen.findByText("You");
 
     expect(within(row("OWNER")).queryByRole("button")).not.toBeInTheDocument();
-    // The signed-in admin may edit their own row but not disable it.
-    const own = within(row("ADMIN"));
-    expect(own.getByRole("button", { name: "Edit" })).toBeInTheDocument();
-    expect(own.queryByRole("button", { name: "Disable" })).not.toBeInTheDocument();
-    expect(within(row("E002")).getByRole("button", { name: "Disable" })).toBeInTheDocument();
+    // The signed-in admin may edit their own row but not disable it or reset their password.
+    await openMenu("ADMIN");
+    expect(screen.getByRole("menuitem", { name: "Edit" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: /Disable/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: /Reset password/ })).not.toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await openMenu("E002");
+    expect(screen.getByRole("menuitem", { name: "Disable…" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Reset password…" })).toBeInTheDocument();
   });
 
   it("asks first, then disables the employee and reloads the list", async () => {
@@ -237,7 +262,8 @@ describe("UsersPanel: row actions", () => {
     renderUsers();
     await screen.findByText("Tran Thi B");
 
-    await userEvent.click(within(row("E002")).getByRole("button", { name: "Disable" }));
+    await openMenu("E002");
+    await choose("Disable…");
     // Nothing is sent until the question is answered.
     expect(updateUserMock).not.toHaveBeenCalled();
 
@@ -250,7 +276,8 @@ describe("UsersPanel: row actions", () => {
     await waitFor(() => expect(updateUserMock).toHaveBeenCalledWith("u-2", { status: "disabled" }));
     // "Disabled" is also an option of the status filter, so look inside the employee's row.
     await waitFor(() => expect(within(row("E002")).getByText("Disabled")).toBeInTheDocument());
-    expect(within(row("E002")).getByRole("button", { name: "Enable" })).toBeInTheDocument();
+    await openMenu("E002");
+    expect(screen.getByRole("menuitem", { name: "Enable" })).toBeInTheDocument();
   });
 
   it("does nothing when the question is cancelled", async () => {
@@ -258,11 +285,12 @@ describe("UsersPanel: row actions", () => {
     renderUsers();
     await screen.findByText("Tran Thi B");
 
-    await userEvent.click(within(row("E002")).getByRole("button", { name: "Disable" }));
+    await openMenu("E002");
+    await choose("Disable…");
     await userEvent.click(within(row("E002")).getByRole("button", { name: "Cancel" }));
 
     expect(updateUserMock).not.toHaveBeenCalled();
-    expect(within(row("E002")).getByRole("button", { name: "Disable" })).toBeInTheDocument();
+    expect(within(row("E002")).getByRole("button", { name: /^Actions for/ })).toBeInTheDocument();
   });
 
   it("enables a disabled employee at once, without a question", async () => {
@@ -272,7 +300,8 @@ describe("UsersPanel: row actions", () => {
     renderUsers();
     await screen.findByText("Tran Thi B");
 
-    await userEvent.click(within(row("E002")).getByRole("button", { name: "Enable" }));
+    await openMenu("E002");
+    await choose("Enable");
 
     await waitFor(() => expect(updateUserMock).toHaveBeenCalledWith("u-2", { status: "active" }));
   });
@@ -283,7 +312,8 @@ describe("UsersPanel: row actions", () => {
     renderUsers();
     await screen.findByText("Tran Thi B");
 
-    await userEvent.click(within(row("E002")).getByRole("button", { name: "Disable" }));
+    await openMenu("E002");
+    await choose("Disable…");
     await userEvent.click(within(row("E002")).getByRole("button", { name: "Yes, disable" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("cannot be changed");
@@ -293,11 +323,12 @@ describe("UsersPanel: row actions", () => {
 
 describe("UsersPanel: edit drawer", () => {
   async function openEditor(code = "E002") {
-    await userEvent.click(within(row(code)).getByRole("button", { name: "Edit" }));
+    await openMenu(code);
+    await choose("Edit");
     return screen.getByRole("form", { name: `Edit ${code}` });
   }
 
-  it("opens from the Edit button and from a click on the row", async () => {
+  it("opens from the menu and from a click on the row", async () => {
     listUsersMock.mockResolvedValue({ items: [employee], next_cursor: null });
     renderUsers();
     await screen.findByText("Tran Thi B");
@@ -328,8 +359,6 @@ describe("UsersPanel: edit drawer", () => {
 
     await userEvent.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    // The focus goes back to the button that opened it.
-    expect(within(row("E002")).getByRole("button", { name: "Edit" })).toHaveFocus();
   });
 
   it("edits the name, department and level of an employee, then closes", async () => {
@@ -342,7 +371,7 @@ describe("UsersPanel: edit drawer", () => {
     const name = within(form).getByLabelText("Full name");
     await userEvent.clear(name);
     await userEvent.type(name, "  Tran Thi Bich ");
-    await userEvent.selectOptions(within(form).getByLabelText("Level"), "department_manager");
+    await userEvent.click(within(form).getByRole("radio", { name: /^Department manager/ }));
     await userEvent.selectOptions(within(form).getByLabelText("Department"), "d-1");
     await userEvent.click(within(form).getByRole("button", { name: "Save changes" }));
 
@@ -374,7 +403,7 @@ describe("UsersPanel: edit drawer", () => {
     await screen.findByText("Tran Thi B");
 
     const form = await openEditor();
-    await userEvent.selectOptions(within(form).getByLabelText("Level"), "admin");
+    await userEvent.click(within(form).getByRole("radio", { name: /^Admin/ }));
     await userEvent.click(within(form).getByRole("button", { name: "Save changes" }));
 
     await waitFor(() =>
@@ -393,8 +422,10 @@ describe("UsersPanel: edit drawer", () => {
     await screen.findByText("You");
 
     const form = await openEditor("ADMIN");
-    expect(within(form).getByLabelText("Level")).toBeDisabled();
+    for (const radio of within(form).getAllByRole("radio")) expect(radio).toBeDisabled();
     expect(screen.getByText("You cannot change this level.")).toBeInTheDocument();
+    // Nor your own status or password: there is no Account group on your own row.
+    expect(within(form).queryByRole("radiogroup", { name: "Account status" })).not.toBeInTheDocument();
     await userEvent.selectOptions(within(form).getByLabelText("Department"), "");
     await userEvent.click(within(form).getByRole("button", { name: "Save changes" }));
 
@@ -434,9 +465,8 @@ describe("UsersPanel: edit drawer", () => {
 
 describe("UsersPanel: reset password", () => {
   async function openEditor(code = "E002") {
-    await userEvent.click(
-      within(row(code)).getByRole("button", { name: "Edit" }),
-    );
+    await openMenu(code);
+    await choose("Reset password…");
     return screen.getByRole("form", { name: `Edit ${code}` });
   }
 
@@ -546,10 +576,13 @@ describe("UsersPanel: reset password", () => {
     renderUsers();
     await screen.findByText("You");
 
-    const form = await openEditor("ADMIN");
+    await openMenu("ADMIN");
+    await choose("Edit");
+    const form = screen.getByRole("form", { name: "Edit ADMIN" });
     expect(
       within(form).queryByRole("region", { name: "Reset password" }),
     ).not.toBeInTheDocument();
+    expect(within(form).queryByRole("button", { name: "Reset password…" })).not.toBeInTheDocument();
   });
 });
 
@@ -562,10 +595,10 @@ describe("Add employee drawer", () => {
     return screen.getByRole("form", { name: "Add employee" });
   }
 
-  it("opens with the cursor in the employee code", async () => {
+  it("opens with the cursor in the full name", async () => {
     const form = await openNewEmployee();
     expect(screen.getByRole("dialog", { name: "New employee" })).toBeInTheDocument();
-    expect(within(form).getByLabelText("Employee code")).toHaveFocus();
+    expect(within(form).getByLabelText("Full name")).toHaveFocus();
   });
 
   it("creates an employee with a normal level as a member, and stays open for the next", async () => {
@@ -586,6 +619,7 @@ describe("Add employee drawer", () => {
         level: "employee",
         org_role: "member",
         department_id: "d-2",
+        manager_id: null,
       }),
     );
     expect(await screen.findByRole("status")).toHaveTextContent("Employee E002 created.");
@@ -593,7 +627,7 @@ describe("Add employee drawer", () => {
     // for the next employee.
     expect(within(form).getByLabelText("Initial password")).toHaveValue("");
     expect(within(form).getByLabelText("Employee code")).toHaveValue("");
-    expect(within(form).getByLabelText("Employee code")).toHaveFocus();
+    expect(within(form).getByLabelText("Full name")).toHaveFocus();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
@@ -627,7 +661,7 @@ describe("Add employee drawer", () => {
     await userEvent.type(within(form).getByLabelText("Employee code"), "BOSS");
     await userEvent.type(within(form).getByLabelText("Full name"), "The Boss");
     await userEvent.type(within(form).getByLabelText("Initial password"), "Initial-Pass-1");
-    await userEvent.selectOptions(within(form).getByLabelText("Level"), "admin");
+    await userEvent.click(within(form).getByRole("radio", { name: /^Admin/ }));
     await userEvent.click(within(form).getByRole("button", { name: "Add employee" }));
 
     await waitFor(() =>
@@ -681,6 +715,158 @@ describe("Add employee drawer", () => {
   });
 });
 
+describe("UsersPanel: manager, department filter and account", () => {
+  const boss = sampleUser({ id: "u-boss", employee_code: "E010", full_name: "Le Minh Chau" });
+
+  async function openEditor(code = "E002") {
+    await openMenu(code);
+    await choose("Edit");
+    return screen.getByRole("form", { name: `Edit ${code}` });
+  }
+
+  it("shows the manager of each employee, and who is on a temporary password", async () => {
+    lookupMock.mockResolvedValue([{ id: "u-boss", employee_code: "E010", full_name: "Le Minh Chau" }]);
+    listUsersMock.mockResolvedValue({
+      items: [{ ...employee, manager_id: "u-boss", must_change_password: true }],
+      next_cursor: null,
+    });
+    renderUsers();
+    await screen.findByText("Tran Thi B");
+
+    expect(await within(row("E002")).findByText("Le Minh Chau")).toBeInTheDocument();
+    expect(within(row("E002")).getByText("Temporary password")).toBeInTheDocument();
+  });
+
+  it("narrows the list to a department chosen in the toolbar", async () => {
+    listUsersMock.mockResolvedValue({ items: [employee], next_cursor: null });
+    const onDepartmentChange = vi.fn();
+    render(
+      <AuthProvider>
+        <ToastProvider>
+          <UsersPanel
+            departments={departments}
+            departmentId=""
+            onDepartmentChange={onDepartmentChange}
+            onChanged={vi.fn()}
+          />
+        </ToastProvider>
+      </AuthProvider>,
+    );
+    await screen.findByText("Tran Thi B");
+
+    const choice = screen.getByLabelText("Department");
+    expect(within(choice).getAllByRole("option").map((o) => o.textContent)).toEqual([
+      "All departments",
+      "Sales",
+      "Sales / Team A",
+    ]);
+    await userEvent.selectOptions(choice, "d-2");
+    expect(onDepartmentChange).toHaveBeenCalledWith("d-2");
+  });
+
+  it("asks the server for the department the screen has chosen", async () => {
+    listUsersMock.mockResolvedValue({ items: [], next_cursor: null });
+    render(
+      <AuthProvider>
+        <UsersPanel
+          departments={departments}
+          departmentId="d-2"
+          onDepartmentChange={vi.fn()}
+          onChanged={vi.fn()}
+        />
+      </AuthProvider>,
+    );
+    expect(await screen.findByText("No employees match.")).toBeInTheDocument();
+    expect(listUsersMock).toHaveBeenLastCalledWith(
+      { q: "", status: "", departmentId: "d-2" },
+      null,
+      expect.anything(),
+    );
+  });
+
+  it("sets the direct manager and disables the account from the panel, with a warning", async () => {
+    searchMock.mockResolvedValue([{ id: "u-boss", employee_code: "E010", full_name: "Le Minh Chau" }]);
+    listUsersMock.mockResolvedValue({ items: [employee], next_cursor: null });
+    updateUserMock.mockResolvedValue(employee);
+    renderUsers();
+    await screen.findByText("Tran Thi B");
+
+    const form = await openEditor();
+    expect(within(form).getByText("Disabling signs them out everywhere at once.")).toBeInTheDocument();
+    await userEvent.type(within(form).getByLabelText("Find an employee for Direct manager"), "le");
+    await userEvent.click(await within(form).findByRole("button", { name: "Add Le Minh Chau (E010)" }));
+    await userEvent.click(within(form).getByRole("radio", { name: "Disabled" }));
+    await userEvent.click(within(form).getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() =>
+      expect(updateUserMock).toHaveBeenCalledWith("u-2", {
+        full_name: "Tran Thi B",
+        department_id: "d-2",
+        manager_id: "u-boss",
+        status: "disabled",
+      }),
+    );
+  });
+
+  it("clears the manager with null", async () => {
+    lookupMock.mockResolvedValue([{ id: "u-boss", employee_code: "E010", full_name: "Le Minh Chau" }]);
+    listUsersMock.mockResolvedValue({ items: [{ ...employee, manager_id: "u-boss" }], next_cursor: null });
+    updateUserMock.mockResolvedValue(employee);
+    renderUsers();
+    await screen.findByText("Tran Thi B");
+
+    const form = await openEditor();
+    await userEvent.click(await within(form).findByRole("button", { name: "Remove Le Minh Chau (E010)" }));
+    await userEvent.click(within(form).getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() =>
+      expect(updateUserMock).toHaveBeenCalledWith("u-2", {
+        full_name: "Tran Thi B",
+        department_id: "d-2",
+        manager_id: null,
+      }),
+    );
+  });
+
+  it("sends the manager of a new employee", async () => {
+    searchMock.mockResolvedValue([{ id: boss.id, employee_code: "E010", full_name: boss.full_name }]);
+    createUserMock.mockResolvedValue(employee);
+    listUsersMock.mockResolvedValue({ items: [], next_cursor: null });
+    renderUsers();
+    await screen.findByText("No employees yet.");
+    await userEvent.click(screen.getByRole("button", { name: "New employee" }));
+    const form = screen.getByRole("form", { name: "Add employee" });
+
+    await userEvent.type(within(form).getByLabelText("Full name"), "Nguyen Van B");
+    await userEvent.type(within(form).getByLabelText("Initial password"), "Initial-Pass-1");
+    await userEvent.type(within(form).getByLabelText("Find an employee for Direct manager"), "le");
+    await userEvent.click(await within(form).findByRole("button", { name: "Add Le Minh Chau (E010)" }));
+    await userEvent.click(within(form).getByRole("button", { name: "Add employee" }));
+
+    await waitFor(() =>
+      expect(createUserMock).toHaveBeenCalledWith(expect.objectContaining({ manager_id: "u-boss" })),
+    );
+  });
+
+  it("shows the password as typed when Show is pressed, and Generate shows the new one", async () => {
+    listUsersMock.mockResolvedValue({ items: [], next_cursor: null });
+    renderUsers();
+    await screen.findByText("No employees yet.");
+    await userEvent.click(screen.getByRole("button", { name: "New employee" }));
+    const form = screen.getByRole("form", { name: "Add employee" });
+    const password = within(form).getByLabelText("Initial password");
+
+    expect(password).toHaveAttribute("type", "password");
+    await userEvent.click(within(form).getByRole("button", { name: "Show" }));
+    expect(password).toHaveAttribute("type", "text");
+
+    await userEvent.click(within(form).getByRole("button", { name: "Hide" }));
+    await userEvent.click(within(form).getByRole("button", { name: "Generate" }));
+    expect(password).toHaveAttribute("type", "text");
+    expect((password as HTMLInputElement).value.length).toBeGreaterThanOrEqual(8);
+  });
+});
+
 describe("orderDepartments", () => {
   it("puts each division first, its departments after it, and loose departments last", () => {
     const loose: Department = { ...teamA, id: "d-3", name: "Alpha", parent_id: null };
@@ -701,9 +887,18 @@ describe("orderDepartments", () => {
 });
 
 describe("DepartmentsPanel", () => {
+  const onShowPeople = vi.fn();
+  const operations: Department = { ...sales, id: "d-4", name: "Operations" };
+  /** A team nobody works in, so it may be deleted. */
+  const emptyTeam: Department = { ...teamA, member_count: 0 };
+
   function renderDepartments(items: Department[] = departments) {
     const onChanged = vi.fn();
-    render(<DepartmentsPanel departments={items} onChanged={onChanged} />);
+    render(
+      <ToastProvider>
+        <DepartmentsPanel departments={items} onChanged={onChanged} onShowPeople={onShowPeople} />
+      </ToastProvider>,
+    );
     return onChanged;
   }
 
@@ -713,91 +908,160 @@ describe("DepartmentsPanel", () => {
       .then(() => screen.getByRole("form", { name: "Add department" }));
   }
 
-  it("lists a division, then its departments, with their kind and parent", () => {
+  async function openDepartmentMenu(name: string) {
+    await userEvent.click(within(row(name)).getByRole("button", { name: `Actions for ${name}` }));
+  }
+
+  it("lists a division, then its departments, with the people in each", () => {
     renderDepartments([teamA, sales]);
     const names = screen
       .getAllByRole("row")
       .slice(1)
       .map((r) => within(r).getAllByRole("cell")[0].textContent);
-    expect(names).toEqual(["Sales", "Team A"]);
+    expect(names).toEqual(["SalesDivision", "Team A"]);
 
+    // A division counts the people of the departments under it.
     const division = within(startRow("Sales")).getAllByRole("cell");
-    expect(division[1]).toHaveTextContent("Division");
-    expect(division[2]).toHaveTextContent("—");
+    expect(division[1]).toHaveTextContent("—");
+    expect(division[2]).toHaveTextContent("1");
     const team = within(row("Team A")).getAllByRole("cell");
-    expect(team[1]).toHaveTextContent("Department");
-    expect(team[2]).toHaveTextContent("Sales");
+    expect(team[2]).toHaveTextContent("1 →");
   });
 
-  it("shows the head of a department and lets an admin remove them", async () => {
-    setHeadMock.mockResolvedValue({ ...teamA, head_user_id: null });
-    const onChanged = renderDepartments([sales, { ...teamA, head_user_id: "u-ann" }]);
-    const user = userEvent.setup();
-
-    // The name and the code are shown side by side.
+  it("shows the head of a department as a person", async () => {
+    renderDepartments([sales, { ...teamA, head_user_id: "u-ann" }]);
     expect(await within(row("Team A")).findByText("Ann")).toBeInTheDocument();
-    expect(within(row("Team A")).getByText("A1")).toBeInTheDocument();
-    await user.click(
-      within(row("Team A")).getByRole("button", { name: "Remove head of Team A" }),
-    );
-
-    expect(setHeadMock).toHaveBeenCalledWith("d-2", null);
-    await waitFor(() => expect(onChanged).toHaveBeenCalled());
   });
 
-  it("sets the head by searching for an employee, and the search opens only on request", async () => {
-    setHeadMock.mockResolvedValue({ ...teamA, head_user_id: "u-ann" });
-    const onChanged = renderDepartments();
-    const user = userEvent.setup();
-
-    expect(screen.queryByLabelText("Find an employee for Head of Team A")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Assign head of Team A" }));
-    await user.type(screen.getByLabelText("Find an employee for Head of Team A"), "an");
-    await user.click(await screen.findByRole("button", { name: "Add Ann (A1)" }));
-
-    expect(setHeadMock).toHaveBeenCalledWith("d-2", "u-ann");
-    await waitFor(() => expect(onChanged).toHaveBeenCalled());
-  });
-
-  it("changes the head of a department that already has one", async () => {
-    setHeadMock.mockResolvedValue({ ...teamA, head_user_id: "u-ann" });
-    renderDepartments([sales, { ...teamA, head_user_id: "u-old" }]);
-    lookupMock.mockResolvedValue([{ id: "u-old", employee_code: "O1", full_name: "Old" }, ann]);
-    const user = userEvent.setup();
-
-    await user.click(
-      await within(row("Team A")).findByRole("button", { name: "Change head of Team A" }),
-    );
-    await user.type(screen.getByLabelText("Find an employee for Head of Team A"), "an");
-    await user.click(await screen.findByRole("button", { name: "Add Ann (A1)" }));
-
-    expect(setHeadMock).toHaveBeenCalledWith("d-2", "u-ann");
-  });
-
-  it("can leave the search without choosing", async () => {
+  it("opens the people of a department in the Employees tab", async () => {
     renderDepartments();
-    const user = userEvent.setup();
+    await userEvent.click(screen.getByRole("button", { name: "Show the 1 person in Team A" }));
+    expect(onShowPeople).toHaveBeenCalledWith("d-2");
 
-    await user.click(screen.getByRole("button", { name: "Assign head of Team A" }));
-    await user.click(within(row("Team A")).getByRole("button", { name: "Cancel" }));
-
-    expect(screen.getByRole("button", { name: "Assign head of Team A" })).toBeInTheDocument();
-    expect(setHeadMock).not.toHaveBeenCalled();
+    onShowPeople.mockClear();
+    await openDepartmentMenu("Team A");
+    await userEvent.click(screen.getByRole("menuitem", { name: "Show people" }));
+    expect(onShowPeople).toHaveBeenCalledWith("d-2");
   });
 
-  it("shows the error when the head cannot be set", async () => {
-    setHeadMock.mockRejectedValue(new ApiError("The head does not exist or is disabled.", 422));
-    const onChanged = renderDepartments();
-    const user = userEvent.setup();
+  it("folds a division and shows it again", async () => {
+    renderDepartments();
+    await userEvent.click(screen.getByRole("button", { name: "Collapse Sales" }));
+    expect(screen.queryByRole("row", { name: /Team A/ })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Assign head of Team A" }));
-    await user.type(screen.getByLabelText("Find an employee for Head of Team A"), "an");
-    await user.click(await screen.findByRole("button", { name: "Add Ann (A1)" }));
+    await userEvent.click(screen.getByRole("button", { name: "Expand Sales" }));
+    expect(row("Team A")).toBeInTheDocument();
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "The head does not exist or is disabled.",
-    );
-    expect(onChanged).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Collapse all" }));
+    expect(screen.queryByRole("row", { name: /Team A/ })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Expand all" }));
+    expect(row("Team A")).toBeInTheDocument();
+  });
+
+  describe("editing in the panel", () => {
+    async function openEditor(name = "Team A") {
+      await userEvent.click(within(row(name)).getByText(name));
+      return screen.getByRole("form", { name: `Edit ${name}` });
+    }
+
+    it("opens from a click on the row, with the type and the people", async () => {
+      listUsersMock.mockResolvedValue({ items: [employee], next_cursor: null });
+      renderDepartments();
+      const form = await openEditor();
+
+      expect(screen.getByRole("dialog", { name: "Team A" })).toBeInTheDocument();
+      expect(within(form).getByText(/The type cannot change/)).toBeInTheDocument();
+      expect(await within(form).findByText("Tran Thi B")).toBeInTheDocument();
+      expect(listUsersMock).toHaveBeenCalledWith(
+        { q: "", status: "", departmentId: "d-2" },
+        null,
+        expect.anything(),
+      );
+    });
+
+    it("renames a department and moves it under another division", async () => {
+      updateDepartmentMock.mockResolvedValue(teamA);
+      listUsersMock.mockResolvedValue({ items: [], next_cursor: null });
+      const onChanged = renderDepartments([sales, operations, teamA]);
+      const form = await openEditor();
+
+      const name = within(form).getByLabelText("Name");
+      await userEvent.clear(name);
+      await userEvent.type(name, "  Team Alpha ");
+      await userEvent.selectOptions(within(form).getByLabelText("Under division"), "d-4");
+      await userEvent.click(within(form).getByRole("button", { name: "Save changes" }));
+
+      await waitFor(() =>
+        expect(updateDepartmentMock).toHaveBeenCalledWith("d-2", {
+          name: "Team Alpha",
+          parent_id: "d-4",
+        }),
+      );
+      expect(onChanged).toHaveBeenCalled();
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    });
+
+    it("sends nothing when nothing changed", async () => {
+      listUsersMock.mockResolvedValue({ items: [], next_cursor: null });
+      renderDepartments();
+      const form = await openEditor();
+      await userEvent.click(within(form).getByRole("button", { name: "Save changes" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(updateDepartmentMock).not.toHaveBeenCalled();
+    });
+
+    it("sets the head by searching for an employee", async () => {
+      updateDepartmentMock.mockResolvedValue({ ...teamA, head_user_id: "u-ann" });
+      listUsersMock.mockResolvedValue({ items: [], next_cursor: null });
+      renderDepartments();
+      const form = await openEditor();
+
+      await userEvent.type(within(form).getByLabelText("Find an employee for Head"), "an");
+      await userEvent.click(await within(form).findByRole("button", { name: "Add Ann (A1)" }));
+      await userEvent.click(within(form).getByRole("button", { name: "Save changes" }));
+
+      await waitFor(() =>
+        expect(updateDepartmentMock).toHaveBeenCalledWith("d-2", { head_user_id: "u-ann" }),
+      );
+    });
+
+    it("takes the head away", async () => {
+      updateDepartmentMock.mockResolvedValue({ ...teamA, head_user_id: null });
+      listUsersMock.mockResolvedValue({ items: [], next_cursor: null });
+      renderDepartments([sales, { ...teamA, head_user_id: "u-ann" }]);
+      const form = await openEditor();
+
+      await userEvent.click(await within(form).findByRole("button", { name: "Remove Ann (A1)" }));
+      await userEvent.click(within(form).getByRole("button", { name: "Save changes" }));
+
+      await waitFor(() =>
+        expect(updateDepartmentMock).toHaveBeenCalledWith("d-2", { head_user_id: null }),
+      );
+    });
+
+    it("shows the error inside the panel and keeps it open", async () => {
+      updateDepartmentMock.mockRejectedValue(
+        new ApiError("The head does not exist or is disabled.", 422),
+      );
+      listUsersMock.mockResolvedValue({ items: [], next_cursor: null });
+      const onChanged = renderDepartments();
+      const form = await openEditor();
+
+      await userEvent.type(within(form).getByLabelText("Find an employee for Head"), "an");
+      await userEvent.click(await within(form).findByRole("button", { name: "Add Ann (A1)" }));
+      await userEvent.click(within(form).getByRole("button", { name: "Save changes" }));
+
+      expect(await within(form).findByRole("alert")).toHaveTextContent("does not exist");
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      expect(onChanged).not.toHaveBeenCalled();
+    });
+
+    it("has no division to choose for a division", async () => {
+      listUsersMock.mockResolvedValue({ items: [], next_cursor: null });
+      renderDepartments();
+      const form = await openEditor("Sales");
+      expect(within(form).queryByLabelText("Under division")).not.toBeInTheDocument();
+    });
   });
 
   it("says so when there are none, and offers to add one", async () => {
@@ -840,6 +1104,7 @@ describe("DepartmentsPanel", () => {
         name: "Operations",
         kind: "division",
         parent_id: null,
+        head_user_id: null,
       }),
     );
     expect(onChanged).toHaveBeenCalled();
@@ -879,6 +1144,7 @@ describe("DepartmentsPanel", () => {
         name: "Team B",
         kind: "department",
         parent_id: "d-1",
+        head_user_id: null,
       }),
     );
     // The division is kept for the next department.
@@ -898,6 +1164,7 @@ describe("DepartmentsPanel", () => {
         name: "Finance",
         kind: "department",
         parent_id: null,
+        head_user_id: null,
       }),
     );
   });
@@ -918,26 +1185,44 @@ describe("DepartmentsPanel", () => {
 
   it("deletes only after the user confirms in the row", async () => {
     deleteDepartmentMock.mockResolvedValue(undefined);
-    const onChanged = renderDepartments();
+    const onChanged = renderDepartments([sales, emptyTeam]);
 
-    await userEvent.click(within(row("Team A")).getByRole("button", { name: "Delete" }));
+    await openDepartmentMenu("Team A");
+    await userEvent.click(screen.getByRole("menuitem", { name: "Delete…" }));
     expect(within(row("Team A")).getByText("Delete Team A?")).toBeInTheDocument();
     await userEvent.click(within(row("Team A")).getByRole("button", { name: "Cancel" }));
     expect(deleteDepartmentMock).not.toHaveBeenCalled();
 
-    await userEvent.click(within(row("Team A")).getByRole("button", { name: "Delete" }));
+    await openDepartmentMenu("Team A");
+    await userEvent.click(screen.getByRole("menuitem", { name: "Delete…" }));
     await userEvent.click(within(row("Team A")).getByRole("button", { name: "Yes, delete" }));
     await waitFor(() => expect(deleteDepartmentMock).toHaveBeenCalledWith("d-2"));
     expect(onChanged).toHaveBeenCalled();
+  });
+
+  it("greys out Delete, with the reason, while the department is in use", async () => {
+    renderDepartments();
+
+    await openDepartmentMenu("Team A");
+    const withPeople = screen.getByRole("menuitem", { name: "Delete…" });
+    expect(withPeople).toBeDisabled();
+    expect(withPeople).toHaveAttribute("title", "It still has 1 employee.");
+    await userEvent.keyboard("{Escape}");
+
+    await userEvent.click(within(startRow("Sales")).getByRole("button", { name: "Actions for Sales" }));
+    const withTeams = screen.getByRole("menuitem", { name: "Delete…" });
+    expect(withTeams).toBeDisabled();
+    expect(withTeams).toHaveAttribute("title", "It still has departments under it.");
   });
 
   it("shows why a department could not be deleted", async () => {
     deleteDepartmentMock.mockRejectedValue(
       new ApiError("The department still has employees.", 409),
     );
-    renderDepartments();
+    renderDepartments([sales, emptyTeam]);
 
-    await userEvent.click(within(row("Team A")).getByRole("button", { name: "Delete" }));
+    await openDepartmentMenu("Team A");
+    await userEvent.click(screen.getByRole("menuitem", { name: "Delete…" }));
     await userEvent.click(within(row("Team A")).getByRole("button", { name: "Yes, delete" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("still has employees");
@@ -969,6 +1254,26 @@ describe("HrScreen", () => {
     await userEvent.click(screen.getByRole("tab", { name: /Departments/ }));
     expect(screen.getByRole("table", { name: "Departments" })).toBeInTheDocument();
     expect(screen.queryByRole("table", { name: "Employees" })).not.toBeInTheDocument();
+  });
+
+  it("narrows the Employees tab to a department from the Departments tab", async () => {
+    listDepartmentsMock.mockResolvedValue(departments);
+    listUsersMock.mockResolvedValue({ items: [employee], next_cursor: null });
+    renderScreen();
+    await screen.findByText("Tran Thi B");
+
+    await userEvent.click(screen.getByRole("tab", { name: /Departments/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Show the 1 person in Team A" }));
+
+    expect(screen.getByRole("tab", { name: /Employees/ })).toHaveAttribute("aria-selected", "true");
+    await waitFor(() =>
+      expect(listUsersMock).toHaveBeenLastCalledWith(
+        { q: "", status: "", departmentId: "d-2" },
+        null,
+        expect.anything(),
+      ),
+    );
+    expect(screen.getByLabelText("Department")).toHaveValue("d-2");
   });
 
   it("moves between the tabs with the arrow keys", async () => {

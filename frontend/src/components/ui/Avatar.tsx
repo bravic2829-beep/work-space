@@ -1,12 +1,16 @@
 import { cn } from "@/lib/cn";
 
+/** A label without its employee code in brackets: "Ann Tran (NV102)" becomes "Ann Tran". */
+export function plainName(label: string): string {
+  return label.replace(/\s*\([^)]*\)\s*$/, "");
+}
+
 /**
  * Up to two initials of a name: "Tran Thi B" gives "TB". A trailing employee code in brackets
  * ("Tran Thi B (NV102)", the form the name caches use) is not part of the name.
  */
 export function initials(name: string): string {
-  const words = name
-    .replace(/\s*\([^)]*\)\s*$/, "")
+  const words = plainName(name)
     .trim()
     .split(/\s+/)
     .filter(Boolean);

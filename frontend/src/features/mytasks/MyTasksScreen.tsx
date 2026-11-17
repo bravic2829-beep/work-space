@@ -15,7 +15,7 @@ import { useLiveRefresh } from "@/features/notifications/liveRefresh";
 
 import { listMyTasks, type Scope } from "./api";
 import { localToday, type MyTask } from "./schema";
-import { isOverdue, TaskList } from "./TaskList";
+import { GroupedTaskList, isOverdue, TaskList } from "./TaskList";
 import { errorMessage } from "@/lib/api/errors";
 
 type State =
@@ -105,10 +105,6 @@ export function MyTasksScreen() {
     if (state.kind !== "ready") return [];
     return tab === "overdue" ? state.items.filter((task) => isOverdue(task, today)) : state.items;
   }, [state, tab, today]);
-  const overdueCount =
-    state.kind === "ready" && tab === "assigned"
-      ? state.items.filter((task) => isOverdue(task, today)).length
-      : 0;
 
   const emptyTitle = EMPTY[tab];
 
@@ -132,26 +128,19 @@ export function MyTasksScreen() {
           aria-labelledby={`mytasks-tab-${tab}`}
           className="grid gap-4"
         >
-          {overdueCount > 0 && (
-            <div
-              role="status"
-              className="flex flex-wrap items-center gap-3 rounded-lg border border-danger/40 bg-danger-soft px-4 py-2.5 text-sm text-danger"
-            >
-              <AlertTriangle className="size-4 shrink-0" aria-hidden />
-              <span className="flex-1 font-medium">
-                {overdueCount} {overdueCount === 1 ? "task is" : "tasks are"} overdue.
-              </span>
-              <Button size="sm" onClick={() => choose("overdue")}>
-                Show overdue
-              </Button>
-            </div>
-          )}
           {state.kind === "loading" && <LoadingState />}
           {state.kind === "error" && <Alert>{state.message}</Alert>}
           {state.kind === "ready" && items.length === 0 && (
             <EmptyState icon={Inbox} title={emptyTitle} />
           )}
-          {state.kind === "ready" && items.length > 0 && <TaskList items={items} today={today} />}
+          {state.kind === "ready" && items.length > 0 && (
+            // The Today and Overdue tabs already are one group each.
+            tab === "today" || tab === "overdue" ? (
+              <TaskList items={items} today={today} />
+            ) : (
+              <GroupedTaskList items={items} today={today} />
+            )
+          )}
           {state.kind === "ready" && state.nextCursor !== null && (
             <div>
               <Button onClick={() => void loadMore()}>Load more</Button>

@@ -13,9 +13,9 @@ có quyền riêng, cập nhật tiến độ, duyệt, bàn giao, đính kèm f
 | --- | --- |
 | Công nghệ | Next.js 16 + React 19 + TypeScript (giao diện), FastAPI + SQLAlchemy + Alembic (backend), PostgreSQL 16, Docker Compose |
 | Ngôn ngữ giao diện | Tiếng Anh. Dữ liệu mẫu bằng tiếng Việt |
-| Nhánh | `ui-redesign`. `main` trên GitHub đang ở `c4c6698`; máy local hơn 6 commit (gồm commit gộp `03cc83f`), **chưa đẩy lên** |
+| Nhánh | `ui-redesign`. `main` trên GitHub đang ở `c303584`; máy local có thêm các commit của 16 đến 17/11 (file đính kèm, Column access, Paused/Blocked, xuất Excel, 4 lần gộp), **chưa đẩy lên** |
 | Việc cần làm ngay | `git push origin HEAD:main` (cần đăng nhập GitHub, chỉ chủ dự án làm được) |
-| Test | Frontend 549 qua. Backend 756 qua (ruff, mypy sạch) |
+| Test | Frontend 596 qua. Backend 787 qua (ruff, mypy sạch) |
 
 ## 2. Những gì web đang làm được
 
@@ -97,6 +97,17 @@ mỗi cột chọn *As their role allows*, *Read only* hoặc *Hidden*, lưu m�
 - Thêm file không đổi số phiên bản của task, nên không gây xung đột sửa.
 
 ## 5. Nhật ký thay đổi
+
+### 17/11/2026, lần gộp thứ tư: giao diện mới của đồng nghiệp
+- Kéo 11 commit (thanh công cụ bảng có chip chế độ xem và menu "⋯", lưới bấm cả dòng, khung chi
+  tiết task theo tab Details / Comments / History / Access, My tasks nhóm theo độ gấp, trang HR
+  mới). 7 file xung đột, đã gộp giữ cả hai bên:
+  - **Column access** chuyển vào menu "⋯" của bảng (chỉ admin của bảng thấy).
+  - Ô file đính kèm nằm trong tab Details; nút Pause/Blocker đi theo `ReviewActions` trong phần
+    tóm tắt task.
+  - Ô số liệu dùng chung `StatCard` có thêm `href` để bấm được.
+  - Thanh tiến trình gọn mới vẫn ghi chú Paused/Blocked.
+- Sau khi gộp: backend 787 test qua, frontend 596 test qua; các trang chính mở được.
 
 ### 17/11/2026, tính năng mới: Paused/Blocked, số báo cáo bấm được, xuất Excel
 - **Trạng thái Paused và Blocked** (migration `0015`): hai loại trạng thái mới `paused`, `blocked`;

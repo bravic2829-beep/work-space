@@ -16,6 +16,13 @@ type Props = {
   disabled?: boolean;
   /** Show only this icon instead of the label (the label stays as the accessible name). */
   icon?: LucideIcon;
+  /**
+   * Ask from outside, for example when "Delete" was chosen in a menu: `open` says whether the
+   * question is showing, and `hideTrigger` leaves out the button that would open it.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
 };
 
 /**
@@ -29,10 +36,16 @@ export function InlineConfirm({
   onConfirm,
   disabled,
   icon: Icon,
+  open,
+  onOpenChange,
+  hideTrigger = false,
 }: Props) {
-  const [asking, setAsking] = useState(false);
+  const [ownAsking, setOwnAsking] = useState(false);
+  const asking = open ?? ownAsking;
+  const setAsking = onOpenChange ?? setOwnAsking;
 
   if (!asking) {
+    if (hideTrigger) return null;
     return (
       <Button
         size={Icon ? "icon" : "sm"}

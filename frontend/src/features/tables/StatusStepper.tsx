@@ -1,5 +1,3 @@
-import { Check } from "lucide-react";
-
 import { cn } from "@/lib/cn";
 
 import type { FieldItem, RecordItem } from "./schema";
@@ -14,7 +12,7 @@ const STEPS: { kind: StatusKind; label: string }[] = [
 
 /**
  * Where a task is on its way: To do, In progress, Review, Done. It only shows the position (the
- * buttons below it move the task). Nothing is drawn for a table with no status column.
+ * buttons beside it move the task). Nothing is drawn for a table with no status column.
  */
 export function StatusStepper({ fields, record }: { fields: FieldItem[]; record: RecordItem }) {
   const actual = statusKind(fields, record);
@@ -26,7 +24,10 @@ export function StatusStepper({ fields, record }: { fields: FieldItem[]; record:
 
   return (
     <>
-    <ol aria-label="Task progress" className="m-0 flex list-none items-start p-0">
+    <ol
+      aria-label="Task progress"
+      className="m-0 flex list-none flex-wrap items-center gap-y-1 p-0 text-xs text-muted"
+    >
       {STEPS.map((step, index) => {
         const done = index < current || kind === "done";
         const active = index === current && kind !== "done";
@@ -34,36 +35,21 @@ export function StatusStepper({ fields, record }: { fields: FieldItem[]; record:
           <li
             key={step.kind}
             aria-current={index === current ? "step" : undefined}
-            className="flex min-w-0 flex-1 flex-col gap-1.5"
+            className="flex items-center"
           >
-            <span className="flex items-center">
-              <span
-                aria-hidden
-                className={cn(
-                  "flex size-5 shrink-0 items-center justify-center rounded-full border-2",
-                  done && "border-primary bg-primary text-primary-fg",
-                  active && "border-primary bg-primary",
-                  !done && !active && "border-line-strong bg-surface",
-                )}
-              >
-                {done && <Check className="size-3" strokeWidth={3.5} />}
-                {active && <span className="size-1.5 rounded-full bg-primary-fg" />}
-              </span>
-              {index < STEPS.length - 1 && (
-                <span
-                  aria-hidden
-                  className={cn("mx-1 h-0.5 flex-1", done ? "bg-primary" : "bg-line-strong")}
-                />
-              )}
-            </span>
             <span
+              aria-hidden
               className={cn(
-                "text-xs",
-                index === current ? "font-semibold text-fg" : done ? "text-fg" : "text-muted",
+                "mr-1 size-2 shrink-0 rounded-full",
+                done && "bg-success",
+                active && "bg-primary",
+                !done && !active && "bg-line-strong",
               )}
-            >
-              {step.label}
-            </span>
+            />
+            <span className={cn(index === current && "font-semibold text-fg")}>{step.label}</span>
+            {index < STEPS.length - 1 && (
+              <span aria-hidden className="mx-1.5 h-0.5 w-4 shrink-0 bg-line-strong" />
+            )}
           </li>
         );
       })}

@@ -1,7 +1,6 @@
 "use client";
 
 import { Play, Square } from "lucide-react";
-import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/cn";
@@ -11,6 +10,7 @@ import type { FieldItem, RecordItem } from "./schema";
 import { elapsedMs, formatDuration, timerRights, timerState } from "./timer";
 import { errorMessage, hasStatus } from "@/lib/api/errors";
 import { useAsyncAction } from "@/lib/useAsyncAction";
+import { useNow } from "@/lib/useNow";
 
 type Props = {
   /** All the columns of the table (who is assigned is read from them). */
@@ -20,25 +20,24 @@ type Props = {
   record: RecordItem;
   currentUserId: string;
   isAdmin: boolean;
+  /** What to show when the timer has not started and the person cannot start it. */
+  idle?: React.ReactNode;
   onChanged: (record: RecordItem) => void;
 };
-
-/** The current time, refreshed every second while `active`. */
-function useNow(active: boolean): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!active) return;
-    const id = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(id);
-  }, [active]);
-  return now;
-}
 
 /**
  * The task timer of one record: a Start button for the person who gave the task, the time running
  * while the work is done, a Stop button for the assignee, and the time spent in the end.
  */
-export function TimerCell({ fields, field, record, currentUserId, isAdmin, onChanged }: Props) {
+export function TimerCell({
+  fields,
+  field,
+  record,
+  currentUserId,
+  isAdmin,
+  idle = <span className="text-muted">Not started</span>,
+  onChanged,
+}: Props) {
   const state = timerState(field, record);
   const rights = timerRights(fields, field, record, currentUserId, isAdmin);
   const now = useNow(state.phase === "running");
@@ -57,7 +56,7 @@ export function TimerCell({ fields, field, record, currentUserId, isAdmin, onCha
 
   return (
     <span className="inline-flex flex-wrap items-center gap-2">
-      {state.phase === "idle" && !rights.start && <span className="text-muted">Not started</span>}
+      {state.phase === "idle" && !rights.start && idle}
       {state.phase !== "idle" && (
         <span
           role="timer"

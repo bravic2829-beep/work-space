@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -118,15 +118,15 @@ describe("MyTasksScreen", () => {
     );
   });
 
-  it("finds the overdue tasks among the assigned ones and warns about them", async () => {
+  it("groups the assigned tasks by urgency, late ones first", async () => {
     listMock.mockResolvedValue({
       items: [
+        task("c", "Not late", { due_date: "2099-01-01" }),
         task("a", "Late one", { due_date: "2000-01-01" }),
         task("b", "Late but finished", {
           due_date: "2000-01-01",
           status: { name: "Done", kind: "done" },
         }),
-        task("c", "Not late", { due_date: "2099-01-01" }),
       ],
       next_cursor: null,
     });
@@ -134,10 +134,14 @@ describe("MyTasksScreen", () => {
     const user = userEvent.setup();
 
     expect(await screen.findByText("Late one")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("1 task is overdue.");
-    expect(screen.getByText(/^Overdue \d+ days$/)).toBeInTheDocument();
+    const overdue = screen.getByRole("region", { name: "Overdue" });
+    expect(within(overdue).getByText("Late one")).toBeInTheDocument();
+    expect(within(overdue).getByText(/^\d+ days$/)).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Later" })).getByText("Not late")).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Done" })).getByText("Late but finished")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Today" })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Show overdue" }));
+    await user.click(screen.getByRole("tab", { name: "Overdue" }));
 
     expect(screen.getByRole("tab", { name: "Overdue" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("Late one")).toBeInTheDocument();

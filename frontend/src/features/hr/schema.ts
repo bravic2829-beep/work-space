@@ -9,6 +9,8 @@ export type Department = {
   kind: DepartmentKind;
   parent_id: string | null;
   head_user_id: string | null;
+  /** Employees in this department, active or not. */
+  member_count: number;
 };
 
 export type UserPage = { items: User[]; next_cursor: string | null };
@@ -20,7 +22,8 @@ export function isDepartment(value: unknown): value is Department {
     typeof value.name === "string" &&
     (value.kind === "division" || value.kind === "department") &&
     (value.parent_id === null || typeof value.parent_id === "string") &&
-    (value.head_user_id === null || typeof value.head_user_id === "string")
+    (value.head_user_id === null || typeof value.head_user_id === "string") &&
+    typeof value.member_count === "number"
   );
 }
 

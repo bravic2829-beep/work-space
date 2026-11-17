@@ -45,6 +45,14 @@ export function isOrgAdmin(user: User): boolean {
   return user.org_role === "owner" || user.org_role === "admin";
 }
 
+/** One line on what each level is for, shown where a level is chosen. */
+export const LEVEL_HELP: Record<UserLevel, string> = {
+  employee: "Works on the tasks given to them.",
+  department_manager: "Can split a task assigned to them into subtasks.",
+  division_manager: "The same, for a division.",
+  admin: "Also manages this Human resources area.",
+};
+
 export const LEVEL_LABELS: Record<UserLevel, string> = {
   admin: "Admin",
   division_manager: "Division manager",

@@ -29,6 +29,15 @@ export function orderDepartments(departments: Department[]): DepartmentRow[] {
   return rows;
 }
 
+/** A department's own name, and the name of the division it sits under (null for a top-level one). */
+export function departmentParts(
+  department: Department,
+  all: Department[],
+): { name: string; parentName: string | null } {
+  const parent = all.find((d) => d.id === department.parent_id);
+  return { name: department.name, parentName: parent?.name ?? null };
+}
+
 /** "Sales / Team A" for a department under a division, so a long list of teams stays readable. */
 export function departmentLabel(department: Department, all: Department[]): string {
   const parent = all.find((d) => d.id === department.parent_id);
