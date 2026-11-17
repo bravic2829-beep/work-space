@@ -1,16 +1,8 @@
 "use client";
 
-import { Eye, EyeOff } from "lucide-react";
+import { ChevronDown, Columns3, Eye, EyeOff } from "lucide-react";
 
-import {
-  Button,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui";
+import { Button, Popover, PopoverContent, PopoverTrigger } from "@/components/ui";
 
 import type { FieldItem } from "./schema";
 
@@ -23,36 +15,23 @@ type Props = {
 
 const LABEL = "Show or hide columns";
 
-/** One eye button: hover for what it does, click to choose which columns are shown. */
+/** "Columns": click to choose which columns are shown. */
 export function ColumnsMenu({ fields, hidden, onChange }: Props) {
-  const Icon = hidden.length > 0 ? EyeOff : Eye;
   return (
     <Popover>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <PopoverTrigger
-              render={
-                <Button variant="ghost" size="icon" aria-label={LABEL} className="relative size-7">
-                  <Icon className="size-4" aria-hidden />
-                  {hidden.length > 0 && (
-                    // A dot says "some columns are hidden"; the tooltip has the numbers.
-                    <span
-                      aria-hidden
-                      className="absolute top-1 right-1 size-1.5 rounded-full bg-primary ring-2 ring-surface-muted"
-                    />
-                  )}
-                </Button>
-              }
-            />
-          }
-        />
-        <TooltipContent align="end">
-          {hidden.length > 0
-            ? `${LABEL} · ${fields.length - hidden.length} of ${fields.length} shown`
-            : LABEL}
-        </TooltipContent>
-      </Tooltip>
+      <PopoverTrigger
+        render={
+          <Button size="sm" icon={Columns3} aria-label={LABEL}>
+            Columns
+            {hidden.length > 0 && (
+              <span className="font-normal text-muted">
+                · {fields.length - hidden.length}/{fields.length}
+              </span>
+            )}
+            <ChevronDown className="size-3.5" aria-hidden />
+          </Button>
+        }
+      />
 
       <PopoverContent align="end">
         <div className="flex items-center justify-between px-2 py-1 text-[11px] font-medium tracking-wider text-muted uppercase">

@@ -6,7 +6,6 @@ import {
   ArrowUp,
   ChevronsUpDown,
   FileSearch,
-  Pencil,
   Trash2,
 } from "lucide-react";
 
@@ -19,7 +18,7 @@ import { cn } from "@/lib/cn";
 import type { FieldItem, RecordItem, SortColumn } from "./schema";
 import { StatusBadge } from "./StatusBadge";
 import { statusKind } from "./taskWorkflow";
-import { formatMoment, isTimerField, timerHeadings } from "./timer";
+import { describeTimer, isTimerField, timerHeadings } from "./timer";
 import { TimerCell } from "./TimerCell";
 import { displayValue, isSortable, optionsOf } from "./values";
 
@@ -34,8 +33,6 @@ type Props = {
   onSort: (field: FieldItem) => void;
   onSelect: (record: RecordItem) => void;
   onLoadMore: () => void;
-  /** An editor sees an Edit button on every row. */
-  canEdit?: boolean;
   /** Only the person who created a record may delete it, so only they get a Delete button. */
   currentUserId?: string;
   onDelete?: (record: RecordItem) => void;
@@ -46,6 +43,13 @@ type Props = {
   /** An organization admin may delete any row, not only the ones they created. */
   canDeleteAny?: boolean;
 };
+
+/** What an empty cell shows, so a row reads as complete. */
+const EMPTY = (
+  <span aria-hidden className="text-line-strong">
+    —
+  </span>
+);
 
 const DUE_TONE: Record<DueTone, string> = {
   overdue: "font-semibold text-danger",
@@ -119,14 +123,13 @@ export function RecordGrid({
   onSort,
   onSelect,
   onLoadMore,
-  canEdit = false,
   currentUserId = "",
   onDelete,
   isAdmin = false,
   onRecordChanged,
   canDeleteAny = false,
 }: Props) {
-  const showActions = canEdit || (onDelete !== undefined && currentUserId !== "");
+  const showActions = onDelete !== undefined && currentUserId !== "";
   function ariaSort(field: FieldItem): "ascending" | "descending" | "none" | undefined {
     if (!isSortable(field)) return undefined;
     const column = sort.find((s) => s.field === field.id);
@@ -149,16 +152,10 @@ export function RecordGrid({
           <tr>
             {fields.map((field, index) => {
               if (isTimerField(field)) {
-                // One timer column is drawn as three: when it started, when it finished, the time.
-                const headings = timerHeadings(field, fields);
                 return (
-                  <Fragment key={field.id}>
-                    {[headings.started, headings.finished, headings.time].map((heading) => (
-                      <th key={heading} scope="col" className="whitespace-nowrap">
-                        {heading}
-                      </th>
-                    ))}
-                  </Fragment>
+                  <th key={field.id} scope="col" className="whitespace-nowrap">
+                    {timerHeadings(field, fields).time}
+                  </th>
                 );
               }
               const direction = sort.find((s) => s.field === field.id)?.direction;
@@ -201,35 +198,38 @@ export function RecordGrid({
           {records.map((record) => {
             const selected = record.id === selectedId;
             return (
-              <tr key={record.id} aria-selected={selected} className="group">
+              <tr
+                key={record.id}
+                aria-selected={selected}
+                className="group cursor-pointer"
+                onClick={(event) => {
+                  // A click on a button, link or field inside the row does its own thing.
+                  if (!(event.target as HTMLElement).closest("button, a, input, select, textarea")) {
+                    onSelect(record);
+                  }
+                }}
+              >
                 {fields.map((field, index) => {
                   const value = record.data[field.id];
                   const text = displayValue(field, value, names);
                   if (isTimerField(field)) {
-                    const moments =
-                      typeof value === "object" && value !== null && !Array.isArray(value)
-                        ? (value as Record<string, unknown>)
-                        : {};
+                    // The time spent; when it started and finished is in the tooltip.
                     return (
-                      <Fragment key={field.id}>
-                        {[moments.started_at, moments.finished_at].map((moment, which) => (
-                          <td key={which} className="whitespace-nowrap">
-                            <span className="text-muted" title={String(moment ?? "")}>
-                              {formatMoment(moment)}
-                            </span>
-                          </td>
-                        ))}
-                        <td className="whitespace-nowrap">
-                          <TimerCell
-                            fields={fields}
-                            field={field}
-                            record={record}
-                            currentUserId={currentUserId}
-                            isAdmin={isAdmin}
-                            onChanged={(updated) => onRecordChanged?.(updated)}
-                          />
-                        </td>
-                      </Fragment>
+                      <td
+                        key={field.id}
+                        className="min-w-44 whitespace-nowrap"
+                        title={describeTimer(value) || undefined}
+                      >
+                        <TimerCell
+                          fields={fields}
+                          field={field}
+                          record={record}
+                          currentUserId={currentUserId}
+                          isAdmin={isAdmin}
+                          idle={EMPTY}
+                          onChanged={(updated) => onRecordChanged?.(updated)}
+                        />
+                      </td>
                     );
                   }
                   return (
@@ -257,8 +257,10 @@ export function RecordGrid({
                         </a>
                       ) : field.type === "number" || field.type === "auto_number" ? (
                         <span className="block text-right font-mono text-xs">{text}</span>
-                      ) : (
+                      ) : text ? (
                         text
+                      ) : (
+                        EMPTY
                       )}
                     </td>
                     </Fragment>
@@ -267,18 +269,6 @@ export function RecordGrid({
                 {showActions && (
                   <td className="text-right whitespace-nowrap">
                     <span className="inline-flex items-center justify-end gap-1 transition-opacity max-md:opacity-100 md:opacity-0 md:focus-within:opacity-100 md:group-hover:opacity-100">
-                      {canEdit && (
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="size-7"
-                          title="Edit"
-                          aria-label={`Edit record ${displayValue(fields[0], record.data[fields[0].id], names) || "(untitled)"}`}
-                          onClick={() => onSelect(record)}
-                        >
-                          <Pencil className="size-4" aria-hidden />
-                        </Button>
-                      )}
                       {onDelete && (canDeleteAny || record.created_by === currentUserId) && (
                         <InlineConfirm
                           label="Delete"

@@ -4,7 +4,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/lib/api/client";
 
-import { createRecord, deleteRecord, getRecordViewers, lookupUsers, updateRecord } from "./api";
+import {
+  createRecord,
+  deleteRecord,
+  getRecordViewers,
+  listComments,
+  lookupUsers,
+  updateRecord,
+} from "./api";
 import { DUE, FIELDS, NAME, POINTS, makeField, makeRecord } from "./fixtures";
 import { RecordSidebar } from "./RecordSidebar";
 import { resetUserNames } from "./useUserNames";
@@ -18,6 +25,7 @@ vi.mock("./api", () => ({
   getTable: vi.fn(),
   listRecords: vi.fn(),
   getRecordViewers: vi.fn(),
+  listComments: vi.fn(),
 }));
 
 const createRecordMock = vi.mocked(createRecord);
@@ -54,6 +62,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   resetUserNames();
   lookupUsersMock.mockResolvedValue([{ id: "u-2", employee_code: "E2", full_name: "Binh" }]);
+  vi.mocked(listComments).mockResolvedValue({ items: [], next_cursor: null });
   vi.mocked(getRecordViewers).mockResolvedValue({
     people: [],
     workspace_name: "Workspace",
@@ -325,5 +334,57 @@ describe("closing", () => {
     renderSidebar();
     await user.click(screen.getByRole("button", { name: "Close panel" }));
     expect(handlers.onClose).toHaveBeenCalled();
+  });
+});
+
+describe("the task panel in tabs", () => {
+  it("names the panel after the task and opens on Details with Save in view", () => {
+    renderSidebar();
+    expect(screen.getByRole("dialog", { name: "Plan" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Details" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByLabelText("Name")).toHaveValue("Plan");
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeInTheDocument();
+  });
+
+  it("shows the comments in their own tab, without the form and the Save button", async () => {
+    const user = userEvent.setup();
+    renderSidebar();
+    await user.click(screen.getByRole("tab", { name: "Comments" }));
+    expect(await screen.findByText("No comments yet.")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Name")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
+  });
+
+  it("shows who can see the task in the Access tab", async () => {
+    const user = userEvent.setup();
+    renderSidebar();
+    await user.click(screen.getByRole("tab", { name: "Access" }));
+    expect(await screen.findByText(/Everyone in “Workspace”/)).toBeInTheDocument();
+  });
+
+  it("keeps what was typed when the person looks at another tab and comes back", async () => {
+    const user = userEvent.setup();
+    renderSidebar();
+    await user.clear(screen.getByLabelText("Name"));
+    await user.type(screen.getByLabelText("Name"), "Plan B");
+    await user.click(screen.getByRole("tab", { name: "History" }));
+    expect(screen.queryByLabelText("Name")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Details" }));
+    expect(screen.getByLabelText("Name")).toHaveValue("Plan B");
+  });
+
+  it("lets the parent keep the open tab", async () => {
+    const user = userEvent.setup();
+    const onTabChange = vi.fn();
+    renderSidebar({ tab: "access", onTabChange });
+    expect(screen.getByRole("tab", { name: "Access" })).toHaveAttribute("aria-selected", "true");
+    await user.click(screen.getByRole("tab", { name: "Comments" }));
+    expect(onTabChange).toHaveBeenCalledWith("comments");
+  });
+
+  it("has no tabs while a new record is written", () => {
+    renderSidebar({ record: null });
+    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "New record" })).toBeInTheDocument();
   });
 });

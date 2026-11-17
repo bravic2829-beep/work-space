@@ -50,6 +50,13 @@ function dayNumber(ymd: string): number | null {
   return Math.floor(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])) / 86_400_000);
 }
 
+/** How many whole days a task is past its due day (0 when it is not). */
+export function daysLate(due: string, today: string): number {
+  const dueDay = dayNumber(due);
+  const nowDay = dayNumber(today);
+  return dueDay === null || nowDay === null ? 0 : Math.max(0, nowDay - dueDay);
+}
+
 /**
  * How a due date reads in a list: "Overdue 3 days", "Today", "Tomorrow", or the date itself.
  * `today` is a YYYY-MM-DD day (see localToday). Null when there is no due date.

@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ToastProvider } from "@/components/ui";
 import { ApiError } from "@/lib/api/client";
 
 import { deleteForever, listTrash, restoreRecord } from "./api";
@@ -59,7 +60,11 @@ describe("TrashScreen", () => {
       items: [item("r-1", "Launch")],
       next_cursor: null,
     });
-    render(<TrashScreen />);
+    render(
+      <ToastProvider>
+        <TrashScreen />
+      </ToastProvider>,
+    );
     expect(await screen.findByText("Launch")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Tasks" })).toHaveAttribute("href", "/tables/t-1");
     expect(listMock).toHaveBeenCalledWith(null, expect.any(AbortSignal));
@@ -71,7 +76,11 @@ describe("TrashScreen", () => {
       next_cursor: null,
     });
     restoreMock.mockResolvedValue(undefined);
-    render(<TrashScreen />);
+    render(
+      <ToastProvider>
+        <TrashScreen />
+      </ToastProvider>,
+    );
     const user = userEvent.setup();
 
     await user.click(await screen.findByRole("button", { name: "Restore Launch" }));
@@ -88,7 +97,11 @@ describe("TrashScreen", () => {
       next_cursor: null,
     });
     restoreMock.mockRejectedValue(new ApiError("The record is not in the trash.", 404));
-    render(<TrashScreen />);
+    render(
+      <ToastProvider>
+        <TrashScreen />
+      </ToastProvider>,
+    );
     const user = userEvent.setup();
 
     await user.click(await screen.findByRole("button", { name: "Restore Launch" }));
@@ -103,7 +116,11 @@ describe("TrashScreen", () => {
       next_cursor: null,
     });
     deleteMock.mockResolvedValue(undefined);
-    render(<TrashScreen />);
+    render(
+      <ToastProvider>
+        <TrashScreen />
+      </ToastProvider>,
+    );
     const user = userEvent.setup();
 
     await user.click(
@@ -127,7 +144,11 @@ describe("TrashScreen", () => {
       items: [item("r-1", "Launch")],
       next_cursor: null,
     });
-    render(<TrashScreen />);
+    render(
+      <ToastProvider>
+        <TrashScreen />
+      </ToastProvider>,
+    );
     const user = userEvent.setup();
 
     await user.click(
@@ -147,7 +168,11 @@ describe("TrashScreen", () => {
     deleteMock.mockRejectedValue(
       new ApiError("The record is not in the trash.", 404),
     );
-    render(<TrashScreen />);
+    render(
+      <ToastProvider>
+        <TrashScreen />
+      </ToastProvider>,
+    );
     const user = userEvent.setup();
 
     await user.click(
@@ -163,7 +188,11 @@ describe("TrashScreen", () => {
 
   it("says so when the trash is empty", async () => {
     listMock.mockResolvedValue({ items: [], next_cursor: null });
-    render(<TrashScreen />);
+    render(
+      <ToastProvider>
+        <TrashScreen />
+      </ToastProvider>,
+    );
     expect(await screen.findByText("The trash is empty.")).toBeInTheDocument();
   });
 
@@ -172,7 +201,11 @@ describe("TrashScreen", () => {
       items: [item("r-1", null)],
       next_cursor: null,
     });
-    render(<TrashScreen />);
+    render(
+      <ToastProvider>
+        <TrashScreen />
+      </ToastProvider>,
+    );
     expect(await screen.findByText("(name hidden)")).toBeInTheDocument();
   });
 
@@ -186,7 +219,11 @@ describe("TrashScreen", () => {
         items: [item("r-2", "Plan")],
         next_cursor: null,
       });
-    render(<TrashScreen />);
+    render(
+      <ToastProvider>
+        <TrashScreen />
+      </ToastProvider>,
+    );
     const user = userEvent.setup();
 
     await user.click(await screen.findByRole("button", { name: "Load more" }));
@@ -199,7 +236,11 @@ describe("TrashScreen", () => {
 
   it("shows an error when the trash cannot be loaded", async () => {
     listMock.mockRejectedValue(new ApiError("Authentication is required.", 401));
-    render(<TrashScreen />);
+    render(
+      <ToastProvider>
+        <TrashScreen />
+      </ToastProvider>,
+    );
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent("Authentication is required."),
     );
