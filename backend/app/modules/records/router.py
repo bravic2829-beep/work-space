@@ -145,7 +145,9 @@ async def timer_record(
     session: AsyncSession = Depends(get_session),
 ) -> RecordPublic:
     """Start the task timer (who gave the task) or stop it (the assignee). Needs `If-Match`."""
-    record, public = await timer.timer_record(session, actor, record_id, body.action, if_match)
+    record, public = await timer.timer_record(
+        session, actor, record_id, body.action, if_match, field_id=body.field_id
+    )
     await session.commit()
     response.headers["ETag"] = service.etag(record)
     return public
@@ -160,6 +162,20 @@ async def list_trash(
 ) -> Page[trash.TrashItem]:
     """The records I deleted in the last 30 days. Nobody else's trash is ever listed."""
     return await trash.list_trash(session, actor, limit=limit, cursor=cursor)
+
+
+@router.delete("/trash/records/{record_id}", status_code=204)
+async def delete_from_trash(
+    record_id: uuid.UUID,
+    request: Request,
+    actor: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> None:
+    """Remove a record in the trash for good. There is no undo."""
+    await trash.delete_forever(
+        session, actor, record_id, request.app.state.settings.attachments_dir
+    )
+    await session.commit()
 
 
 @router.post("/records/{record_id}/restore", response_model=RecordPublic)

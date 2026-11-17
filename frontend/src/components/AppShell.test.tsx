@@ -50,6 +50,21 @@ function renderShell() {
   );
 }
 
+describe("AppShell with a temporary password", () => {
+  it("shows only the change-password form until the password is changed", async () => {
+    fetchMeMock.mockResolvedValue(sampleUser({ must_change_password: true }));
+    renderShell();
+
+    expect(
+      await screen.findByRole("heading", { name: "Choose a new password" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("page content")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("complementary", { name: "Sidebar" }),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe("AppShell", () => {
   it("shows the user, the page and the HR link to an admin", async () => {
     fetchMeMock.mockResolvedValue(adminUser);

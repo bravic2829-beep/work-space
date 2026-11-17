@@ -68,6 +68,7 @@ OPERATORS: dict[FieldType, tuple[str, ...]] = {
     FieldType.CREATED_BY: ("eq", "neq", "in"),
     FieldType.LINK_RECORD: ("contains", "is_empty", "is_not_empty"),
     FieldType.ATTACHMENT: (),  # files are not searched or filtered
+    FieldType.TIMER: ("is_empty", "is_not_empty"),
 }
 SORTABLE = (
     TEXT_TYPES

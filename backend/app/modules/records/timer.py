@@ -1,7 +1,8 @@
 """The task timer: the person who gives the work presses Start, the assignee presses Stop.
 
-Two date-time columns hold the moments (semantics timer_start and timer_stop); the time spent is
-their difference, worked out by whoever shows it.
+A timer column (type `timer`) holds both moments in one cell, {"started_at", "finished_at"}; the
+time spent is their difference, worked out by whoever shows it. A table may have several timer
+columns: the request names one with `field_id`, or leaves it out when there is only one.
 
 - start: the person who created the task (or an organization admin) begins the clock. A task still
   in "to do" moves to "in progress".
@@ -21,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import ProblemError
 from app.modules.activity.log import diff, record_activity
 from app.modules.activity.models import ActivityAction
-from app.modules.fields.models import FieldAccessLevel, FieldSemantic
+from app.modules.fields.models import Field, FieldAccessLevel, FieldSemantic, FieldType
 from app.modules.notifications import service as notifications
 from app.modules.notifications.models import NotificationType
 from app.modules.permissions.service import is_org_admin
@@ -37,23 +38,45 @@ def _moment() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _pick_timer(
+    fields: list[tuple[Field, FieldAccessLevel]], field_id: uuid.UUID | None
+) -> tuple[Field, FieldAccessLevel]:
+    """The timer column the request is about, with the caller's access to it."""
+    timers = [(f, level) for f, level in fields if f.type == FieldType.TIMER]
+    if field_id is not None:
+        found = next(((f, level) for f, level in timers if f.id == field_id), None)
+        if found is None:
+            raise ProblemError(404, "The timer column does not exist.")
+        return found
+    if not timers:
+        raise ProblemError(409, "The table has no timer column.")
+    if len(timers) > 1:
+        raise ProblemError(422, "The table has more than one timer column. Say which one.")
+    return timers[0]
+
+
+def _moments(value: Any) -> tuple[str | None, str | None]:
+    """The start and the stop held in a cell (a cell that is not an object has neither)."""
+    if not isinstance(value, dict):
+        return None, None
+    return value.get("started_at") or None, value.get("finished_at") or None
+
+
 async def timer_record(
     session: AsyncSession,
     actor: User,
     record_id: uuid.UUID,
     action: str,
     if_match: str | None,
+    *,
+    field_id: uuid.UUID | None = None,
 ) -> tuple[Record, RecordPublic]:
     record, context = await service._load(session, actor, record_id, for_update=True)
     fields = await service._fields_with_access(
         session, actor, context, is_creator=record.created_by == actor.id
     )
-    started = next((f for f, _ in fields if f.semantic == FieldSemantic.TIMER_START), None)
-    stopped = next((f for f, _ in fields if f.semantic == FieldSemantic.TIMER_STOP), None)
-    if started is None or stopped is None:
-        raise ProblemError(409, "The table has no timer columns.")
-    levels = {f.id: level for f, level in fields}
-    if FieldAccessLevel.HIDDEN in (levels[started.id], levels[stopped.id]):
+    timer, level = _pick_timer(fields, field_id)
+    if level == FieldAccessLevel.HIDDEN:
         raise ProblemError(403, review.FORBIDDEN)
 
     expected = service.parse_if_match(if_match)
@@ -63,8 +86,7 @@ async def timer_record(
     is_creator = record.created_by == actor.id
     sheet_role = await sheet_access.role_for_record(session, actor, record, [f for f, _ in fields])
     allowed_by_role = is_creator or is_org_admin(actor) or sheet_role == SheetRole.MANAGER
-    began = record.data.get(str(started.id))
-    ended = record.data.get(str(stopped.id))
+    began, ended = _moments(record.data.get(str(timer.id)))
     data: dict[str, Any] = dict(record.data)
     status = next((f for f, _ in fields if f.semantic == FieldSemantic.STATUS), None)
     current = review._kind_of(status, record.data.get(str(status.id))) if status else "todo"
@@ -75,8 +97,7 @@ async def timer_record(
             raise ProblemError(403, "Only the person who gave the task can start the timer.")
         if began:
             raise ProblemError(409, "The timer was already started.")
-        data[str(started.id)] = now
-        data.pop(str(stopped.id), None)
+        data[str(timer.id)] = {"started_at": now}
         if status is not None and current == "todo":
             data[str(status.id)] = review._option_of_kind(status, "in_progress")
     else:
@@ -86,7 +107,7 @@ async def timer_record(
             raise ProblemError(409, "The timer has not been started.")
         if ended:
             raise ProblemError(409, "The timer was already stopped.")
-        data[str(stopped.id)] = now
+        data[str(timer.id)] = {"started_at": began, "finished_at": now}
         if status is not None and current not in ("review", "done"):
             data[str(status.id)] = review._option_of_kind(status, "review")
 

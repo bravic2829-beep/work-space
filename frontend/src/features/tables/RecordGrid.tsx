@@ -21,7 +21,7 @@ import { attachmentUrl, formatSize } from "./attachments";
 import { filesOf, type AttachmentItem, type FieldItem, type RecordItem, type SortColumn } from "./schema";
 import { StatusBadge } from "./StatusBadge";
 import { statusKind } from "./taskWorkflow";
-import { formatMoment, isTimerField } from "./timer";
+import { formatMoment, isTimerField, timerHeadings } from "./timer";
 import { TimerCell } from "./TimerCell";
 import { displayValue, isSortable, optionsOf } from "./values";
 
@@ -149,8 +149,6 @@ export function RecordGrid({
   canDeleteAny = false,
 }: Props) {
   const showActions = canEdit || (onDelete !== undefined && currentUserId !== "");
-  // The "Time" column (Start, the running clock, Stop) sits right after the last timer column.
-  const timerAt = fields.reduce((at, field, index) => (isTimerField(field) ? index : at), -1);
   function ariaSort(field: FieldItem): "ascending" | "descending" | "none" | undefined {
     if (!isSortable(field)) return undefined;
     const column = sort.find((s) => s.field === field.id);
@@ -172,6 +170,19 @@ export function RecordGrid({
         <thead>
           <tr>
             {fields.map((field, index) => {
+              if (isTimerField(field)) {
+                // One timer column is drawn as three: when it started, when it finished, the time.
+                const headings = timerHeadings(field, fields);
+                return (
+                  <Fragment key={field.id}>
+                    {[headings.started, headings.finished, headings.time].map((heading) => (
+                      <th key={heading} scope="col" className="whitespace-nowrap">
+                        {heading}
+                      </th>
+                    ))}
+                  </Fragment>
+                );
+              }
               const direction = sort.find((s) => s.field === field.id)?.direction;
               const Arrow = direction === "asc" ? ArrowUp : direction === "desc" ? ArrowDown : ChevronsUpDown;
               return (
@@ -198,11 +209,6 @@ export function RecordGrid({
                       field.name
                     )}
                   </th>
-                  {index === timerAt && (
-                    <th scope="col" className="whitespace-nowrap">
-                      Time
-                    </th>
-                  )}
                 </Fragment>
               );
             })}
@@ -221,6 +227,33 @@ export function RecordGrid({
                 {fields.map((field, index) => {
                   const value = record.data[field.id];
                   const text = displayValue(field, value, names);
+                  if (isTimerField(field)) {
+                    const moments =
+                      typeof value === "object" && value !== null && !Array.isArray(value)
+                        ? (value as Record<string, unknown>)
+                        : {};
+                    return (
+                      <Fragment key={field.id}>
+                        {[moments.started_at, moments.finished_at].map((moment, which) => (
+                          <td key={which} className="whitespace-nowrap">
+                            <span className="text-muted" title={String(moment ?? "")}>
+                              {formatMoment(moment)}
+                            </span>
+                          </td>
+                        ))}
+                        <td className="whitespace-nowrap">
+                          <TimerCell
+                            fields={fields}
+                            field={field}
+                            record={record}
+                            currentUserId={currentUserId}
+                            isAdmin={isAdmin}
+                            onChanged={(updated) => onRecordChanged?.(updated)}
+                          />
+                        </td>
+                      </Fragment>
+                    );
+                  }
                   return (
                     <Fragment key={field.id}>
                     <td className={index === 0 ? "min-w-64" : undefined}>
@@ -240,10 +273,6 @@ export function RecordGrid({
                         <DueCell text={text} done={statusKind(fields, record) === "done"} />
                       ) : field.type === "attachment" ? (
                         <FileLinks files={filesOf(value)} />
-                      ) : isTimerField(field) && text ? (
-                        <span className="whitespace-nowrap text-muted" title={text}>
-                          {formatMoment(value)}
-                        </span>
                       ) : field.type === "user" && Array.isArray(value) && value.length > 0 ? (
                         <PeopleCell ids={value} names={names} />
                       ) : field.type === "url" && isWebLink(text) ? (
@@ -256,17 +285,6 @@ export function RecordGrid({
                         text
                       )}
                     </td>
-                    {index === timerAt && (
-                      <td className="whitespace-nowrap">
-                        <TimerCell
-                          fields={fields}
-                          record={record}
-                          currentUserId={currentUserId}
-                          isAdmin={isAdmin}
-                          onChanged={(updated) => onRecordChanged?.(updated)}
-                        />
-                      </td>
-                    )}
                     </Fragment>
                   );
                 })}

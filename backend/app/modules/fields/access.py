@@ -5,7 +5,7 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.fields import repository
-from app.modules.fields.models import Field, FieldAccessLevel
+from app.modules.fields.models import Field, FieldAccessLevel, FieldType
 from app.modules.permissions.service import TableContext, is_org_admin
 from app.modules.sheets.access import LOCKED_FOR_EDITORS
 from app.modules.sheets.models import SheetRole
@@ -16,7 +16,11 @@ def _sheet_default(role: SheetRole, field: Field) -> FieldAccessLevel:
     """A member of the sheet of a record: managers edit every column, editors all but a few."""
     if role == SheetRole.MANAGER:
         return FieldAccessLevel.EDIT
-    if role == SheetRole.EDITOR and field.semantic not in LOCKED_FOR_EDITORS:
+    if (
+        role == SheetRole.EDITOR
+        and field.semantic not in LOCKED_FOR_EDITORS
+        and field.type != FieldType.TIMER
+    ):
         return FieldAccessLevel.EDIT
     return FieldAccessLevel.READ
 

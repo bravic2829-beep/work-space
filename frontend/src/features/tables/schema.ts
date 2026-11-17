@@ -18,6 +18,7 @@ export const FIELD_TYPES = [
   "created_time",
   "auto_number",
   "attachment",
+  "timer",
 ] as const;
 export type FieldType = (typeof FIELD_TYPES)[number];
 

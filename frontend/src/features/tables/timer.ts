@@ -1,5 +1,5 @@
 import type { FieldItem, RecordItem } from "./schema";
-import { assigneeIds, fieldBySemantic } from "./taskWorkflow";
+import { assigneeIds } from "./taskWorkflow";
 
 export type TimerPhase = "idle" | "running" | "stopped";
 
@@ -10,15 +10,13 @@ export type TimerState = {
   stoppedAt: number | null;
 };
 
-/** The two columns of the task timer, or null when the table has no timer. */
-export function timerFields(fields: FieldItem[]): { start: FieldItem; stop: FieldItem } | null {
-  const start = fieldBySemantic(fields, "timer_start");
-  const stop = fieldBySemantic(fields, "timer_stop");
-  return start && stop ? { start, stop } : null;
+/** The timer columns of a table (a table may have several), in column order. */
+export function timerColumns(fields: FieldItem[]): FieldItem[] {
+  return fields.filter(isTimerField);
 }
 
 export function isTimerField(field: FieldItem): boolean {
-  return field.semantic === "timer_start" || field.semantic === "timer_stop";
+  return field.type === "timer";
 }
 
 function moment(value: unknown): number | null {
@@ -27,10 +25,18 @@ function moment(value: unknown): number | null {
   return Number.isNaN(time) ? null : time;
 }
 
-export function timerState(fields: FieldItem[], record: RecordItem): TimerState {
-  const columns = timerFields(fields);
-  const startedAt = columns ? moment(record.data[columns.start.id]) : null;
-  const stoppedAt = columns ? moment(record.data[columns.stop.id]) : null;
+/** What one timer cell holds: {"started_at", "finished_at"}, either of which may be missing. */
+function cellMoments(value: unknown): { startedAt: number | null; stoppedAt: number | null } {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return { startedAt: null, stoppedAt: null };
+  }
+  const cell = value as Record<string, unknown>;
+  return { startedAt: moment(cell.started_at), stoppedAt: moment(cell.finished_at) };
+}
+
+/** The state of one timer column of a record. */
+export function timerState(field: FieldItem, record: RecordItem): TimerState {
+  const { startedAt, stoppedAt } = cellMoments(record.data[field.id]);
   if (startedAt === null) return { phase: "idle", startedAt: null, stoppedAt: null };
   if (stoppedAt === null) return { phase: "running", startedAt, stoppedAt: null };
   return { phase: "stopped", startedAt, stoppedAt };
@@ -64,6 +70,32 @@ export function formatMoment(value: unknown): string {
   });
 }
 
+/** One timer cell in words, for lists and the history: "Nov 14, 08:00 → Nov 14, 09:30 (1:30:05)". */
+export function describeTimer(value: unknown): string {
+  const { startedAt, stoppedAt } = cellMoments(value);
+  if (startedAt === null) return "";
+  const started = formatMoment(new Date(startedAt).toISOString());
+  if (stoppedAt === null) return `${started} → running`;
+  const finished = formatMoment(new Date(stoppedAt).toISOString());
+  return `${started} → ${finished} (${formatDuration(stoppedAt - startedAt)})`;
+}
+
+/**
+ * The three columns a timer is drawn as. With one timer they are plain ("Started at"); with
+ * several each one is prefixed by the name of its column so they can be told apart.
+ */
+export function timerHeadings(
+  field: FieldItem,
+  fields: FieldItem[],
+): { started: string; finished: string; time: string } {
+  const prefix = timerColumns(fields).length > 1 ? `${field.name} · ` : "";
+  return {
+    started: `${prefix}Started at`,
+    finished: `${prefix}Finished at`,
+    time: `${prefix}Time`,
+  };
+}
+
 export type TimerRights = { start: boolean; stop: boolean };
 
 /**
@@ -73,11 +105,12 @@ export type TimerRights = { start: boolean; stop: boolean };
  */
 export function timerRights(
   fields: FieldItem[],
+  field: FieldItem,
   record: RecordItem,
   currentUserId: string,
   isAdmin: boolean,
 ): TimerRights {
-  const { phase } = timerState(fields, record);
+  const { phase } = timerState(field, record);
   const giver = record.created_by === currentUserId || isAdmin;
   return {
     start: phase === "idle" && giver,

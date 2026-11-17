@@ -39,7 +39,7 @@ import type {
   ViewItem,
 } from "./schema";
 import { fieldBySemantic } from "./taskWorkflow";
-import { timerFields } from "./timer";
+import { timerColumns } from "./timer";
 import { useHiddenColumns } from "./useHiddenColumns";
 import { useUserNames } from "./useUserNames";
 import { userIdsIn } from "./values";
@@ -216,7 +216,7 @@ export function TableScreen({ tableId, sheet, addTaskSignal = 0 }: Props) {
     fieldBySemantic(table.fields, "assignee") !== undefined &&
     fieldBySemantic(table.fields, "status") !== undefined;
   // A task table that has no timer yet can get one.
-  const canAddTimer = !sheet && canEdit && isTaskTable && timerFields(table.fields) === null;
+  const canAddTimer = !sheet && canEdit && isTaskTable && timerColumns(table.fields).length === 0;
   // The admin of the table's workspace may give a person a sheet of it.
   const canMakeSheet = !sheet && (isAdmin || table.my_role === "admin") && isTaskTable;
   // Workspace admins choose which columns each person sees.
@@ -237,17 +237,12 @@ export function TableScreen({ tableId, sheet, addTaskSignal = 0 }: Props) {
     );
   }
 
-  /** Gives an older task table the two timer columns (new task tables already have them). */
+  /** Gives an older task table a timer column (new task tables already have one). */
   async function addTimer() {
     setNotice(null);
     setAddingTimer(true);
     try {
-      for (const [name, semantic] of [
-        ["Started at", "timer_start"],
-        ["Finished at", "timer_stop"],
-      ] as const) {
-        await createField(tableId, { name, type: "date", config: { include_time: true }, semantic });
-      }
+      await createField(tableId, { name: "Timer", type: "timer" });
       setTableKey((n) => n + 1);
       reloadRecords();
     } catch (error) {

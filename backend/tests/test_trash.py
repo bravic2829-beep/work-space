@@ -176,8 +176,56 @@ async def test_a_hidden_title_column_does_not_leak_into_the_trash(work: Work, bo
     assert (await trashed(work, "editor"))[0]["name"] is None
 
 
+async def delete_forever(work: Work, record_id: str, who: str) -> Any:
+    return await work.api("DELETE", f"/trash/records/{record_id}", who)
+
+
+async def test_the_person_who_deleted_a_record_can_remove_it_for_good(
+    work: Work, board: Board, migrated_database_url: str
+) -> None:
+    record = await board.create("editor", Name="Mine", Assignee=[board.user("member")])
+    await delete(work, record, "editor")
+
+    assert (await delete_forever(work, record["id"], "editor")).status_code == 204
+
+    assert await trashed(work, "editor") == []
+    assert_problem(await restore(work, record["id"], "editor"), 404)
+    rows = await db_fetch(
+        migrated_database_url, "SELECT 1 FROM records WHERE id = $1", uuid.UUID(record["id"])
+    )
+    assert rows == []
+    assert_problem(await delete_forever(work, record["id"], "editor"), 404)  # twice
+
+
+async def test_an_organization_admin_can_remove_anyones_trashed_record(
+    work: Work, board: Board
+) -> None:
+    record = await board.create("editor", Name="Theirs")
+    await delete(work, record, "editor")
+    assert (await delete_forever(work, record["id"], "admin")).status_code == 204
+    assert await trashed(work, "admin") == []
+
+
+async def test_nobody_else_can_remove_a_trashed_record_for_good(work: Work, board: Board) -> None:
+    record = await board.create("editor", Name="Mine")
+    await delete(work, record, "editor")
+
+    for who in ("wsadmin", "member"):
+        assert_problem(await delete_forever(work, record["id"], who), 403)
+    assert_problem(await delete_forever(work, record["id"], "other_admin"), 404)
+    assert len(await trashed(work, "editor")) == 1
+
+
+async def test_a_live_record_cannot_be_removed_through_the_trash(work: Work, board: Board) -> None:
+    live = await board.create(Name="Live")
+    assert_problem(await delete_forever(work, live["id"], "admin"), 404)
+    assert_problem(await delete_forever(work, str(uuid.uuid4()), "admin"), 404)
+    assert (await work.api("GET", f"/records/{live['id']}", "admin")).status_code == 200
+
+
 async def test_the_trash_needs_a_login(work: Work, board: Board) -> None:
     record = await board.create(Name="x")
+    assert_problem(await work.client.delete(f"/api/v1/trash/records/{record['id']}"), 401)
     assert_problem(await work.client.get("/api/v1/trash/records"), 401)
     assert_problem(await work.client.post(f"/api/v1/records/{record['id']}/restore"), 401)
 

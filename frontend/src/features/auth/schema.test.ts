@@ -22,6 +22,7 @@ describe("isUser", () => {
     { ...sampleUser(), status: "deleted" },
     { ...sampleUser(), department_id: 5 },
     { ...sampleUser(), manager_id: undefined },
+    { ...sampleUser(), must_change_password: undefined },
   ])("rejects %j", (value) => {
     expect(isUser(value)).toBe(false);
   });

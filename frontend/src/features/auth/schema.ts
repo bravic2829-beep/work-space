@@ -11,6 +11,8 @@ export type User = {
   status: UserStatus;
   department_id: string | null;
   manager_id: string | null;
+  /** An admin set a temporary password: it must be replaced before anything else is open. */
+  must_change_password: boolean;
 };
 
 const ORG_ROLES: readonly string[] = ["owner", "admin", "member"];
@@ -38,7 +40,8 @@ export function isUser(value: unknown): value is User {
     typeof value.status === "string" &&
     STATUSES.includes(value.status) &&
     isStringOrNull(value.department_id) &&
-    isStringOrNull(value.manager_id)
+    isStringOrNull(value.manager_id) &&
+    typeof value.must_change_password === "boolean"
   );
 }
 

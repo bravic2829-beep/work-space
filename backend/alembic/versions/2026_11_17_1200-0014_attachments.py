@@ -1,8 +1,8 @@
 """attachments: files kept in a column of type attachment
 
-Revision ID: 0012
-Revises: 0011
-Create Date: 2026-11-16 09:00:00.000000
+Revision ID: 0014
+Revises: 0013
+Create Date: 2026-11-17 12:00:00.000000
 
 """
 
@@ -13,15 +13,16 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "0012"
-down_revision: str | Sequence[str] | None = "0011"
+revision: str = "0014"
+down_revision: str | Sequence[str] | None = "0013"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 _TYPE = "ck_fields_field_type"
 _TYPES_OLD = (
     "'text', 'long_text', 'number', 'date', 'checkbox', 'single_select', 'multi_select', "
-    "'status', 'user', 'url', 'link_record', 'created_by', 'created_time', 'auto_number'"
+    "'status', 'user', 'url', 'link_record', 'created_by', 'created_time', 'auto_number', "
+    "'timer'"
 )
 _TYPES_NEW = _TYPES_OLD + ", 'attachment'"
 _ACTION = "ck_activity_log_activity_action"

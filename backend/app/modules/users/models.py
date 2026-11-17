@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -71,6 +72,10 @@ class User(Base):
     )
     status: Mapped[UserStatus] = mapped_column(
         str_enum(UserStatus, "status"), default=UserStatus.ACTIVE, server_default="active"
+    )
+    # Set when an admin resets the password: the person must choose their own before anything else.
+    must_change_password: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false")
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

@@ -15,15 +15,14 @@ from app.modules.sheets.models import SHEET_RANK, Sheet, SheetMember, SheetRole
 from app.modules.users.models import User
 
 # Columns a sheet editor cannot change: who the work is for, its state (which moves by Start,
-# Stop and the review buttons), the timer, and what the manager says about it.
+# Stop and the review buttons), and what the manager says about it. Timer columns are locked too,
+# by their type (see fields/access.py).
 LOCKED_FOR_EDITORS = frozenset(
     {
         FieldSemantic.ASSIGNEE,
         FieldSemantic.FOLLOWER,
         FieldSemantic.STATUS,
         FieldSemantic.FEEDBACK,
-        FieldSemantic.TIMER_START,
-        FieldSemantic.TIMER_STOP,
     }
 )
 

@@ -55,7 +55,10 @@ async def test_login_succeeds_and_sets_a_safe_cookie(
     assert body["employee_code"] == "E001"
     assert body["full_name"] == "Nguyen Van A"
     # Neither the hash nor the token is part of the body.
-    assert "password" not in str(body).lower()
+    assert (
+        "password"
+        not in str({k: v for k, v in body.items() if k != "must_change_password"}).lower()
+    )
     assert session_cookie(response) not in response.text
 
     cookie = response.headers["set-cookie"].lower()

@@ -125,6 +125,45 @@ async def authenticate(
     return AuthContext(user=found[1], session_id=found[0].id)
 
 
+async def change_password(
+    session: AsyncSession,
+    limiter: LoginFailureLimiter,
+    context: AuthContext,
+    *,
+    current_password: str,
+    new_password: str,
+    now: datetime | None = None,
+) -> None:
+    """Replace the signed-in user's password and sign out every other session. The caller commits.
+
+    A wrong current password counts against the same lock as failed logins, so a stolen session
+    cannot be used to guess the password.
+    """
+    user = context.user
+    retry_after = limiter.retry_after_seconds(user.employee_code)
+    if retry_after is not None:
+        raise ProblemError(
+            429,
+            "Too many failed attempts. Try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+    if not await verify_password_async(user.password_hash, current_password):
+        limiter.record_failure(user.employee_code)
+        raise ProblemError(403, "The current password is not correct.")
+    if new_password == current_password:
+        raise ProblemError(422, "The new password must be different from the current one.")
+
+    limiter.reset(user.employee_code)
+    user.password_hash = await hash_password_async(new_password)
+    user.must_change_password = False
+    await repository.revoke_others_for_user(
+        session,
+        user_id=user.id,
+        keep_session_id=context.session_id,
+        now=now or datetime.now(UTC),
+    )
+
+
 async def logout(
     session: AsyncSession, *, session_id: uuid.UUID, now: datetime | None = None
 ) -> None:

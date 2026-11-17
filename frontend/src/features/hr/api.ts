@@ -28,7 +28,8 @@ export function listUsers(
 }
 
 export type NewUser = {
-  employee_code: string;
+  /** Leave out to let the server pick the next free code (NV001, NV002, ...). */
+  employee_code?: string;
   full_name: string;
   password: string;
   level: UserLevel;
@@ -50,6 +51,13 @@ export type UserChanges = Partial<{
 
 export function updateUser(id: string, changes: UserChanges): Promise<User> {
   return apiRequest<User>("PATCH", `/api/v1/users/${id}`, { body: changes, guard: isUser });
+}
+
+/** Admin: set a temporary password. The employee is signed out and must change it. */
+export function resetPassword(id: string, newPassword: string): Promise<void> {
+  return apiRequest("PUT", `/api/v1/users/${id}/password`, {
+    body: { new_password: newPassword },
+  });
 }
 
 export function listDepartments(signal?: AbortSignal): Promise<Department[]> {

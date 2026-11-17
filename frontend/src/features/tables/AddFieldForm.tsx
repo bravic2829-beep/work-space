@@ -24,6 +24,7 @@ export const LABELS: Record<FieldType, string> = {
   created_time: "Created time",
   auto_number: "Auto number",
   attachment: "Files",
+  timer: "Timer (started, finished, time)",
 };
 
 type Props = {

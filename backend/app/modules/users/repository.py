@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import BigInteger, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.users.models import OrgRole, User, UserStatus
@@ -20,6 +20,27 @@ async def get_by_employee_code(
         )
     )
     return result.scalar_one_or_none()
+
+
+AUTO_CODE_PREFIX = "NV"
+
+
+async def next_auto_employee_code(session: AsyncSession, *, organization_id: uuid.UUID) -> str:
+    """The next free code of the form NV001, NV002, ... (one above the highest NV<number>).
+
+    Takes a transaction-level advisory lock per organization so two admins adding people at the
+    same moment get different codes; the lock is released when the caller commits.
+    """
+    await session.execute(
+        select(func.pg_advisory_xact_lock(func.hashtext(f"employee_code:{organization_id}")))
+    )
+    pattern = f"^{AUTO_CODE_PREFIX}([0-9]{{1,15}})$"
+    number = cast(func.substring(User.employee_code, pattern), BigInteger)
+    result = await session.execute(
+        select(func.max(number)).where(User.organization_id == organization_id)
+    )
+    highest = result.scalar_one_or_none() or 0
+    return f"{AUTO_CODE_PREFIX}{highest + 1:03d}"
 
 
 async def get_in_organization(

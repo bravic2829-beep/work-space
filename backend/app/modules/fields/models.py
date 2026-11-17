@@ -39,6 +39,9 @@ class FieldType(enum.StrEnum):
     AUTO_NUMBER = "auto_number"
     # Files kept on the server's disk (`attachments` table), not in the record's data.
     ATTACHMENT = "attachment"
+    # A task timer: one cell holds {"started_at", "finished_at"}, written only by the timer
+    # endpoint. The web page draws it as three columns (Started at, Finished at, Time).
+    TIMER = "timer"
 
 
 class FieldSemantic(enum.StrEnum):
@@ -50,10 +53,6 @@ class FieldSemantic(enum.StrEnum):
     DUE_DATE = "due_date"
     PARENT = "parent"
     SUBTASKS = "subtasks"
-    # The moment the person who gave the work pressed Start, and the moment the assignee pressed
-    # Stop (the timer endpoint writes them). The time spent is the difference.
-    TIMER_START = "timer_start"
-    TIMER_STOP = "timer_stop"
     # What the manager says about the work. A sheet editor (the assignee) can read it, not write.
     FEEDBACK = "feedback"
 

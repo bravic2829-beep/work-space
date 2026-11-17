@@ -162,6 +162,43 @@ async def restore_record(
     return record, rendered[0]
 
 
+async def delete_forever(
+    session: AsyncSession,
+    actor: User,
+    record_id: uuid.UUID,
+    attachments_dir: str | None = None,
+) -> None:
+    """Remove a record that is in the trash for good. Same people as restore: whoever deleted
+    it, or an organization admin. Links, viewers, comments, notifications and attached files go
+    with it (the files once the removal is saved)."""
+    record = (
+        await session.execute(
+            select(Record)
+            .join(Table, Table.id == Record.table_id)
+            .join(WorkBase, WorkBase.id == Table.base_id)
+            .join(Workspace, Workspace.id == WorkBase.workspace_id)
+            .where(
+                Record.id == record_id,
+                Record.deleted_at.is_not(None),
+                Record.deleted_at >= datetime.now(UTC) - timedelta(days=TRASH_DAYS),
+                *_alive_in(actor.organization_id),
+            )
+            .with_for_update(of=Record)
+        )
+    ).scalar_one_or_none()
+    if record is None:
+        raise ProblemError(404, "The record is not in the trash.")
+    if record.deleted_by != actor.id and not is_org_admin(actor):
+        raise ProblemError(
+            403, "Only the person who deleted a record, or an admin, can remove it for good."
+        )
+    if attachments_dir is not None:
+        keys = await attachment_repository.keys_of_records(session, [record.id])
+        attachment_storage.remove_after_commit(session.sync_session, attachments_dir, keys)
+    await session.delete(record)
+    await session.flush()
+
+
 async def purge_expired(
     session: AsyncSession, *, now: datetime | None = None, attachments_dir: str | None = None
 ) -> int:

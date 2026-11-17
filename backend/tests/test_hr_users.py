@@ -123,7 +123,7 @@ async def test_admin_creates_an_employee_with_a_personal_workspace(
     assert response.headers["location"] == f"/api/v1/users/{body['id']}"
     assert body["employee_code"] == "NV100"
     assert (body["org_role"], body["level"], body["status"]) == ("member", "employee", "active")
-    assert "password" not in response.text.lower()
+    assert "password" not in response.text.lower().replace("must_change_password", "")
 
     rows = await db_fetch(
         migrated_database_url, "SELECT password_hash FROM users WHERE employee_code = 'NV100'"
@@ -183,6 +183,62 @@ async def test_two_admins_creating_the_same_code_at_once_leave_one_account(
         )
         == 1
     )
+
+
+async def test_a_missing_employee_code_is_generated_as_the_next_nv_number(
+    client: AsyncClient, migrated_database_url: str
+) -> None:
+    await make_admin(migrated_database_url)
+    await create_user(migrated_database_url, employee_code="NV101")
+    await create_user(migrated_database_url, employee_code="NV7")
+    await create_user(migrated_database_url, employee_code="NVX9")  # not a number: ignored
+    headers = await login_as(client, "ADMIN")
+    without_code = {k: v for k, v in NEW_USER.items() if k != "employee_code"}
+
+    first = await client.post("/api/v1/users", json=without_code, headers=headers)
+    second = await client.post(
+        "/api/v1/users", json={**without_code, "employee_code": None}, headers=headers
+    )
+
+    assert first.status_code == 201
+    assert first.json()["employee_code"] == "NV102"
+    assert second.status_code == 201
+    assert second.json()["employee_code"] == "NV103"
+
+
+async def test_the_first_generated_code_is_nv001(
+    client: AsyncClient, migrated_database_url: str
+) -> None:
+    await make_admin(migrated_database_url)
+    headers = await login_as(client, "ADMIN")
+    without_code = {k: v for k, v in NEW_USER.items() if k != "employee_code"}
+
+    response = await client.post("/api/v1/users", json=without_code, headers=headers)
+
+    assert response.json()["employee_code"] == "NV001"
+
+
+async def test_generated_codes_never_collide_when_admins_add_people_at_once(
+    migrated_database_url: str,
+) -> None:
+    import asyncio
+
+    from tests.helpers import app_client
+
+    await make_admin(migrated_database_url)
+    without_code = {k: v for k, v in NEW_USER.items() if k != "employee_code"}
+    async with app_client(migrated_database_url) as client:
+        headers = await login_as(client, "ADMIN")
+        results = await asyncio.gather(
+            *(client.post("/api/v1/users", json=without_code, headers=headers) for _ in range(4))
+        )
+    assert [r.status_code for r in results] == [201, 201, 201, 201]
+    assert sorted(r.json()["employee_code"] for r in results) == [
+        "NV001",
+        "NV002",
+        "NV003",
+        "NV004",
+    ]
 
 
 @pytest.mark.parametrize(

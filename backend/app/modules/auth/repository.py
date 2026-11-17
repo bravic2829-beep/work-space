@@ -39,6 +39,21 @@ async def revoke(session: AsyncSession, *, session_id: uuid.UUID, now: datetime)
     )
 
 
+async def revoke_others_for_user(
+    session: AsyncSession, *, user_id: uuid.UUID, keep_session_id: uuid.UUID, now: datetime
+) -> None:
+    """Sign the person out everywhere except the session they are using now."""
+    await session.execute(
+        update(AuthSession)
+        .where(
+            AuthSession.user_id == user_id,
+            AuthSession.id != keep_session_id,
+            AuthSession.revoked_at.is_(None),
+        )
+        .values(revoked_at=now)
+    )
+
+
 async def revoke_all_for_user(session: AsyncSession, *, user_id: uuid.UUID, now: datetime) -> None:
     await session.execute(
         update(AuthSession)

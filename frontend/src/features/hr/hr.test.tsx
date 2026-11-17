@@ -15,6 +15,7 @@ import {
   deleteDepartment,
   listDepartments,
   listUsers,
+  resetPassword,
   setDepartmentHead,
   updateUser,
 } from "./api";
@@ -33,6 +34,7 @@ vi.mock("./api", () => ({
   listUsers: vi.fn(),
   createUser: vi.fn(),
   updateUser: vi.fn(),
+  resetPassword: vi.fn(),
   listDepartments: vi.fn(),
   createDepartment: vi.fn(),
   deleteDepartment: vi.fn(),
@@ -47,6 +49,7 @@ const fetchMeMock = vi.mocked(fetchMe);
 const listUsersMock = vi.mocked(listUsers);
 const createUserMock = vi.mocked(createUser);
 const updateUserMock = vi.mocked(updateUser);
+const resetPasswordMock = vi.mocked(resetPassword);
 const listDepartmentsMock = vi.mocked(listDepartments);
 const createDepartmentMock = vi.mocked(createDepartment);
 const deleteDepartmentMock = vi.mocked(deleteDepartment);
@@ -429,6 +432,127 @@ describe("UsersPanel: edit drawer", () => {
   });
 });
 
+describe("UsersPanel: reset password", () => {
+  async function openEditor(code = "E002") {
+    await userEvent.click(
+      within(row(code)).getByRole("button", { name: "Edit" }),
+    );
+    return screen.getByRole("form", { name: `Edit ${code}` });
+  }
+
+  it("sets a temporary password and shows it once so the admin can tell the employee", async () => {
+    listUsersMock.mockResolvedValue({ items: [employee], next_cursor: null });
+    resetPasswordMock.mockResolvedValue(undefined);
+    renderUsers();
+    await screen.findByText("Tran Thi B");
+
+    const form = await openEditor();
+    const section = within(form).getByRole("region", {
+      name: "Reset password",
+    });
+    const reset = within(section).getByRole("button", {
+      name: "Reset password",
+    });
+    expect(reset).toBeDisabled();
+    await userEvent.type(
+      within(section).getByPlaceholderText("Temporary password"),
+      "Temp-Pass-1",
+    );
+    await userEvent.click(reset);
+
+    await waitFor(() =>
+      expect(resetPasswordMock).toHaveBeenCalledWith(
+        employee.id,
+        "Temp-Pass-1",
+      ),
+    );
+    expect(await within(section).findByRole("status")).toHaveTextContent(
+      "Temp-Pass-1",
+    );
+    expect(
+      within(section).getByPlaceholderText("Temporary password"),
+    ).toHaveValue("");
+    // The edit form itself was not saved by accident.
+    expect(updateUserMock).not.toHaveBeenCalled();
+  });
+
+  it("Enter in the password box resets it and does not save the form", async () => {
+    listUsersMock.mockResolvedValue({ items: [employee], next_cursor: null });
+    resetPasswordMock.mockResolvedValue(undefined);
+    renderUsers();
+    await screen.findByText("Tran Thi B");
+
+    const form = await openEditor();
+    await userEvent.type(
+      within(form).getByPlaceholderText("Temporary password"),
+      "Temp-Pass-1{Enter}",
+    );
+
+    await waitFor(() => expect(resetPasswordMock).toHaveBeenCalledTimes(1));
+    expect(updateUserMock).not.toHaveBeenCalled();
+  });
+
+  it("Generate fills in a password of a usable length", async () => {
+    listUsersMock.mockResolvedValue({ items: [employee], next_cursor: null });
+    renderUsers();
+    await screen.findByText("Tran Thi B");
+
+    const form = await openEditor();
+    await userEvent.click(
+      within(form).getByRole("button", { name: "Generate" }),
+    );
+
+    const value = (
+      within(form).getByPlaceholderText(
+        "Temporary password",
+      ) as HTMLInputElement
+    ).value;
+    expect(value.length).toBeGreaterThanOrEqual(8);
+    expect(
+      within(form).getByRole("button", { name: "Reset password" }),
+    ).toBeEnabled();
+  });
+
+  it("shows why it failed", async () => {
+    listUsersMock.mockResolvedValue({ items: [employee], next_cursor: null });
+    resetPasswordMock.mockRejectedValue(
+      new ApiError("You do not have permission to do this.", 403),
+    );
+    renderUsers();
+    await screen.findByText("Tran Thi B");
+
+    const form = await openEditor();
+    await userEvent.type(
+      within(form).getByPlaceholderText("Temporary password"),
+      "Temp-Pass-1",
+    );
+    await userEvent.click(
+      within(form).getByRole("button", { name: "Reset password" }),
+    );
+
+    expect(await within(form).findByRole("alert")).toHaveTextContent(
+      "do not have permission",
+    );
+  });
+
+  it("is not offered for your own account", async () => {
+    const me = sampleUser({
+      id: "admin-1",
+      employee_code: "ADMIN",
+      org_role: "admin",
+    });
+    fetchMeMock.mockResolvedValue(adminUser);
+    listUsersMock.mockResolvedValue({ items: [me], next_cursor: null });
+    renderUsers();
+    await screen.findByText("You");
+
+    const form = await openEditor("ADMIN");
+    expect(
+      within(form).queryByRole("region", { name: "Reset password" }),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe("Add employee drawer", () => {
   async function openNewEmployee(deps: Department[] = departments) {
     listUsersMock.mockResolvedValue({ items: [], next_cursor: null });
@@ -471,6 +595,29 @@ describe("Add employee drawer", () => {
     expect(within(form).getByLabelText("Employee code")).toHaveValue("");
     expect(within(form).getByLabelText("Employee code")).toHaveFocus();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("leaving the employee code blank omits it so the server generates one", async () => {
+    createUserMock.mockResolvedValue(employee);
+    const form = await openNewEmployee();
+
+    await userEvent.type(
+      within(form).getByLabelText("Full name"),
+      "Nguyen Van B",
+    );
+    await userEvent.type(
+      within(form).getByLabelText("Initial password"),
+      "Initial-Pass-1",
+    );
+    await userEvent.click(
+      within(form).getByRole("button", { name: "Add employee" }),
+    );
+
+    await waitFor(() => expect(createUserMock).toHaveBeenCalledTimes(1));
+    expect(createUserMock.mock.calls[0][0].employee_code).toBeUndefined();
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Employee E002 created.",
+    );
   });
 
   it("the admin level also sends the admin organization role, no department means null", async () => {

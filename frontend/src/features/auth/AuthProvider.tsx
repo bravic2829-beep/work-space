@@ -17,6 +17,8 @@ type AuthContextValue = {
   state: AuthState;
   login: (employeeCode: string, password: string, rememberMe: boolean) => Promise<void>;
   logout: () => Promise<void>;
+  /** Read the signed-in user again, for example after a temporary password was replaced. */
+  refresh: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -66,7 +68,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState({ status: "anonymous" });
   }, []);
 
-  const value = useMemo(() => ({ state, login, logout }), [state, login, logout]);
+  const refresh = useCallback(async () => {
+    const user = await fetchMe();
+    setState({ status: "authenticated", user });
+  }, []);
+
+  const value = useMemo(
+    () => ({ state, login, logout, refresh }),
+    [state, login, logout, refresh],
+  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

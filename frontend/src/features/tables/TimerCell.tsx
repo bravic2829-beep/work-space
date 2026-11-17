@@ -12,7 +12,10 @@ import type { FieldItem, RecordItem } from "./schema";
 import { elapsedMs, formatDuration, timerRights, timerState } from "./timer";
 
 type Props = {
+  /** All the columns of the table (who is assigned is read from them). */
   fields: FieldItem[];
+  /** The timer column this cell belongs to. */
+  field: FieldItem;
   record: RecordItem;
   currentUserId: string;
   isAdmin: boolean;
@@ -34,9 +37,9 @@ function useNow(active: boolean): number {
  * The task timer of one record: a Start button for the person who gave the task, the time running
  * while the work is done, a Stop button for the assignee, and the time spent in the end.
  */
-export function TimerCell({ fields, record, currentUserId, isAdmin, onChanged }: Props) {
-  const state = timerState(fields, record);
-  const rights = timerRights(fields, record, currentUserId, isAdmin);
+export function TimerCell({ fields, field, record, currentUserId, isAdmin, onChanged }: Props) {
+  const state = timerState(field, record);
+  const rights = timerRights(fields, field, record, currentUserId, isAdmin);
   const now = useNow(state.phase === "running");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -45,7 +48,7 @@ export function TimerCell({ fields, record, currentUserId, isAdmin, onChanged }:
     setBusy(true);
     setMessage(null);
     try {
-      onChanged(await timerRecord(record.id, record.version, action));
+      onChanged(await timerRecord(record.id, record.version, action, field.id));
     } catch (error) {
       setMessage(
         error instanceof ApiError && error.status === 412

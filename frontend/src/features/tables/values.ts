@@ -8,14 +8,16 @@ import {
   type RecordItem,
   type SelectOption,
 } from "./schema";
+import { describeTimer } from "./timer";
 
 /** Types whose value is made by the system: nobody edits them as a cell (files have their own
- * buttons for adding and removing). */
+ * buttons for adding and removing; a timer has its Start and Stop buttons). */
 const COMPUTED: ReadonlySet<FieldType> = new Set([
   "created_by",
   "created_time",
   "auto_number",
   "attachment",
+  "timer",
 ]);
 const SORTABLE: ReadonlySet<FieldType> = new Set([
   "text",
@@ -110,6 +112,8 @@ export function displayValue(
       return filesOf(value)
         .map((file) => file.name)
         .join(", ");
+    case "timer":
+      return describeTimer(value);
     case "created_time":
     case "date": {
       const text = String(value);

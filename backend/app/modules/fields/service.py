@@ -214,6 +214,8 @@ async def create_field(
         raise ProblemError(409, TOO_MANY_FIELDS)
     if await repository.name_taken(session, table_id=table.id, name=data.name):
         raise ProblemError(409, DUPLICATE_NAME)
+    if data.type == FieldType.TIMER and data.is_required:
+        raise _invalid("A timer cannot be required.")
     if data.semantic is not None:
         taken = [data.semantic]
         if data.semantic in (FieldSemantic.PARENT, FieldSemantic.SUBTASKS):
@@ -336,7 +338,7 @@ async def create_template_fields(session: AsyncSession, table: Table, template: 
         grants_view=False,
         is_required=False,
     )
-    await add_timer_fields(session, table)
+    await add_timer_field(session, table)
     for name, kind, semantic in (
         ("Progress update", FieldType.LONG_TEXT, None),
         ("Result", FieldType.LONG_TEXT, None),
@@ -366,22 +368,18 @@ async def create_template_fields(session: AsyncSession, table: Table, template: 
     )
 
 
-async def add_timer_fields(session: AsyncSession, table: Table) -> None:
-    """The two columns of the task timer: when it was started and when it was stopped."""
-    for name, semantic in (
-        ("Started at", FieldSemantic.TIMER_START),
-        ("Finished at", FieldSemantic.TIMER_STOP),
-    ):
-        await _insert(
-            session,
-            table,
-            name=name,
-            field_type=FieldType.DATE,
-            config={"include_time": True},
-            semantic=semantic,
-            grants_view=False,
-            is_required=False,
-        )
+async def add_timer_field(session: AsyncSession, table: Table) -> None:
+    """The task timer: one column that holds when it was started and when it was stopped."""
+    await _insert(
+        session,
+        table,
+        name="Timer",
+        field_type=FieldType.TIMER,
+        config={},
+        semantic=None,
+        grants_view=False,
+        is_required=False,
+    )
 
 
 async def get_field(session: AsyncSession, actor: User, field_id: uuid.UUID) -> FieldPublic:
@@ -416,6 +414,8 @@ async def update_field(
                 raise _invalid("A link field cannot be required.")
             if field.type == FieldType.ATTACHMENT:
                 raise _invalid("A files column cannot be required.")
+            if field.type == FieldType.TIMER:
+                raise _invalid("A timer cannot be required.")
             missing = await records.count_missing_value(session, field=field)
             if missing:
                 raise ProblemError(

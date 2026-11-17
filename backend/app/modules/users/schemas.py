@@ -23,6 +23,7 @@ class UserPublic(BaseModel):
     status: UserStatus
     department_id: uuid.UUID | None
     manager_id: uuid.UUID | None
+    must_change_password: bool
 
 
 class DirectoryEntry(BaseModel):
@@ -46,7 +47,8 @@ class UserCreate(BaseModel):
     # Unknown fields are refused, so a client cannot try to slip in id, password_hash, etc.
     model_config = ConfigDict(extra="forbid")
 
-    employee_code: EmployeeCode
+    # Left out (or null): the server picks the next free code, NV001, NV002, ...
+    employee_code: EmployeeCode | None = None
     full_name: FullName
     password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=128)
     level: UserLevel = UserLevel.EMPLOYEE
@@ -55,6 +57,14 @@ class UserCreate(BaseModel):
     manager_id: uuid.UUID | None = None
 
     _check_role = field_validator("org_role")(_forbid_owner)
+
+
+class PasswordReset(BaseModel):
+    """An admin sets a temporary password; the employee must replace it at the next sign-in."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    new_password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=128)
 
 
 class UserUpdate(BaseModel):
