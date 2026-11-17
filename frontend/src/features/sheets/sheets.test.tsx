@@ -95,9 +95,14 @@ describe("sheetAccess", () => {
     expect(sheetAccess("manager", { ...edit, semantic: "feedback" })).toBe("edit");
     expect(sheetAccess("editor", { ...edit, semantic: null })).toBe("edit");
     expect(sheetAccess("editor", { ...edit, semantic: "due_date" })).toBe("edit");
-    for (const semantic of ["assignee", "follower", "status", "feedback", "timer_start"]) {
+    for (const semantic of ["assignee", "follower", "status", "feedback"]) {
       expect(sheetAccess("editor", { ...edit, semantic })).toBe("read");
     }
+  });
+
+  it("keeps a timer column read-only for an editor, whatever its name", () => {
+    expect(sheetAccess("editor", { ...edit, semantic: null, type: "timer" })).toBe("read");
+    expect(sheetAccess("manager", { ...edit, semantic: null, type: "timer" })).toBe("edit");
   });
 
   it("gives a commenter or a viewer no editing, and never shows a hidden column", () => {

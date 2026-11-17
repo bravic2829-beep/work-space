@@ -8,6 +8,8 @@ text, long_text, url: string. number: JSON number. date: ISO 8601 string. checkb
 single_select, status: option id. multi_select: list of option ids. user: list of user ids.
 link_record is stored in `record_links`; created_by, created_time are read from the record;
 auto_number is an integer made when the record is created.
+timer: {"started_at": ISO moment, "finished_at": ISO moment} (either may be missing), written only
+by the timer endpoint.
 """
 
 import math
@@ -38,8 +40,10 @@ DEFAULT_STATUS_OPTIONS = (
 )
 
 SELECT_TYPES = frozenset({FieldType.SINGLE_SELECT, FieldType.MULTI_SELECT, FieldType.STATUS})
-# Values that are made by the system. Nobody can write them.
-COMPUTED_TYPES = frozenset({FieldType.CREATED_BY, FieldType.CREATED_TIME, FieldType.AUTO_NUMBER})
+# Values that are made by the system. Nobody can write them (a timer only through its endpoint).
+COMPUTED_TYPES = frozenset(
+    {FieldType.CREATED_BY, FieldType.CREATED_TIME, FieldType.AUTO_NUMBER, FieldType.TIMER}
+)
 # Types whose values live in the record's JSONB `data`.
 STORED_IN_DATA = frozenset(
     set(FieldType) - {FieldType.LINK_RECORD, FieldType.CREATED_BY, FieldType.CREATED_TIME}
@@ -52,8 +56,6 @@ SEMANTIC_TYPES: dict[FieldSemantic, FieldType] = {
     FieldSemantic.DUE_DATE: FieldType.DATE,
     FieldSemantic.PARENT: FieldType.LINK_RECORD,
     FieldSemantic.SUBTASKS: FieldType.LINK_RECORD,
-    FieldSemantic.TIMER_START: FieldType.DATE,
-    FieldSemantic.TIMER_STOP: FieldType.DATE,
     FieldSemantic.FEEDBACK: FieldType.LONG_TEXT,
 }
 

@@ -90,23 +90,17 @@ export function isMemberList(value: unknown): value is SheetMemberItem[] {
  * the columns that belong to the manager. The backend decides for real; this only shows the right
  * controls (same rule as the backend's sheet access).
  */
-const LOCKED_FOR_EDITORS = new Set([
-  "assignee",
-  "follower",
-  "status",
-  "feedback",
-  "timer_start",
-  "timer_stop",
-]);
+const LOCKED_FOR_EDITORS = new Set(["assignee", "follower", "status", "feedback"]);
 
 export function sheetAccess(
   role: SheetRole,
-  field: { access: "hidden" | "read" | "edit"; semantic: string | null },
+  field: { access: "hidden" | "read" | "edit"; semantic: string | null; type?: string },
 ): "hidden" | "read" | "edit" {
   if (field.access === "hidden") return "hidden";
   if (role === "manager") return "edit";
-  if (role === "editor" && !(field.semantic !== null && LOCKED_FOR_EDITORS.has(field.semantic))) {
-    return "edit";
-  }
+  // The timer columns belong to the manager too (they move by Start and Stop).
+  const locked =
+    field.type === "timer" || (field.semantic !== null && LOCKED_FOR_EDITORS.has(field.semantic));
+  if (role === "editor" && !locked) return "edit";
   return "read";
 }

@@ -6,8 +6,17 @@ import { ApiError } from "@/lib/api/client";
 
 import { ASSIGNEE, NAME, makeField, makeRecord } from "./fixtures";
 import { RecordGrid } from "./RecordGrid";
-import { elapsedMs, formatDuration, timerFields, timerRights, timerState } from "./timer";
+import {
+  describeTimer,
+  elapsedMs,
+  formatDuration,
+  timerColumns,
+  timerHeadings,
+  timerRights,
+  timerState,
+} from "./timer";
 import { TimerCell } from "./TimerCell";
+import { displayValue } from "./values";
 
 const timerMock = vi.fn();
 vi.mock("./api", async (importOriginal) => ({
@@ -15,19 +24,19 @@ vi.mock("./api", async (importOriginal) => ({
   timerRecord: (...args: unknown[]) => timerMock(...args),
 }));
 
-const START = makeField("f-start", "Started at", "date", {
-  semantic: "timer_start",
-  config: { include_time: true },
-});
-const STOP = makeField("f-stop", "Finished at", "date", {
-  semantic: "timer_stop",
-  config: { include_time: true },
-});
-const FIELDS = [NAME, ASSIGNEE, START, STOP].map((f, position) => ({ ...f, position }));
+const TIMER = makeField("f-timer", "Timer", "timer");
+const FIELDS = [NAME, ASSIGNEE, TIMER].map((f, position) => ({ ...f, position }));
+
+const BEGAN = "2026-11-14T08:00:00Z";
+const ENDED = "2026-11-14T09:30:05Z";
 
 // The task was created by "u-me" (who gave it) and is assigned to "u-ann".
-function task(data: Record<string, unknown> = {}) {
-  return makeRecord("r-1", { "f-name": "Count", "f-assignee": ["u-ann"], ...data });
+function task(timer?: Record<string, string>) {
+  return makeRecord("r-1", {
+    "f-name": "Count",
+    "f-assignee": ["u-ann"],
+    ...(timer ? { "f-timer": timer } : {}),
+  });
 }
 
 beforeEach(() => {
@@ -35,30 +44,31 @@ beforeEach(() => {
 });
 
 describe("the timer helpers", () => {
-  it("finds both columns, or none", () => {
-    expect(timerFields(FIELDS)?.start.id).toBe("f-start");
-    expect(timerFields([NAME, ASSIGNEE, START])).toBeNull();
+  it("finds every timer column, or none", () => {
+    expect(timerColumns(FIELDS).map((f) => f.id)).toEqual(["f-timer"]);
+    expect(timerColumns([NAME, ASSIGNEE])).toEqual([]);
+    const second = makeField("f-second", "Review time", "timer");
+    expect(timerColumns([...FIELDS, second]).map((f) => f.id)).toEqual(["f-timer", "f-second"]);
   });
 
-  it("is idle, running or stopped by which moments are set", () => {
-    expect(timerState(FIELDS, task()).phase).toBe("idle");
-    expect(timerState(FIELDS, task({ "f-start": "2026-11-14T08:00:00Z" })).phase).toBe("running");
-    expect(
-      timerState(
-        FIELDS,
-        task({ "f-start": "2026-11-14T08:00:00Z", "f-stop": "2026-11-14T09:30:05Z" }),
-      ).phase,
-    ).toBe("stopped");
+  it("is idle, running or stopped by which moments the cell holds", () => {
+    expect(timerState(TIMER, task()).phase).toBe("idle");
+    expect(timerState(TIMER, task({ started_at: BEGAN })).phase).toBe("running");
+    expect(timerState(TIMER, task({ started_at: BEGAN, finished_at: ENDED })).phase).toBe(
+      "stopped",
+    );
+  });
+
+  it("treats a cell that is not an object as not started", () => {
+    const odd = makeRecord("r-2", { "f-timer": "yesterday" });
+    expect(timerState(TIMER, odd).phase).toBe("idle");
   });
 
   it("measures the time to now while running and to the stop when stopped", () => {
-    const start = Date.parse("2026-11-14T08:00:00Z");
-    const running = timerState(FIELDS, task({ "f-start": "2026-11-14T08:00:00Z" }));
+    const start = Date.parse(BEGAN);
+    const running = timerState(TIMER, task({ started_at: BEGAN }));
     expect(elapsedMs(running, start + 65_000)).toBe(65_000);
-    const done = timerState(
-      FIELDS,
-      task({ "f-start": "2026-11-14T08:00:00Z", "f-stop": "2026-11-14T09:30:05Z" }),
-    );
+    const done = timerState(TIMER, task({ started_at: BEGAN, finished_at: ENDED }));
     expect(elapsedMs(done, start + 999_999_999)).toBe(5405_000);
     expect(elapsedMs({ phase: "idle", startedAt: null, stoppedAt: null }, start)).toBe(0);
   });
@@ -72,12 +82,40 @@ describe("the timer helpers", () => {
 
   it("offers Start to who gave the task and Stop to the assignee", () => {
     const idle = task();
-    const running = task({ "f-start": "2026-11-14T08:00:00Z" });
-    expect(timerRights(FIELDS, idle, "u-me", false)).toEqual({ start: true, stop: false });
-    expect(timerRights(FIELDS, idle, "u-ann", false)).toEqual({ start: false, stop: false });
-    expect(timerRights(FIELDS, running, "u-ann", false)).toEqual({ start: false, stop: true });
-    expect(timerRights(FIELDS, running, "u-other", false)).toEqual({ start: false, stop: false });
-    expect(timerRights(FIELDS, idle, "u-other", true).start).toBe(true);
+    const running = task({ started_at: BEGAN });
+    expect(timerRights(FIELDS, TIMER, idle, "u-me", false)).toEqual({ start: true, stop: false });
+    expect(timerRights(FIELDS, TIMER, idle, "u-ann", false)).toEqual({
+      start: false,
+      stop: false,
+    });
+    expect(timerRights(FIELDS, TIMER, running, "u-ann", false)).toEqual({
+      start: false,
+      stop: true,
+    });
+    expect(timerRights(FIELDS, TIMER, running, "u-other", false)).toEqual({
+      start: false,
+      stop: false,
+    });
+    expect(timerRights(FIELDS, TIMER, idle, "u-other", true).start).toBe(true);
+  });
+
+  it("names the three columns plainly for one timer, and by column for several", () => {
+    expect(timerHeadings(TIMER, FIELDS)).toEqual({
+      started: "Started at",
+      finished: "Finished at",
+      time: "Time",
+    });
+    const second = makeField("f-second", "Review time", "timer");
+    expect(timerHeadings(second, [...FIELDS, second]).started).toBe("Review time · Started at");
+  });
+
+  it("describes a cell in words, for the history and the lists", () => {
+    expect(describeTimer(undefined)).toBe("");
+    expect(describeTimer({ started_at: BEGAN })).toMatch(/→ running$/);
+    expect(describeTimer({ started_at: BEGAN, finished_at: ENDED })).toMatch(/\(1:30:05\)$/);
+    expect(displayValue(TIMER, { started_at: BEGAN, finished_at: ENDED }, new Map())).toMatch(
+      /\(1:30:05\)$/,
+    );
   });
 });
 
@@ -87,6 +125,7 @@ describe("TimerCell", () => {
     render(
       <TimerCell
         fields={FIELDS}
+        field={TIMER}
         record={record}
         currentUserId={who}
         isAdmin={false}
@@ -97,18 +136,18 @@ describe("TimerCell", () => {
   }
 
   it("starts the timer for the person who gave the task", async () => {
-    const started = task({ "f-start": "2026-11-14T08:00:00Z" });
+    const started = task({ started_at: BEGAN });
     timerMock.mockResolvedValue(started);
     const { user, onChanged } = setup();
 
     await user.click(screen.getByRole("button", { name: "Start" }));
     await waitFor(() => expect(onChanged).toHaveBeenCalledWith(started));
-    expect(timerMock).toHaveBeenCalledWith("r-1", 1, "start");
+    expect(timerMock).toHaveBeenCalledWith("r-1", 1, "start", "f-timer");
   });
 
   it("lets the assignee stop a running timer, and shows the clock", async () => {
-    const running = task({ "f-start": new Date(Date.now() - 125_000).toISOString() });
-    const stopped = task({ "f-start": "2026-11-14T08:00:00Z", "f-stop": "2026-11-14T08:05:00Z" });
+    const running = task({ started_at: new Date(Date.now() - 125_000).toISOString() });
+    const stopped = task({ started_at: BEGAN, finished_at: "2026-11-14T08:05:00Z" });
     timerMock.mockResolvedValue(stopped);
     const { user, onChanged } = setup(running, "u-ann");
 
@@ -116,14 +155,11 @@ describe("TimerCell", () => {
     expect(screen.queryByRole("button", { name: "Start" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Stop" }));
     await waitFor(() => expect(onChanged).toHaveBeenCalledWith(stopped));
-    expect(timerMock).toHaveBeenCalledWith("r-1", 1, "stop");
+    expect(timerMock).toHaveBeenCalledWith("r-1", 1, "stop", "f-timer");
   });
 
   it("shows the time spent, with no buttons, once stopped", () => {
-    setup(
-      task({ "f-start": "2026-11-14T08:00:00Z", "f-stop": "2026-11-14T09:30:05Z" }),
-      "u-ann",
-    );
+    setup(task({ started_at: BEGAN, finished_at: ENDED }), "u-ann");
     expect(screen.getByRole("timer")).toHaveTextContent("1:30:05");
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
@@ -143,12 +179,12 @@ describe("TimerCell", () => {
   });
 });
 
-describe("the Time column of the table", () => {
-  it("appears after the timer columns, with the buttons of each row", () => {
+describe("the timer columns of the table", () => {
+  function grid(fields = FIELDS, records = [task()]) {
     render(
       <RecordGrid
-        fields={FIELDS}
-        records={[task()]}
+        fields={fields}
+        records={records}
         names={new Map()}
         sort={[]}
         selectedId={null}
@@ -160,26 +196,33 @@ describe("the Time column of the table", () => {
         currentUserId="u-me"
       />,
     );
+  }
+
+  it("draws one timer field as Started at, Finished at and Time, with the buttons of each row", () => {
+    grid();
     const headers = screen.getAllByRole("columnheader").map((h) => h.textContent);
-    expect(headers.slice(-2)).toEqual(["Finished at", "Time"]);
+    expect(headers.slice(-3)).toEqual(["Started at", "Finished at", "Time"]);
     expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
   });
 
+  it("shows the moments of the cell in the first two columns", () => {
+    grid(FIELDS, [task({ started_at: BEGAN, finished_at: ENDED })]);
+    const cells = screen.getAllByRole("cell");
+    expect(cells[2]).not.toHaveTextContent("");
+    expect(cells[3]).not.toHaveTextContent("");
+    expect(cells[4]).toHaveTextContent("1:30:05");
+  });
+
+  it("keeps two timers apart by the name of their column", () => {
+    const second = { ...makeField("f-second", "Review time", "timer"), position: 3 };
+    grid([...FIELDS, second]);
+    const headers = screen.getAllByRole("columnheader").map((h) => h.textContent);
+    expect(headers).toContain("Timer · Started at");
+    expect(headers).toContain("Review time · Time");
+  });
+
   it("is absent from a table without a timer", () => {
-    render(
-      <RecordGrid
-        fields={[NAME]}
-        records={[task()]}
-        names={new Map()}
-        sort={[]}
-        selectedId={null}
-        hasMore={false}
-        loadingMore={false}
-        onSort={vi.fn()}
-        onSelect={vi.fn()}
-        onLoadMore={vi.fn()}
-      />,
-    );
-    expect(screen.queryByRole("columnheader", { name: "Time" })).not.toBeInTheDocument();
+    grid([NAME]);
+    expect(screen.queryByRole("columnheader", { name: /time/i })).not.toBeInTheDocument();
   });
 });

@@ -94,7 +94,7 @@ export type NewField = {
   type: FieldType;
   config?: Record<string, unknown>;
   is_required?: boolean;
-  /** The role of the column (the timer columns use timer_start and timer_stop). */
+  /** The role of the column (assignee, status, due_date...). */
   semantic?: string | null;
 };
 
@@ -234,14 +234,18 @@ export function reviewRecord(
 
 export type TimerAction = "start" | "stop";
 
-/** Start the task timer (who gave the task) or stop it (the assignee). Sends If-Match. */
+/**
+ * Start the task timer (who gave the task) or stop it (the assignee). Sends If-Match. A table with
+ * several timer columns needs `fieldId` to say which one.
+ */
 export function timerRecord(
   id: string,
   version: number,
   action: TimerAction,
+  fieldId?: string,
 ): Promise<RecordItem> {
   return apiRequest("POST", `${API}/records/${id}/timer`, {
-    body: { action },
+    body: fieldId === undefined ? { action } : { action, field_id: fieldId },
     guard: isRecordItem,
     headers: { "If-Match": `"${version}"` },
   });

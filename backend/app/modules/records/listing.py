@@ -67,6 +67,7 @@ OPERATORS: dict[FieldType, tuple[str, ...]] = {
     FieldType.USER: ("contains", "is_empty", "is_not_empty"),
     FieldType.CREATED_BY: ("eq", "neq", "in"),
     FieldType.LINK_RECORD: ("contains", "is_empty", "is_not_empty"),
+    FieldType.TIMER: ("is_empty", "is_not_empty"),
 }
 SORTABLE = (
     TEXT_TYPES

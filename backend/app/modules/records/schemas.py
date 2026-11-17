@@ -47,3 +47,5 @@ class TimerAction(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     action: Literal["start", "stop"]
+    # Which timer column, when the table has more than one. Left out: the table's only timer.
+    field_id: uuid.UUID | None = None

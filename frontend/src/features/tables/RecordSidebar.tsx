@@ -24,7 +24,7 @@ import type { FieldItem, RecordItem } from "./schema";
 import { StatusStepper } from "./StatusStepper";
 import { SubtaskForm } from "./SubtaskForm";
 import { assigneeIds, fieldBySemantic } from "./taskWorkflow";
-import { isTimerField, timerFields } from "./timer";
+import { isTimerField, timerColumns } from "./timer";
 import { TimerCell } from "./TimerCell";
 import { useUserNames } from "./useUserNames";
 import {
@@ -108,8 +108,11 @@ export function RecordSidebar({
   const names = useUserNames(userIdsIn(fields, record ? [record] : []));
 
   const isNew = record === null;
+  // A timer has its own section below (Start, Stop and the time), not an input.
+  const timers = timerColumns(fields);
   const shown = fields.filter(
     (field) =>
+      !isTimerField(field) &&
       !(isNew && isComputed(field)) &&
       !(isNew && givenTo !== undefined && (field.semantic === "assignee" || field.semantic === "follower")),
   );
@@ -209,7 +212,7 @@ export function RecordSidebar({
               draft={drafts[field.id] ?? ""}
               value={record?.data[field.id]}
               names={names}
-              disabled={busy || !canEditField(field) || isTimerField(field)}
+              disabled={busy || !canEditField(field)}
               error={errors[field.id]}
               onChange={(draft) => setDrafts((current) => ({ ...current, [field.id]: draft }))}
             />
@@ -226,21 +229,22 @@ export function RecordSidebar({
         </form>
         {record && (
           <div className="grid gap-5 border-t border-line pt-4">
-            {timerFields(fields) && (
-              <section aria-label="Time" className="grid gap-2">
+            {timers.map((timer) => (
+              <section key={timer.id} aria-label={timers.length > 1 ? timer.name : "Time"} className="grid gap-2">
                 <h3 className="m-0 flex items-center gap-1.5 text-sm">
                   <Timer className="size-4 text-muted" aria-hidden />
-                  Time spent
+                  {timers.length > 1 ? timer.name : "Time spent"}
                 </h3>
                 <TimerCell
                   fields={fields}
+                  field={timer}
                   record={record}
                   currentUserId={currentUserId}
                   isAdmin={isAdmin}
                   onChanged={(updated) => onSaved(updated, false)}
                 />
               </section>
-            )}
+            ))}
             <ReviewActions
               fields={fields}
               record={record}

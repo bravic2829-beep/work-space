@@ -1,9 +1,15 @@
 /** How each field type is shown, edited, filtered and sorted. Mirrors the backend rules. */
 
+import { describeTimer } from "./timer";
 import type { Condition, FieldItem, FieldType, RecordItem, SelectOption } from "./schema";
 
 /** Types whose value is made by the system: nobody edits them. */
-const COMPUTED: ReadonlySet<FieldType> = new Set(["created_by", "created_time", "auto_number"]);
+const COMPUTED: ReadonlySet<FieldType> = new Set([
+  "created_by",
+  "created_time",
+  "auto_number",
+  "timer",
+]);
 const SORTABLE: ReadonlySet<FieldType> = new Set([
   "text",
   "long_text",
@@ -93,6 +99,8 @@ export function displayValue(
       return names.get(String(value)) ?? "…";
     case "link_record":
       return Array.isArray(value) && value.length > 0 ? `${value.length} linked` : "";
+    case "timer":
+      return describeTimer(value);
     case "created_time":
     case "date": {
       const text = String(value);

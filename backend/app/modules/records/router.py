@@ -142,7 +142,9 @@ async def timer_record(
     session: AsyncSession = Depends(get_session),
 ) -> RecordPublic:
     """Start the task timer (who gave the task) or stop it (the assignee). Needs `If-Match`."""
-    record, public = await timer.timer_record(session, actor, record_id, body.action, if_match)
+    record, public = await timer.timer_record(
+        session, actor, record_id, body.action, if_match, field_id=body.field_id
+    )
     await session.commit()
     response.headers["ETag"] = service.etag(record)
     return public
