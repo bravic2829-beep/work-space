@@ -1,10 +1,20 @@
 "use client";
 
-import { Plus, Save, Settings2, Timer, Trash2, UserPlus, Users, X } from "lucide-react";
+import { Plus, Save, Settings2, Timer, Trash2, UserPlus, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { usePageCrumb } from "@/components/Breadcrumb";
-import { Alert, Button, Drawer, DrawerBody, Input, LoadingState, Select } from "@/components/ui";
+import {
+  Alert,
+  Button,
+  Drawer,
+  DrawerBody,
+  Input,
+  LoadingState,
+  Select,
+  SkeletonTable,
+  useToast,
+} from "@/components/ui";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { isOrgAdmin } from "@/features/auth/schema";
 import { useLiveRefresh } from "@/features/notifications/liveRefresh";
@@ -106,7 +116,7 @@ export function TableScreen({ tableId, sheet, addTaskSignal = 0 }: Props) {
   const [viewName, setViewName] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [showAssign, setShowAssign] = useState(false);
-  const [flash, setFlash] = useState<string | null>(null);
+  const toast = useToast();
   const [addingTimer, setAddingTimer] = useState(false);
   const [showCreateSheet, setShowCreateSheet] = useState(false);
 
@@ -502,8 +512,10 @@ export function TableScreen({ tableId, sheet, addTaskSignal = 0 }: Props) {
           tableId={table.id}
           fields={table.fields}
           onClose={() => setShowAssign(false)}
-          onAssigned={(_record, taskName, assignee) => {
-            setFlash(`Assigned “${taskName}” to ${assignee}.`);
+          onAssigned={(record, taskName, assignee) => {
+            toast(`Assigned “${taskName}” to ${assignee}.`, {
+              action: { label: "View", onClick: () => setSelected(record.id) },
+            });
             reloadRecords();
           }}
         />
@@ -514,33 +526,18 @@ export function TableScreen({ tableId, sheet, addTaskSignal = 0 }: Props) {
           tableId={table.id}
           onClose={() => setShowCreateSheet(false)}
           onCreated={(created) => {
-            setFlash(
-              `Sheet “${created.name}” created. Open Work summary in the sidebar to see it.`,
-            );
+            toast(`Sheet “${created.name}” created. Open Work summary in the sidebar to see it.`);
           }}
         />
-      )}
-
-      {flash && (
-        <Alert tone="success" className="items-center">
-          <span className="flex-1">{flash}</span>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="size-6"
-            aria-label="Dismiss"
-            onClick={() => setFlash(null)}
-          >
-            <X className="size-3.5" aria-hidden />
-          </Button>
-        </Alert>
       )}
 
       {notice && <Alert>{notice}</Alert>}
 
       <div>
         <div className="min-w-0">
-          {records.kind === "loading" && <LoadingState>Loading records…</LoadingState>}
+          {records.kind === "loading" && (
+            <SkeletonTable headings={shownFields.map((field) => field.name)} label="Loading records…" />
+          )}
           {records.kind === "error" && (
             <Alert>
               <span className="mr-2">{describe(records.error)}</span>

@@ -12,6 +12,7 @@ import {
   InlineConfirm,
   LoadingState,
   PageHeader,
+  useToast,
 } from "@/components/ui";
 
 import { deleteForever, listTrash, restoreRecord } from "./api";
@@ -28,7 +29,7 @@ type State =
 export function TrashScreen() {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const toast = useToast();
   const [problem, setProblem] = useState<string | null>(null);
 
   useEffect(() => {
@@ -55,11 +56,10 @@ export function TrashScreen() {
     if (state.kind !== "ready") return;
     setBusyId(item.id);
     setProblem(null);
-    setNotice(null);
     try {
       await restoreRecord(item.id);
       setState({ ...state, items: state.items.filter((other) => other.id !== item.id) });
-      setNotice(`Restored "${item.name ?? "a record"}" to ${item.table_name}.`);
+      toast(`Restored "${item.name ?? "a record"}" to ${item.table_name}.`);
     } catch (error) {
       setProblem(errorMessage(error, "Could not restore the record."));
     } finally {
@@ -71,14 +71,13 @@ export function TrashScreen() {
     if (state.kind !== "ready") return;
     setBusyId(item.id);
     setProblem(null);
-    setNotice(null);
     try {
       await deleteForever(item.id);
       setState({
         ...state,
         items: state.items.filter((other) => other.id !== item.id),
       });
-      setNotice(`Removed "${item.name ?? "a record"}" for good.`);
+      toast(`Removed "${item.name ?? "a record"}" for good.`);
     } catch (error) {
       setProblem(
         errorMessage(error, "Could not remove the record."),
@@ -111,7 +110,6 @@ export function TrashScreen() {
       <div className="grid gap-3">
         {state.kind === "loading" && <LoadingState />}
         {state.kind === "error" && <Alert>{state.message}</Alert>}
-        {notice && <Alert tone="success">{notice}</Alert>}
         {problem && <Alert>{problem}</Alert>}
         {state.kind === "ready" && state.items.length === 0 && (
           <EmptyState icon={Trash2} title="The trash is empty.">
