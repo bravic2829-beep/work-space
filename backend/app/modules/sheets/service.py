@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import ProblemError
+from app.core.errors import FORBIDDEN, ProblemError
 from app.core.pagination import Page
 from app.modules.fields import repository as fields_repo
 from app.modules.permissions.service import (
@@ -38,8 +38,6 @@ from app.modules.sheets.schemas import (
 )
 from app.modules.users.models import User
 from app.modules.workspaces.models import WorkspaceRole
-
-FORBIDDEN = "You do not have permission to do this."
 
 
 def _is_admin(actor: User, context: TableContext) -> bool:

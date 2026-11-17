@@ -12,8 +12,8 @@ from typing import Any
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import ProblemError
-from app.core.pagination import MAX_PAGE_SIZE, Page
+from app.core.errors import FORBIDDEN, STALE_RECORD, ProblemError
+from app.core.pagination import Page, check_limit
 from app.modules.activity.log import diff, record_activity
 from app.modules.activity.models import ActivityAction
 from app.modules.fields import repository as fields_repo
@@ -39,8 +39,6 @@ from app.modules.records.schemas import RecordPublic
 from app.modules.sheets import access as sheet_access
 from app.modules.sheets.models import SheetRole
 from app.modules.users.models import User
-
-FORBIDDEN = "You do not have permission to do this."
 
 
 @dataclass
@@ -408,8 +406,7 @@ async def list_records(
     filter_json: str | None,
 ) -> Page[RecordPublic]:
     """A page of the records the person may see, with only the columns they may see."""
-    if not 1 <= limit <= MAX_PAGE_SIZE:
-        raise ProblemError(422, f"The limit must be from 1 to {MAX_PAGE_SIZE}.")
+    check_limit(limit)
     context = await require_table_read(session, actor, table_id)
     return await list_in_context(
         session, actor, context, limit=limit, cursor=cursor, sort=sort, filter_json=filter_json
@@ -429,8 +426,7 @@ async def list_in_context(
 ) -> Page[RecordPublic]:
     """`list_records` once the caller's right to read the table is settled. `extra_filters` are
     conditions the caller adds itself (a sheet adds "names its owner")."""
-    if not 1 <= limit <= MAX_PAGE_SIZE:
-        raise ProblemError(422, f"The limit must be from 1 to {MAX_PAGE_SIZE}.")
+    check_limit(limit)
     table_id = context.table.id
     visible = _visible(await _fields_with_access(session, actor, context))
     # Filtering or sorting by a hidden column would reveal its values, so only visible columns
@@ -471,7 +467,7 @@ async def update_record(
     expected = parse_if_match(if_match)
     changes = await _check_changes(session, actor, context, fields, incoming, record=record)
     if expected != record.version:
-        raise ProblemError(412, "The record was changed by somebody else. Reload it and try again.")
+        raise ProblemError(412, STALE_RECORD)
 
     new_data = {k: v for k, v in record.data.items() if k not in changes.cleared}
     new_data.update(changes.data)

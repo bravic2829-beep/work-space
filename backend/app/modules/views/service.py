@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import ProblemError
+from app.core.errors import FORBIDDEN, ProblemError
 from app.modules.fields import service as fields_service
 from app.modules.permissions.service import require_table_read
 from app.modules.records import listing
@@ -94,7 +94,7 @@ async def _own_view(session: AsyncSession, actor: User, view_id: uuid.UUID) -> V
     # The table must still be readable by the caller (this also checks the organization).
     await require_table_read(session, actor, view.table_id)
     if view.owner_user_id != actor.id:
-        raise ProblemError(403, "You do not have permission to do this.")
+        raise ProblemError(403, FORBIDDEN)
     return view
 
 

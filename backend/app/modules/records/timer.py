@@ -19,7 +19,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import ProblemError
+from app.core.errors import FORBIDDEN, STALE_RECORD, ProblemError
 from app.modules.activity.log import diff, record_activity
 from app.modules.activity.models import ActivityAction
 from app.modules.fields.models import Field, FieldAccessLevel, FieldSemantic, FieldType
@@ -77,11 +77,11 @@ async def timer_record(
     )
     timer, level = _pick_timer(fields, field_id)
     if level == FieldAccessLevel.HIDDEN:
-        raise ProblemError(403, review.FORBIDDEN)
+        raise ProblemError(403, FORBIDDEN)
 
     expected = service.parse_if_match(if_match)
     if expected != record.version:
-        raise ProblemError(412, "The record was changed by somebody else. Reload it and try again.")
+        raise ProblemError(412, STALE_RECORD)
 
     is_creator = record.created_by == actor.id
     sheet_role = await sheet_access.role_for_record(session, actor, record, [f for f, _ in fields])

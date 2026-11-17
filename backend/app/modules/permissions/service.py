@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import ProblemError
+from app.core.errors import FORBIDDEN, ProblemError
 from app.modules.bases import repository as bases
 from app.modules.bases.models import Table, WorkBase
 from app.modules.records.models import Record, RecordViewer
@@ -65,7 +65,7 @@ async def require_workspace_role(
         raise ProblemError(404, "The workspace does not exist.")
     role = await workspace_role(session, user, workspace)
     if role is None or not role_at_least(role, minimum):
-        raise ProblemError(403, "You do not have permission to do this.")
+        raise ProblemError(403, FORBIDDEN)
     return workspace, role
 
 
@@ -82,7 +82,7 @@ async def require_base_role(
     base, workspace = found
     role = await workspace_role(session, user, workspace)
     if role is None or not role_at_least(role, minimum):
-        raise ProblemError(403, "You do not have permission to do this.")
+        raise ProblemError(403, FORBIDDEN)
     return base, workspace, role
 
 
@@ -125,7 +125,7 @@ async def require_table_role(
     """The user needs at least this role in the workspace of the table (404, then 403)."""
     context = await load_table_context(session, user, table_id)
     if context.role is None or not role_at_least(context.role, minimum):
-        raise ProblemError(403, "You do not have permission to do this.")
+        raise ProblemError(403, FORBIDDEN)
     return context
 
 
@@ -158,7 +158,7 @@ async def require_table_read(
         and not await has_visible_records(session, user, table_id)
         and not await has_sheet_on_table(session, user, table_id)
     ):
-        raise ProblemError(403, "You do not have permission to do this.")
+        raise ProblemError(403, FORBIDDEN)
     return context
 
 

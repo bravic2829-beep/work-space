@@ -6,14 +6,13 @@ hidden can be worked out from the totals.
 """
 
 import uuid
-from datetime import UTC, date, datetime
 from typing import Any
 
 from pydantic import BaseModel
 from sqlalchemy import exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import ProblemError
+from app.core.dates import day_or_today
 from app.modules.bases.models import Table, WorkBase
 from app.modules.fields.models import Field, FieldAccessLevel, FieldSemantic
 from app.modules.permissions.service import is_org_admin, require_table_read
@@ -103,19 +102,10 @@ async def report_tables(session: AsyncSession, actor: User) -> list[ReportTable]
     return [ReportTable(id=t.id, name=t.name, workspace_name=name) for t, name in rows]
 
 
-def _day(value: str | None) -> str:
-    if value is None:
-        return datetime.now(UTC).date().isoformat()
-    try:
-        return date.fromisoformat(value).isoformat()
-    except ValueError:
-        raise ProblemError(422, "The date must look like 2026-11-13.") from None
-
-
 async def overview(
     session: AsyncSession, actor: User, table_id: uuid.UUID, day: str | None
 ) -> Overview:
-    today = _day(day)
+    today = day_or_today(day)
     context = await require_table_read(session, actor, table_id)
     fields = await records._fields_with_access(session, actor, context)
     shown = {

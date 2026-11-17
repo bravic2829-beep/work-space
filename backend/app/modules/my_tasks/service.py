@@ -6,7 +6,6 @@ hidden from me is left out, exactly as in the table itself.
 """
 
 import uuid
-from datetime import UTC, date, datetime
 from typing import Any, Literal
 
 from sqlalchemy import Text, cast, column, exists, false, func, or_, select, true, tuple_
@@ -14,8 +13,8 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
-from app.core.errors import ProblemError
-from app.core.pagination import MAX_PAGE_SIZE, Page, decode_cursor, encode_cursor
+from app.core.dates import day_or_today
+from app.core.pagination import Page, check_limit, parse_time_cursor, time_cursor
 from app.modules.bases.models import Table, WorkBase
 from app.modules.fields import repository as fields_repo
 from app.modules.fields.models import Field, FieldAccessLevel, FieldSemantic
@@ -32,29 +31,6 @@ from app.modules.workspaces.models import Workspace, WorkspaceMember
 Scope = Literal["assigned", "today", "following", "review"]
 
 
-def _parse_cursor(cursor: str | None) -> tuple[datetime, uuid.UUID] | None:
-    if cursor is None:
-        return None
-    try:
-        stamp, raw_id = decode_cursor(cursor).split("|")
-        parsed = datetime.fromisoformat(stamp)
-        if parsed.tzinfo is None:
-            raise ValueError("no time zone")
-        return parsed, uuid.UUID(raw_id)
-    except ValueError:
-        raise ProblemError(422, "The cursor is not valid.") from None
-
-
-def _day(value: str | None) -> str:
-    """The day for "today": the client sends its own date, because the server cannot know it."""
-    if value is None:
-        return datetime.now(UTC).date().isoformat()
-    try:
-        return date.fromisoformat(value).isoformat()
-    except ValueError:
-        raise ProblemError(422, "The date must look like 2026-11-13.") from None
-
-
 async def list_my_tasks(
     session: AsyncSession,
     actor: User,
@@ -64,9 +40,8 @@ async def list_my_tasks(
     limit: int,
     cursor: str | None,
 ) -> Page[MyTask]:
-    if not 1 <= limit <= MAX_PAGE_SIZE:
-        raise ProblemError(422, f"The limit must be from 1 to {MAX_PAGE_SIZE}.")
-    today = _day(day)
+    check_limit(limit)
+    today = day_or_today(day)
 
     assignee = aliased(Field)
 
@@ -157,7 +132,7 @@ async def list_my_tasks(
                 today, autoescape=True
             )
         )
-    after = _parse_cursor(cursor)
+    after = parse_time_cursor(cursor)
     if after is not None:
         query = query.where(tuple_(Record.created_at, Record.id) < tuple_(*after))
 
@@ -181,7 +156,7 @@ async def list_my_tasks(
     next_cursor = None
     if more:
         last = rows[-1][0]
-        next_cursor = encode_cursor(f"{last.created_at.astimezone(UTC).isoformat()}|{last.id}")
+        next_cursor = time_cursor(last.created_at, last.id)
     return Page[MyTask](items=items, next_cursor=next_cursor)
 
 

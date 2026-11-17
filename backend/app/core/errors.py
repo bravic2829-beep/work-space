@@ -15,6 +15,9 @@ logger = logging.getLogger(__name__)
 
 PROBLEM_MEDIA_TYPE = "application/problem+json"
 
+FORBIDDEN = "You do not have permission to do this."
+STALE_RECORD = "The record was changed by somebody else. Reload it and try again."
+
 
 class ProblemError(Exception):
     """Raise this from services and routers to answer with a Problem Details body."""

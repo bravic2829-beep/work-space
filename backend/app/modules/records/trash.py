@@ -14,7 +14,7 @@ from sqlalchemy import delete, select, true, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ProblemError
-from app.core.pagination import MAX_PAGE_SIZE, Page, decode_cursor, encode_cursor
+from app.core.pagination import Page, check_limit, parse_time_cursor, time_cursor
 from app.modules.bases.models import Table, WorkBase
 from app.modules.fields import repository as fields_repo
 from app.modules.fields.models import FieldAccessLevel
@@ -48,25 +48,11 @@ def _alive_in(organization_id: uuid.UUID):  # type: ignore[no-untyped-def]
     )
 
 
-def _parse_cursor(cursor: str | None) -> tuple[datetime, uuid.UUID] | None:
-    if cursor is None:
-        return None
-    try:
-        stamp, raw_id = decode_cursor(cursor).split("|")
-        parsed = datetime.fromisoformat(stamp)
-        if parsed.tzinfo is None:
-            raise ValueError("no time zone")
-        return parsed, uuid.UUID(raw_id)
-    except ValueError:
-        raise ProblemError(422, "The cursor is not valid.") from None
-
-
 async def list_trash(
     session: AsyncSession, actor: User, *, limit: int, cursor: str | None
 ) -> Page[TrashItem]:
     """The records this person deleted (an admin: everybody's), newest deletion first."""
-    if not 1 <= limit <= MAX_PAGE_SIZE:
-        raise ProblemError(422, f"The limit must be from 1 to {MAX_PAGE_SIZE}.")
+    check_limit(limit)
     now = datetime.now(UTC)
     query = (
         select(Record, Table)
@@ -82,7 +68,7 @@ async def list_trash(
         .order_by(Record.deleted_at.desc(), Record.id.desc())
         .limit(limit + 1)
     )
-    after = _parse_cursor(cursor)
+    after = parse_time_cursor(cursor)
     if after is not None:
         query = query.where(tuple_(Record.deleted_at, Record.id) < tuple_(*after))
     rows = [(row[0], row[1]) for row in (await session.execute(query)).all()]
@@ -116,7 +102,7 @@ async def list_trash(
     if more:
         last = rows[-1][0]
         assert last.deleted_at is not None
-        next_cursor = encode_cursor(f"{last.deleted_at.astimezone(UTC).isoformat()}|{last.id}")
+        next_cursor = time_cursor(last.deleted_at, last.id)
     return Page[TrashItem](items=items, next_cursor=next_cursor)
 
 

@@ -12,14 +12,12 @@ from typing import Any
 from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import ProblemError
+from app.core.errors import FORBIDDEN, ProblemError
 from app.modules.fields import repository as fields_repo
 from app.modules.fields.models import FieldSemantic
 from app.modules.organizations.models import Department
 from app.modules.records.models import Record
 from app.modules.users.models import User
-
-FORBIDDEN = "You do not have permission to do this."
 
 
 async def is_department_head(session: AsyncSession, user: User) -> bool:

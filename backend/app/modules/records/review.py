@@ -24,7 +24,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import ProblemError
+from app.core.errors import FORBIDDEN, STALE_RECORD, ProblemError
 from app.modules.activity.log import record_activity
 from app.modules.activity.models import ActivityAction
 from app.modules.comments.models import Comment
@@ -38,8 +38,6 @@ from app.modules.records.schemas import RecordPublic
 from app.modules.sheets import access as sheet_access
 from app.modules.sheets.models import SheetRole
 from app.modules.users.models import User
-
-FORBIDDEN = "You do not have permission to do this."
 
 _ACTIVITY = {
     "submit": ActivityAction.SUBMITTED,
@@ -94,7 +92,7 @@ async def review_record(
 
     expected = service.parse_if_match(if_match)
     if expected != record.version:
-        raise ProblemError(412, "The record was changed by somebody else. Reload it and try again.")
+        raise ProblemError(412, STALE_RECORD)
 
     current = _kind_of(status, record.data.get(str(status.id)))
     assignee_ids = service.assignees(record, fields)
