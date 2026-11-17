@@ -1,3 +1,4 @@
+import type { ComponentProps } from "react";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -17,8 +18,8 @@ import {
   listViews,
   lookupUsers,
 } from "./api";
-import { FIELDS, makeRecord, makeTable, makeView } from "./fixtures";
-import type { Role } from "./schema";
+import { ASSIGNEE, FIELDS, NAME, makeField, makeRecord, makeTable, makeView } from "./fixtures";
+import type { FieldItem, Role } from "./schema";
 import { TableScreen } from "./TableScreen";
 import { resetUserNames } from "./useUserNames";
 
@@ -514,5 +515,73 @@ describe("hidden columns survive a reload", () => {
     await renderTable();
     expect(await screen.findByRole("columnheader", { name: /Name/ })).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: /Points/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("a filter that comes from the reports", () => {
+  const STATUS = makeField("f-status", "Status", "status", {
+    semantic: "status",
+    config: {
+      options: [
+        { id: "o-todo", name: "To do", kind: "todo" },
+        { id: "o-done", name: "Done", kind: "done" },
+      ],
+    },
+  });
+  const DUE_DATE = makeField("f-due", "Due date", "date", {
+    semantic: "due_date",
+    config: { include_time: false },
+  });
+
+  async function renderWith(fields: FieldItem[], preset: ComponentProps<typeof TableScreen>["preset"]) {
+    getTableMock.mockResolvedValue(makeTable("editor", fields));
+    render(
+      <AuthProvider>
+        <TableScreen tableId="t-1" preset={preset} />
+      </AuthProvider>,
+    );
+    await screen.findByRole("heading", { name: "Tasks" });
+  }
+
+  it("is applied once the columns are known", async () => {
+    await renderWith([NAME, ASSIGNEE, STATUS, DUE_DATE], {
+      show: "overdue",
+      person: "u-2",
+      today: "2026-11-17",
+    });
+    await waitFor(() =>
+      expect(lastQuery()).toEqual({
+        filter: [
+          { field: "f-status", op: "neq", value: "o-done" },
+          { field: "f-due", op: "lt", value: "2026-11-17" },
+          { field: "f-assignee", op: "contains", value: "u-2" },
+        ],
+        sort: [],
+      }),
+    );
+    // The records were never asked for without the filter, so nothing flashes on the screen.
+    expect(listRecordsMock.mock.calls.every(([, query]) => query?.filter.length === 3)).toBe(true);
+  });
+
+  it("can be cleared like any other filter", async () => {
+    const user = userEvent.setup();
+    await renderWith([NAME, ASSIGNEE, STATUS, DUE_DATE], {
+      show: "open",
+      today: "2026-11-17",
+    });
+    await waitFor(() => expect(lastQuery()?.filter).toHaveLength(1));
+    await user.click(screen.getByRole("button", { name: /Remove filter/ }));
+    await waitFor(() => expect(lastQuery()?.filter).toEqual([]));
+  });
+
+  it("is explained when the table has no column for it", async () => {
+    await renderWith([NAME], { show: "overdue", today: "2026-11-17" });
+    expect(await screen.findByText(/no column for that report/)).toBeInTheDocument();
+    expect(lastQuery()).toEqual({ filter: [], sort: [] });
+  });
+
+  it("does nothing without a preset", async () => {
+    await renderWith([NAME, STATUS], undefined);
+    await waitFor(() => expect(lastQuery()).toEqual({ filter: [], sort: [] }));
   });
 });

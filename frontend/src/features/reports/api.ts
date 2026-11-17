@@ -13,6 +13,7 @@ export type PersonLoad = {
   open: number;
   overdue: number;
   in_review: number;
+  blocked: number;
   done: number;
 };
 
@@ -24,6 +25,8 @@ export type Overview = {
   total: number;
   open: number | null;
   in_review: number | null;
+  blocked: number | null;
+  paused: number | null;
   done: number | null;
   overdue: number | null;
   due_today: number | null;
@@ -53,7 +56,7 @@ function isPerson(value: unknown): value is PersonLoad {
     typeof value.user_id === "string" &&
     typeof value.full_name === "string" &&
     typeof value.employee_code === "string" &&
-    ["open", "overdue", "in_review", "done"].every((k) => typeof value[k] === "number")
+    ["open", "overdue", "in_review", "blocked", "done"].every((k) => typeof value[k] === "number")
   );
 }
 
@@ -64,7 +67,7 @@ export function isOverview(value: unknown): value is Overview {
     typeof value.table_name === "string" &&
     typeof value.day === "string" &&
     typeof value.total === "number" &&
-    ["open", "in_review", "done", "overdue", "due_today", "unassigned"].every((k) =>
+    ["open", "in_review", "blocked", "paused", "done", "overdue", "due_today", "unassigned"].every((k) =>
       count(value[k]),
     ) &&
     (value.by_status === null ||
@@ -82,6 +85,15 @@ export function isOverview(value: unknown): value is Overview {
 
 export function listReportTables(signal?: AbortSignal): Promise<ReportTable[]> {
   return apiRequest("GET", "/api/v1/reports/tables", { guard: isReportTables, signal });
+}
+
+/**
+ * Where the Excel file of a report is downloaded from. A plain link is enough: the sign-in cookie
+ * goes with it and the server answers with a file to save, not a page to open.
+ */
+export function exportUrl(tableId: string): string {
+  const params = new URLSearchParams({ table_id: tableId, date: localToday() });
+  return `/api/v1/reports/export?${params.toString()}`;
 }
 
 export function getOverview(tableId: string, signal?: AbortSignal): Promise<Overview> {

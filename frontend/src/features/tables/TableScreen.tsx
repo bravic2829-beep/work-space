@@ -27,6 +27,7 @@ import {
 import { ColumnAccessDrawer } from "./ColumnAccessDrawer";
 import { ColumnsMenu } from "./ColumnsMenu";
 import { FilterBar } from "./FilterBar";
+import { presetFilter, type Preset } from "./presets";
 import { ManageFieldsPanel } from "./ManageFieldsPanel";
 import { RecordGrid } from "./RecordGrid";
 import { RecordSidebar } from "./RecordSidebar";
@@ -81,10 +82,15 @@ type Props = {
    * tab strip keeps that button next to Share); the new-task form opens on every change.
    */
   addTaskSignal?: number;
+  /**
+   * Open with a ready-made filter (from a number of the Reports page). It is applied once, when
+   * the table has loaded; the person can change or clear the filter like any other.
+   */
+  preset?: { show: Preset; person?: string | null; today: string };
 };
 
 /** The table view: columns, rows, filter, sort, saved views, and the record panel. */
-export function TableScreen({ tableId, sheet, addTaskSignal = 0 }: Props) {
+export function TableScreen({ tableId, sheet, addTaskSignal = 0, preset }: Props) {
   const { state: auth } = useAuth();
   const sheetId = sheet?.id;
   const sheetRole = sheet?.my_role;
@@ -155,10 +161,23 @@ export function TableScreen({ tableId, sheet, addTaskSignal = 0 }: Props) {
     setSelected("new");
   }
 
+  // A ready-made filter from the Reports page, applied once when the columns are known.
+  const [presetApplied, setPresetApplied] = useState(false);
+  if (preset && !presetApplied && tableState.kind === "ready") {
+    setPresetApplied(true);
+    const result = presetFilter(preset.show, tableState.table.fields, preset.today, preset.person);
+    if (result) setFilter(result.filter);
+    else setNotice("This table has no column for that report, so it is shown without a filter.");
+  }
+
   // A task given to me appears at once. Reads again without the loading flash or closing the panel.
   useLiveRefresh(() => setRecordsKey((n) => n + 1));
 
+  // The records wait for a ready-made filter (it needs the columns), so the full list never
+  // flashes on the screen before it is narrowed.
+  const waitingForPreset = preset !== undefined && !presetApplied;
   useEffect(() => {
+    if (waitingForPreset) return;
     const controller = new AbortController();
     async function load() {
       try {
@@ -173,7 +192,7 @@ export function TableScreen({ tableId, sheet, addTaskSignal = 0 }: Props) {
     }
     void load();
     return () => controller.abort();
-  }, [tableId, sheetId, filter, sort, recordsKey]);
+  }, [tableId, sheetId, filter, sort, recordsKey, waitingForPreset]);
 
   const table = tableState.kind === "ready" ? tableState.table : null;
   usePageCrumb(table?.name ?? null);

@@ -98,6 +98,35 @@ mỗi cột chọn *As their role allows*, *Read only* hoặc *Hidden*, lưu m�
 
 ## 5. Nhật ký thay đổi
 
+### 17/11/2026, tính năng mới: Paused/Blocked, số báo cáo bấm được, xuất Excel
+- **Trạng thái Paused và Blocked** (migration `0015`): hai loại trạng thái mới `paused`, `blocked`;
+  mọi cột Status đang có được thêm hai lựa chọn "Paused" và "Blocked" (bảng mới có sẵn). Dùng lại
+  `POST /records/{id}/review` với ba hành động mới: `pause` (từ To do/In progress), `block` (bắt
+  ghi lý do, thành bình luận "Blocked: …", thông báo mới `task_blocked` cho người tạo và các người
+  được giao khác), `resume` (từ Paused/Blocked về In progress). Người được làm: người được giao,
+  người tạo, manager của sheet, Admin. Lịch sử có thêm `paused`/`blocked`/`resumed`. Việc Blocked
+  và Paused vẫn tính là "đang mở" và có thể quá hạn. Giao diện: nút Pause / Report a blocker /
+  Resume / Unblock cạnh nút duyệt việc, ô nhập lý do dùng chung với "Send back", thanh tiến trình
+  ghi rõ Paused/Blocked, huy hiệu đỏ cho Blocked.
+- **Reports:** thêm ô **Blocked** và **Paused**, cột Blocked theo từng người. **Mọi số bấm được:**
+  bấm "Overdue 5" mở bảng đã lọc sẵn đúng 5 việc đó (`/tables/{id}?show=overdue`, thêm
+  `&person=<id>` cho số của từng người). Bộ lọc là điều kiện lọc bình thường, sửa hoặc xóa được.
+  Bảng không tải danh sách trước khi bộ lọc sẵn sàng nên không nháy danh sách đầy đủ.
+- **Xuất Excel:** nút "Export to Excel" trên Reports, `GET /reports/export?table_id=&date=` trả file
+  `.xlsx` gồm 4 sheet: Summary, By status, Work per person, Tasks. Chỉ có việc và cột mà người tải
+  được phép xem; số cần cột ẩn ghi "—". Chữ luôn lưu là chữ (không bao giờ thành công thức, chống
+  `=HYPERLINK(...)`), ký tự XML không chứa được bị bỏ, ô dài cắt ở 32.000 ký tự, tối đa 20.000 việc
+  (sheet Summary ghi chú nếu bị cắt). Cột bấm giờ thành 3 cột (started / finished / hours).
+  **Thêm thư viện `openpyxl`** (`pyproject.toml`, `uv.lock`): sau khi kéo code phải
+  `docker compose up -d --build backend`, và `uv sync` nếu chạy ngoài Docker.
+- **Migration `0015` là số của tôi:** đồng nghiệp tạo migration mới hãy lấy số `0016` trở đi.
+- Sửa tên hàm nội bộ trong module file đính kèm cho khớp đợt refactor của đồng nghiệp
+  (`load_record`, `fields_with_access`, `visible_columns`).
+
+### 17/11/2026, lần gộp thứ ba (commit gộp `4ebf50d`): đợt refactor của đồng nghiệp
+- Kéo 7 commit refactor (gom code trùng: phân trang, ngày, trạng thái, `mutation`); 2 file xung đột
+  (`records/trash.py`, `tables/values.ts`) đã gộp giữ cả hai bên.
+
 ### 17/11/2026, lần gộp thứ hai (commit gộp `03cc83f`; chưa đẩy lên GitHub)
 - **Kéo thêm 2 commit từ GitHub:** `00def26` (đổi mật khẩu, xóa hẳn khỏi thùng rác) và `c4c6698`
   (bấm giờ thành một cột). Có 10 file xung đột, đã giữ cả hai bên: hai kiểu cột `attachment` và
@@ -193,6 +222,7 @@ khởi động lại frontend. Dockerfile đổi thì `up -d --build backend`.
 | 0012 | Cột `users.must_change_password` (bắt đổi mật khẩu sau khi admin đặt lại) |
 | 0013 | Kiểu cột `timer`: gộp hai cột bấm giờ cũ thành một cột |
 | 0014 | Bảng `attachments`; kiểu cột `attachment`; hai hành động lịch sử về file (trước đây đánh số 0012) |
+| 0015 | Trạng thái `paused`/`blocked` (thêm hai lựa chọn vào mọi cột Status), thông báo `task_blocked`, ba hành động lịch sử |
 
 ## 8. Kiểm thử
 
@@ -204,11 +234,13 @@ khởi động lại frontend. Dockerfile đổi thì `up -d --build backend`.
 
 ## 9. Chưa làm (theo thứ tự đề xuất)
 
-1. Trạng thái Tạm dừng và Có vướng mắc; việc hoàn thành không cần duyệt (cấu hình theo bảng).
+1. Việc hoàn thành không cần duyệt (cấu hình theo bảng). (Tạm dừng và Có vướng mắc: đã làm.)
 2. Sửa trực tiếp trong ô bảng, chọn nhiều dòng, sao chép/dán, kéo độ rộng và đổi thứ tự cột.
 3. Checklist trong task; người phối hợp là một vai trò riêng.
-4. Mục tài liệu/SOP; chế độ Kanban, lịch, timeline; số trong báo cáo bấm được.
-5. Xuất file (chạy nền), tìm kiếm toàn hệ thống (ô tìm trên cùng chưa hoạt động), nhắc hạn.
+4. Mục tài liệu/SOP; chế độ Kanban, lịch, timeline. (Số trong báo cáo bấm được: đã làm, trừ biểu đồ
+   "By status".)
+5. Xuất Excel cho cả bảng dữ liệu và xuất chạy nền cho bảng rất lớn (báo cáo đã xuất được),
+   tìm kiếm toàn hệ thống (ô tìm trên cùng chưa hoạt động), nhắc hạn.
 6. File: xem trước trên trình duyệt, quét virus, file lớn hơn 10 MB (cần chỉnh proxy), ảnh thu nhỏ.
 7. Vận hành: log có mã truy vết, quy trình sao lưu và khôi phục, cấu hình production có HTTPS và
    bí mật tách khỏi mã, giao diện điện thoại.

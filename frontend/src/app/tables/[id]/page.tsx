@@ -2,7 +2,7 @@ import { Suspense } from "react";
 
 import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/features/auth/RequireAuth";
-import { TableScreen } from "@/features/tables/TableScreen";
+import { TableRoute } from "@/features/tables/TableRoute";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -12,7 +12,7 @@ async function Table({ params }: Props) {
   return (
     <RequireAuth>
       <AppShell>
-        <TableScreen tableId={id} />
+        <TableRoute tableId={id} />
       </AppShell>
     </RequireAuth>
   );

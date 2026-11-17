@@ -12,6 +12,7 @@ dependencies = [
     "alembic>=1.20.1",
     "argon2-cffi>=25.1.0",
     "pyjwt>=2.15.1",
+    "openpyxl>=3.1.5",
 ]
 
 [dependency-groups]
@@ -45,7 +46,7 @@ plugins = ["pydantic.mypy"]
 files = ["app", "tests"]
 
 [[tool.mypy.overrides]]
-module = ["asyncpg", "asyncpg.*"]
+module = ["asyncpg", "asyncpg.*", "openpyxl", "openpyxl.*"]
 ignore_missing_imports = true
 
 [tool.ruff.lint.per-file-ignores]
