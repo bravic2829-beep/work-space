@@ -4,11 +4,11 @@ import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 
 import { Alert, Badge, Button, Checkbox, Input, Select, Textarea } from "@/components/ui";
-import { ApiError } from "@/lib/api/client";
 
 import { LABELS, ROLES } from "./AddFieldForm";
 import { deleteField, updateField, type FieldPatch } from "./api";
 import { FIELD_TYPES, type FieldItem, type FieldType, type SelectOption } from "./schema";
+import { errorMessage } from "@/lib/api/errors";
 
 const CHOICE_TYPES: FieldType[] = ["single_select", "multi_select", "status"];
 
@@ -50,7 +50,7 @@ function FieldRow({ field, all, onChanged }: RowProps) {
       await action();
       onChanged();
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : fallback);
+      setError(errorMessage(caught, fallback));
     } finally {
       setBusy(false);
     }

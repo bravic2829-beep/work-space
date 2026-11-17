@@ -37,6 +37,7 @@ import {
   userIdsIn,
   type Draft,
 } from "./values";
+import { errorMessage } from "@/lib/api/errors";
 
 type Props = {
   tableId: string;
@@ -172,7 +173,7 @@ export function RecordSidebar({
       await deleteRecord(record.id);
       onDeleted(record.id);
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : "Could not delete the record.");
+      setMessage(errorMessage(error, "Could not delete the record."));
     } finally {
       setBusy(false);
     }

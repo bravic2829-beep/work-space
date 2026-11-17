@@ -40,8 +40,8 @@ async def _column(
     edit: bool,
 ) -> tuple[Record, Field]:
     """The task and the files column, once the person may see (or edit) it."""
-    record, context = await records._load(session, actor, record_id)
-    fields = await records._fields_with_access(
+    record, context = await records.load_record(session, actor, record_id)
+    fields = await records.fields_with_access(
         session, actor, context, is_creator=record.created_by == actor.id, record=record
     )
     found = next(
@@ -57,10 +57,12 @@ async def _column(
 
 async def _render(session: AsyncSession, actor: User, record: Record) -> RecordPublic:
     context = await load_table_context(session, actor, record.table_id)
-    fields = await records._fields_with_access(
+    fields = await records.fields_with_access(
         session, actor, context, is_creator=record.created_by == actor.id, record=record
     )
-    return (await records.render(session, actor, context, [record], records._visible(fields)))[0]
+    return (
+        await records.render(session, actor, context, [record], records.visible_columns(fields))
+    )[0]
 
 
 async def upload(

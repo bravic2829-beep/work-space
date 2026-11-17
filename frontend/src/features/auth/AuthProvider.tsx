@@ -2,10 +2,10 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-import { ApiError } from "@/lib/api/client";
 
 import { fetchMe, login as loginRequest, logout as logoutRequest } from "./api";
 import type { User } from "./schema";
+import { hasStatus } from "@/lib/api/errors";
 
 type AuthState =
   | { status: "loading" }
@@ -35,7 +35,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setState({ status: "authenticated", user });
       } catch (error) {
         if (controller.signal.aborted) return;
-        if (error instanceof ApiError && error.status === 401) {
+        if (hasStatus(error, 401)) {
           setState({ status: "anonymous" });
         } else {
           setState({
@@ -63,7 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await logoutRequest();
     } catch (error) {
       // 401 means the session was already gone: the user is signed out either way.
-      if (!(error instanceof ApiError && error.status === 401)) throw error;
+      if (!(hasStatus(error, 401))) throw error;
     }
     setState({ status: "anonymous" });
   }, []);

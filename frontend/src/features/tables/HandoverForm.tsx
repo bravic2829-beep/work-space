@@ -4,11 +4,12 @@ import { ArrowRightLeft } from "lucide-react";
 import { useState } from "react";
 
 import { Alert, Button, FormField, Input, Textarea } from "@/components/ui";
-import { ApiError } from "@/lib/api/client";
 
 import { handOver } from "./activity";
 import type { RecordItem } from "./schema";
 import { UserPicker } from "./UserPicker";
+import { errorMessage, hasStatus } from "@/lib/api/errors";
+import { useAsyncAction } from "@/lib/useAsyncAction";
 
 type Props = {
   record: RecordItem;
@@ -24,8 +25,7 @@ export function HandoverForm({ record, onChanged }: Props) {
   const [to, setTo] = useState<string[]>([]);
   const [result, setResult] = useState("");
   const [documents, setDocuments] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const { busy, message, run } = useAsyncAction();
 
   if (!open) {
     return (
@@ -42,28 +42,22 @@ export function HandoverForm({ record, onChanged }: Props) {
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!ready) return;
-    setBusy(true);
-    setMessage(null);
-    try {
-      onChanged(
-        await handOver(record.id, record.version, {
-          to_user_id: to[0],
-          result: result.trim(),
-          ...(documents.trim() ? { documents: documents.trim() } : {}),
-        }),
-      );
-    } catch (error) {
-      // What was typed stays, so it can be sent again.
-      setMessage(
-        error instanceof ApiError && error.status === 412
+    // What was typed stays when it fails, so it can be sent again.
+    await run(
+      async () => {
+        onChanged(
+          await handOver(record.id, record.version, {
+            to_user_id: to[0],
+            result: result.trim(),
+            ...(documents.trim() ? { documents: documents.trim() } : {}),
+          }),
+        );
+      },
+      (error) =>
+        hasStatus(error, 412)
           ? "Somebody else changed this task. Close it and open it again."
-          : error instanceof ApiError
-            ? error.message
-            : "Could not hand the task over.",
-      );
-    } finally {
-      setBusy(false);
-    }
+          : errorMessage(error, "Could not hand the task over."),
+    );
   }
 
   return (

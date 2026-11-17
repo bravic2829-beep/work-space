@@ -3,12 +3,19 @@
 import { Building2, CornerDownRight, Layers, Plus, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { Badge, Button, DataTable, EmptyState, InlineConfirm, Input } from "@/components/ui";
+import {
+  Badge,
+  Button,
+  DataTable,
+  EmptyState,
+  ErrorMessage,
+  InlineConfirm,
+  SearchInput,
+} from "@/components/ui";
 
 import { deleteDepartment, setDepartmentHead } from "./api";
 import { DepartmentDrawer } from "./DepartmentDrawer";
 import { orderDepartments } from "./departmentTree";
-import { ErrorMessage } from "./ErrorMessage";
 import { HeadCell } from "./HeadCell";
 import type { Department } from "./schema";
 
@@ -51,20 +58,13 @@ export function DepartmentsPanel({
   return (
     <section aria-label="Departments" className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative">
-          <Search
-            className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted"
-            aria-hidden
-          />
-          <Input
-            type="search"
-            aria-label="Filter departments"
-            placeholder="Filter departments…"
-            value={filter}
-            onChange={(event) => setFilter(event.target.value)}
-            className="h-7 w-56 pl-7 text-[13px]"
-          />
-        </div>
+        <SearchInput
+          aria-label="Filter departments"
+          placeholder="Filter departments…"
+          value={filter}
+          onChange={(event) => setFilter(event.target.value)}
+          className="w-56"
+        />
         <div className="ml-auto flex items-center gap-3">
           <span className="font-mono text-xs text-muted">
             {visible.length} of {departments.length}

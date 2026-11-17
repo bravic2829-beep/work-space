@@ -1,3 +1,5 @@
+import { isRecord, isStringOrNull } from "@/lib/api/guards";
+
 export type OrgRole = "owner" | "admin" | "member";
 export type UserLevel = "admin" | "division_manager" | "department_manager" | "employee";
 export type UserStatus = "active" | "disabled";
@@ -18,14 +20,6 @@ export type User = {
 const ORG_ROLES: readonly string[] = ["owner", "admin", "member"];
 const LEVELS: readonly string[] = ["admin", "division_manager", "department_manager", "employee"];
 const STATUSES: readonly string[] = ["active", "disabled"];
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isStringOrNull(value: unknown): value is string | null {
-  return value === null || typeof value === "string";
-}
 
 export function isUser(value: unknown): value is User {
   return (

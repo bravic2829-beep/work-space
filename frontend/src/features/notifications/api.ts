@@ -1,4 +1,4 @@
-import { apiRequest } from "@/lib/api/client";
+import { API, apiRequest } from "@/lib/api/client";
 
 import {
   isNotification,
@@ -7,8 +7,6 @@ import {
   type Notification,
   type NotificationPage,
 } from "./schema";
-
-const API = "/api/v1";
 
 export function listNotifications(limit: number, signal?: AbortSignal): Promise<NotificationPage> {
   return apiRequest("GET", `${API}/notifications?limit=${limit}`, {

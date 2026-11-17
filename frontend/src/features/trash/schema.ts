@@ -1,3 +1,5 @@
+import { isRecord, pageOf } from "@/lib/api/guards";
+
 export type TrashItem = {
   id: string;
   table_id: string;
@@ -9,10 +11,6 @@ export type TrashItem = {
 };
 
 export type TrashPage = { items: TrashItem[]; next_cursor: string | null };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 export function isTrashItem(value: unknown): value is TrashItem {
   return (
@@ -26,14 +24,7 @@ export function isTrashItem(value: unknown): value is TrashItem {
   );
 }
 
-export function isTrashPage(value: unknown): value is TrashPage {
-  return (
-    isRecord(value) &&
-    Array.isArray(value.items) &&
-    value.items.every(isTrashItem) &&
-    (value.next_cursor === null || typeof value.next_cursor === "string")
-  );
-}
+export const isTrashPage = pageOf(isTrashItem);
 
 /** A record that was restored: all we need is that the server answered with a record. */
 export function isRestoredRecord(value: unknown): value is { id: string } {

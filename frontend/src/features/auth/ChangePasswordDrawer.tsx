@@ -11,9 +11,9 @@ import {
   FormField,
   Input,
 } from "@/components/ui";
-import { ApiError } from "@/lib/api/client";
 
 import { changePassword } from "./api";
+import { errorMessage } from "@/lib/api/errors";
 
 const MIN_LENGTH = 8;
 
@@ -61,9 +61,7 @@ export function ChangePasswordForm({
       onChanged?.();
     } catch (caught) {
       setError(
-        caught instanceof ApiError
-          ? caught.message
-          : "Could not change the password.",
+        errorMessage(caught, "Could not change the password."),
       );
     } finally {
       setBusy(false);

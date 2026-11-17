@@ -1,4 +1,4 @@
-import { Alert } from "@/components/ui";
+import { Alert } from "./Alert";
 import { ApiError } from "@/lib/api/client";
 
 /** Shows an API error, including the per-field messages of a 422 answer. */

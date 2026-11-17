@@ -1,9 +1,9 @@
 import uuid
 from typing import Any
 
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.db import flush_or_conflict
 from app.core.errors import ProblemError
 from app.modules.bases.models import Table
 from app.modules.fields import conversion, repository
@@ -133,10 +133,7 @@ async def _insert(
         position=await repository.next_position(session, table_id=table.id),
     )
     session.add(field)
-    try:
-        await session.flush()
-    except IntegrityError:  # the same name or role used at the same moment by another request
-        raise ProblemError(409, DUPLICATE_NAME) from None
+    await flush_or_conflict(session, DUPLICATE_NAME)
     return field
 
 
@@ -443,10 +440,7 @@ async def update_field(
             for item in (field, actor, context.table, context.base, context.workspace):
                 await session.refresh(item)
 
-    try:
-        await session.flush()
-    except IntegrityError:
-        raise ProblemError(409, DUPLICATE_NAME) from None
+    await flush_or_conflict(session, DUPLICATE_NAME)
     access = await column_access(session, actor, context, [field])
     return public(field, access[field.id])
 

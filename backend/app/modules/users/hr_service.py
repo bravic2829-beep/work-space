@@ -3,9 +3,9 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.db import flush_or_conflict
 from app.core.errors import ProblemError
 from app.core.pagination import Page, decode_cursor, encode_cursor
 from app.core.security import hash_password_async
@@ -101,11 +101,7 @@ async def create_user(session: AsyncSession, actor: User, data: UserCreate) -> U
         manager_id=data.manager_id,
     )
     users.add(session, user)
-    try:
-        await session.flush()
-    except IntegrityError:
-        # Two admins creating the same code at the same moment: the database has the last word.
-        raise ProblemError(409, "This employee code is already in use.") from None
+    await flush_or_conflict(session, "This employee code is already in use.")
     await create_personal_workspace(session, user)
     return user
 

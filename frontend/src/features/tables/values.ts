@@ -9,6 +9,7 @@ import {
   type SelectOption,
 } from "./schema";
 import { describeTimer } from "./timer";
+import { formatDateTime } from "@/lib/format";
 
 /** Types whose value is made by the system: nobody edits them as a cell (files have their own
  * buttons for adding and removing; a timer has its Start and Stop buttons). */
@@ -118,7 +119,7 @@ export function displayValue(
     case "date": {
       const text = String(value);
       // Dates are stored in UTC. Date-only values are shown as they are.
-      return text.length > 10 ? new Date(text).toLocaleString() : text;
+      return text.length > 10 ? formatDateTime(text) : text;
     }
     default:
       return String(value);

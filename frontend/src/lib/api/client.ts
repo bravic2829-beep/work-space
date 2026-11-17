@@ -1,3 +1,13 @@
+import { isRecord } from "./guards";
+
+/** The root of every backend endpoint. */
+export const API = "/api/v1";
+
+/** The If-Match header: change a record only if it is still at the version the person saw. */
+export function ifMatch(version: number): Record<string, string> {
+  return { "If-Match": `"${version}"` };
+}
+
 export type FieldError = { field: string; message: string };
 
 export class ApiError extends Error {
@@ -26,10 +36,6 @@ type RequestOptions<T> = {
   /** Send this as the raw body (a file) instead of JSON. Set the Content-Type in `headers`. */
   rawBody?: BodyInit;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 /** Reads the field errors of an RFC 9457 Problem Details body. */
 function readFieldErrors(body: Record<string, unknown>): FieldError[] {

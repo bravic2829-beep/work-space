@@ -12,11 +12,11 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Alert, Button, EmptyState, LoadingState, PageHeader, Tabs } from "@/components/ui";
 import { useLiveRefresh } from "@/features/notifications/liveRefresh";
-import { ApiError } from "@/lib/api/client";
 
 import { listMyTasks, type Scope } from "./api";
 import { localToday, type MyTask } from "./schema";
 import { isOverdue, TaskList } from "./TaskList";
+import { errorMessage } from "@/lib/api/errors";
 
 type State =
   | { kind: "loading" }
@@ -65,7 +65,7 @@ export function MyTasksScreen() {
         if (controller.signal.aborted) return;
         setState({
           kind: "error",
-          message: error instanceof ApiError ? error.message : "Could not load your tasks.",
+          message: errorMessage(error, "Could not load your tasks."),
         });
       }
     }
@@ -96,7 +96,7 @@ export function MyTasksScreen() {
     } catch (error) {
       setState({
         kind: "error",
-        message: error instanceof ApiError ? error.message : "Could not load more tasks.",
+        message: errorMessage(error, "Could not load more tasks."),
       });
     }
   }

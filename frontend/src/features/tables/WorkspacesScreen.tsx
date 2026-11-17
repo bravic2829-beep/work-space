@@ -4,13 +4,22 @@ import { FolderKanban, FolderOpen, Plus, User } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { Alert, Badge, Button, EmptyState, Input, LoadingState, PageHeader } from "@/components/ui";
+import {
+  Alert,
+  Badge,
+  Button,
+  EmptyState,
+  Input,
+  LinkCard,
+  LoadingState,
+  PageHeader,
+} from "@/components/ui";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { isOrgAdmin } from "@/features/auth/schema";
-import { ApiError } from "@/lib/api/client";
 
 import { createWorkspace, listWorkspaces } from "./api";
 import type { WorkspaceItem } from "./schema";
+import { errorMessage } from "@/lib/api/errors";
 
 type State =
   | { kind: "loading" }
@@ -36,7 +45,7 @@ export function WorkspacesScreen() {
         if (controller.signal.aborted) return;
         setState({
           kind: "error",
-          message: caught instanceof ApiError ? caught.message : "Could not load workspaces.",
+          message: errorMessage(caught, "Could not load workspaces."),
         });
       }
     }
@@ -53,7 +62,7 @@ export function WorkspacesScreen() {
       setName("");
       setReload((n) => n + 1);
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "Could not create the workspace.");
+      setError(errorMessage(caught, "Could not create the workspace."));
     } finally {
       setSaving(false);
     }
@@ -120,10 +129,7 @@ export function WorkspacesScreen() {
           {state.items.map((workspace) => {
             const Icon = workspace.kind === "personal" ? User : FolderKanban;
             return (
-              <li
-                key={workspace.id}
-                className="relative flex items-start gap-3 rounded-lg border border-line bg-surface p-3 transition-colors hover:border-primary hover:bg-primary-soft/40"
-              >
+              <LinkCard key={workspace.id} className="items-start rounded-lg p-3">
                 <span className="flex size-9 shrink-0 items-center justify-center rounded bg-primary-soft text-primary">
                   <Icon className="size-4.5" aria-hidden />
                 </span>
@@ -141,7 +147,7 @@ export function WorkspacesScreen() {
                     </Badge>
                   </small>
                 </span>
-              </li>
+              </LinkCard>
             );
           })}
         </ul>
