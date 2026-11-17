@@ -242,14 +242,14 @@ export function deleteRecord(id: string): Promise<void> {
   return apiRequest("DELETE", `${API}/records/${id}`);
 }
 
-export type ReviewAction = "submit" | "approve" | "reject";
+export type ReviewAction = "submit" | "approve" | "reject" | "pause" | "block" | "resume";
 
 /** Report a task as done (submit), approve it or send it back (the version is sent as If-Match). */
 export function reviewRecord(
   id: string,
   version: number,
   action: ReviewAction,
-  /** Required to send back (reject): what needs to change. */
+  /** Required to send back (reject) and to report a blocker (block): the why. */
   reason?: string,
 ): Promise<RecordItem> {
   return apiRequest("POST", `${API}/records/${id}/review`, {

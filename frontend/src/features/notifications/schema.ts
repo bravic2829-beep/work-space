@@ -1,8 +1,12 @@
 import { isRecord, pageOf } from "@/lib/api/guards";
 
-export type NotificationType = "task_assigned" | "review_requested" | "changes_requested";
+export type NotificationType =
+  | "task_assigned"
+  | "review_requested"
+  | "changes_requested"
+  | "task_blocked";
 
-const TYPES: string[] = ["task_assigned", "review_requested", "changes_requested"];
+const TYPES: string[] = ["task_assigned", "review_requested", "changes_requested", "task_blocked"];
 
 export type Notification = {
   id: string;
@@ -54,6 +58,9 @@ export function describe(notification: Notification): string {
   }
   if (notification.type === "changes_requested") {
     return `${notification.actor.full_name} sent ${task} back for changes`;
+  }
+  if (notification.type === "task_blocked") {
+    return `${notification.actor.full_name} reported a blocker on ${task}`;
   }
   return `${notification.actor.full_name} assigned you ${task}`;
 }

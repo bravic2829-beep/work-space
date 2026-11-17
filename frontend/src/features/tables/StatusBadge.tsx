@@ -7,6 +7,8 @@ const TONE_OF_KIND: Record<StatusKind, Tone> = {
   in_progress: "info",
   review: "warning",
   done: "success",
+  paused: "neutral",
+  blocked: "danger",
 };
 
 /** The status of a task as a coloured label. The colour comes from the status kind, not its name. */

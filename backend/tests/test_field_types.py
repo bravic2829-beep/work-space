@@ -111,9 +111,18 @@ def test_status_gets_default_options_with_kinds() -> None:
         "In progress",
         "Pending review",
         "Done",
+        "Paused",
+        "Blocked",
     ]
-    assert [o["kind"] for o in config["options"]] == ["todo", "in_progress", "review", "done"]
-    assert len({o["id"] for o in config["options"]}) == 4
+    assert [o["kind"] for o in config["options"]] == [
+        "todo",
+        "in_progress",
+        "review",
+        "done",
+        "paused",
+        "blocked",
+    ]
+    assert len({o["id"] for o in config["options"]}) == 6
 
 
 @pytest.mark.parametrize(

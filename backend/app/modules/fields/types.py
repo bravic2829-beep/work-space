@@ -32,12 +32,15 @@ MAX_LINKS_PER_CELL = 200
 MAX_NUMBER_PRECISION = 10
 MAX_ABS_NUMBER = 10**15
 
-STATUS_KINDS = ("todo", "in_progress", "review", "done")
+STATUS_KINDS = ("todo", "in_progress", "review", "done", "paused", "blocked")
 DEFAULT_STATUS_OPTIONS = (
     ("To do", "todo"),
     ("In progress", "in_progress"),
     ("Pending review", "review"),
     ("Done", "done"),
+    # On hold, or stuck on something outside the assignee's hands. Both are still open work.
+    ("Paused", "paused"),
+    ("Blocked", "blocked"),
 )
 
 SELECT_TYPES = frozenset({FieldType.SINGLE_SELECT, FieldType.MULTI_SELECT, FieldType.STATUS})

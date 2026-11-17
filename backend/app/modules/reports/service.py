@@ -9,14 +9,14 @@ import uuid
 from typing import Any
 
 from pydantic import BaseModel
-from sqlalchemy import exists, or_, select
+from sqlalchemy import Select, exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dates import day_or_today
 from app.modules.bases.models import Table, WorkBase
 from app.modules.bases.repository import live_conditions
 from app.modules.fields.models import Field, FieldAccessLevel, FieldSemantic
-from app.modules.permissions.service import is_org_admin, require_table_read
+from app.modules.permissions.service import TableContext, is_org_admin, require_table_read
 from app.modules.records import service as records
 from app.modules.records.models import Record, RecordViewer
 from app.modules.sheets.models import Sheet, SheetMember
@@ -43,6 +43,7 @@ class PersonLoad(BaseModel):
     open: int
     overdue: int
     in_review: int
+    blocked: int
     done: int
 
 
@@ -54,12 +55,25 @@ class Overview(BaseModel):
     # None: the column the number needs is hidden from the caller.
     open: int | None
     in_review: int | None
+    blocked: int | None
+    paused: int | None
     done: int | None
     overdue: int | None
     due_today: int | None
     unassigned: int | None
     by_status: list[StatusCount] | None
     people: list[PersonLoad] | None
+
+
+def visible_records(actor: User, context: TableContext, query: Select[Any]) -> Select[Any]:
+    """The live tasks of the table that the caller may open: all of them for somebody who sees
+    everything, otherwise the ones they are a viewer of (the rule of the table itself)."""
+    query = query.where(Record.table_id == context.table.id, Record.deleted_at.is_(None))
+    if not records.sees_everything(actor, context):
+        query = query.where(
+            exists().where(RecordViewer.record_id == Record.id, RecordViewer.user_id == actor.id)
+        )
+    return query
 
 
 def _has_semantic(semantic: FieldSemantic) -> Any:
@@ -113,11 +127,7 @@ async def overview(
     due = shown.get(FieldSemantic.DUE_DATE)
     assignee = shown.get(FieldSemantic.ASSIGNEE)
 
-    query = select(Record.data).where(Record.table_id == table_id, Record.deleted_at.is_(None))
-    if not records.sees_everything(actor, context):
-        query = query.where(
-            exists().where(RecordViewer.record_id == Record.id, RecordViewer.user_id == actor.id)
-        )
+    query = visible_records(actor, context, select(Record.data))
     rows: list[dict[str, Any]] = list((await session.execute(query)).scalars().all())
 
     options = status.config.get("options", []) if status else []
@@ -136,13 +146,25 @@ async def overview(
         return isinstance(value, str) and value[:10] < today and kind(data) != "done"
 
     def tally(counts: dict[str, int], k: str, is_late: bool) -> None:
-        """Count one task into open or done, and into in review and overdue when it is."""
+        """Count one task into open or done, and into in review, blocked and overdue when it is.
+
+        A paused or blocked task is still open work, and it can be overdue."""
         counts["done" if k == "done" else "open"] += 1
         counts["in_review"] += k == "review"
+        counts["blocked"] += k == "blocked"
         counts["overdue"] += is_late
 
     people: dict[uuid.UUID, dict[str, int]] = {}
-    totals = {"open": 0, "in_review": 0, "done": 0, "overdue": 0, "due_today": 0, "unassigned": 0}
+    totals = {
+        "open": 0,
+        "in_review": 0,
+        "blocked": 0,
+        "paused": 0,
+        "done": 0,
+        "overdue": 0,
+        "due_today": 0,
+        "unassigned": 0,
+    }
     for data in rows:
         k = kind(data)
         if status is not None:
@@ -153,6 +175,7 @@ async def overview(
                 by_option[key] += 1
         is_late = late(data)
         tally(totals, k, is_late)
+        totals["paused"] += k == "paused"
         if due is not None:
             value = data.get(str(due.id))
             totals["due_today"] += isinstance(value, str) and value[:10] == today and k != "done"
@@ -162,7 +185,7 @@ async def overview(
                 totals["unassigned"] += 1
             for person in named:
                 load = people.setdefault(
-                    person, {"open": 0, "overdue": 0, "in_review": 0, "done": 0}
+                    person, {"open": 0, "overdue": 0, "in_review": 0, "blocked": 0, "done": 0}
                 )
                 tally(load, k, is_late)
 
@@ -194,6 +217,8 @@ async def overview(
         total=len(rows),
         open=totals["open"] if status else None,
         in_review=totals["in_review"] if status else None,
+        blocked=totals["blocked"] if status else None,
+        paused=totals["paused"] if status else None,
         done=totals["done"] if status else None,
         overdue=totals["overdue"] if due else None,
         due_today=totals["due_today"] if due else None,

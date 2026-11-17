@@ -1,6 +1,14 @@
 "use client";
 
-import { Bell, ClipboardCheck, Undo2, UserPlus, WifiOff, type LucideIcon } from "lucide-react";
+import {
+  Bell,
+  ClipboardCheck,
+  OctagonAlert,
+  Undo2,
+  UserPlus,
+  WifiOff,
+  type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -28,6 +36,7 @@ const ICONS: Record<NotificationType, LucideIcon> = {
   task_assigned: UserPlus,
   review_requested: ClipboardCheck,
   changes_requested: Undo2,
+  task_blocked: OctagonAlert,
 };
 
 /** The bell in the header: a number of unread notifications, the list behind it and live news. */

@@ -32,12 +32,13 @@ class RecordUpdate(BaseModel):
 
 
 class ReviewAction(BaseModel):
-    """submit: report done (needs review). approve: reviewer says done. reject: back to work."""
+    """submit: report done (needs review). approve: reviewer says done. reject: back to work.
+    pause: put the work on hold. block: report a blocker. resume: pick it up again."""
 
     model_config = ConfigDict(extra="forbid")
 
-    action: Literal["submit", "approve", "reject"]
-    # Required to send back (reject): what needs to change.
+    action: Literal["submit", "approve", "reject", "pause", "block", "resume"]
+    # Required to send back (reject) and to report a blocker (block): the why.
     reason: str | None = Field(default=None, max_length=2000)
 
 

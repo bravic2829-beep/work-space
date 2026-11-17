@@ -1,13 +1,22 @@
 "use client";
 
-import { Check, RefreshCw, Send, Undo2, type LucideIcon } from "lucide-react";
+import {
+  Check,
+  OctagonAlert,
+  Pause,
+  Play,
+  RefreshCw,
+  Send,
+  Undo2,
+  type LucideIcon,
+} from "lucide-react";
 import { useState } from "react";
 
 import { Alert, Button, Textarea, type ButtonProps } from "@/components/ui";
 
 import { reviewRecord, type ReviewAction } from "./api";
 import type { FieldItem, RecordItem } from "./schema";
-import { reviewSteps } from "./taskWorkflow";
+import { holdSteps, reviewSteps } from "./taskWorkflow";
 import { errorMessage, hasStatus } from "@/lib/api/errors";
 import { useAsyncAction } from "@/lib/useAsyncAction";
 
@@ -27,11 +36,33 @@ const LOOK: Record<ReviewAction, { icon: LucideIcon; variant: ButtonProps["varia
   submit: { icon: Send, variant: "primary" },
   approve: { icon: Check, variant: "primary" },
   reject: { icon: Undo2, variant: "secondary" },
+  pause: { icon: Pause, variant: "secondary" },
+  block: { icon: OctagonAlert, variant: "secondary" },
+  resume: { icon: Play, variant: "primary" },
+};
+
+/** The actions that need a reason, with the words the box and its button use. */
+const WHY: Partial<
+  Record<ReviewAction, { question: string; hint: string; send: string; icon: LucideIcon }>
+> = {
+  reject: {
+    question: "What needs to change?",
+    hint: "For example: add the refunds of October before sending it again.",
+    send: "Send back with this reason",
+    icon: Undo2,
+  },
+  block: {
+    question: "What is blocking this task?",
+    hint: "For example: waiting for the price list from the supplier.",
+    send: "Report this blocker",
+    icon: OctagonAlert,
+  },
 };
 
 /**
- * Report done, approve or send back: the buttons that fit this person and this task's status.
- * Sending back asks what needs to change; the reason reaches the assignee as a comment.
+ * The buttons that fit this person and this task's status: report done, approve, send back, and
+ * pause, report a blocker or resume. Sending back and reporting a blocker ask for a reason; it
+ * reaches the people concerned as a comment.
  */
 export function ReviewActions({
   fields,
@@ -44,20 +75,25 @@ export function ReviewActions({
 }: Props) {
   const { busy, message, run: execute } = useAsyncAction();
   const [conflict, setConflict] = useState(false);
-  const [asking, setAsking] = useState(false);
+  const [asking, setAsking] = useState<ReviewAction | null>(null);
   const [reason, setReason] = useState("");
 
-  const steps = reviewSteps(fields, record, currentUserId, reviewer, admin);
+  const steps = [
+    ...reviewSteps(fields, record, currentUserId, reviewer, admin),
+    ...holdSteps(fields, record, currentUserId, reviewer, admin),
+  ];
   if (steps.length === 0) return null;
 
   const run = (action: ReviewAction) =>
     execute(
       async () => {
-        onChanged(
-          action === "reject"
+        const updated =
+          WHY[action] !== undefined
             ? await reviewRecord(record.id, record.version, action, reason.trim())
-            : await reviewRecord(record.id, record.version, action),
-        );
+            : await reviewRecord(record.id, record.version, action);
+        setAsking(null);
+        setReason("");
+        onChanged(updated);
       },
       (error) => {
         if (hasStatus(error, 412)) {
@@ -69,6 +105,8 @@ export function ReviewActions({
       },
     );
 
+  const why = asking ? WHY[asking] : undefined;
+
   return (
     <section aria-label="Review" className="grid gap-2">
       <div className="flex flex-wrap gap-2">
@@ -77,41 +115,47 @@ export function ReviewActions({
             key={step.action}
             variant={LOOK[step.action].variant}
             icon={LOOK[step.action].icon}
-            disabled={busy || conflict || (asking && step.action === "reject")}
-            onClick={() => (step.action === "reject" ? setAsking(true) : void run(step.action))}
+            disabled={busy || conflict || asking === step.action}
+            onClick={() => {
+              if (WHY[step.action] !== undefined) setAsking(step.action);
+              else {
+                setAsking(null);
+                void run(step.action);
+              }
+            }}
           >
             {step.label}
           </Button>
         ))}
       </div>
-      {asking && (
+      {asking && why && (
         <form
           className="grid gap-2 rounded-md border border-line bg-surface-muted p-3"
           onSubmit={(event) => {
             event.preventDefault();
-            void run("reject");
+            void run(asking);
           }}
         >
           <label className="grid gap-1 text-sm font-medium">
-            What needs to change?
+            {why.question}
             <Textarea
               rows={3}
               value={reason}
               maxLength={2000}
               onChange={(event) => setReason(event.target.value)}
-              placeholder="For example: add the refunds of October before sending it again."
+              placeholder={why.hint}
             />
           </label>
           <div className="flex gap-2">
             <Button
               type="submit"
               variant="primary"
-              icon={Undo2}
+              icon={why.icon}
               disabled={busy || reason.trim() === ""}
             >
-              Send back with this reason
+              {why.send}
             </Button>
-            <Button onClick={() => setAsking(false)} disabled={busy}>
+            <Button onClick={() => setAsking(null)} disabled={busy}>
               Cancel
             </Button>
           </div>

@@ -17,11 +17,15 @@ const STEPS: { kind: StatusKind; label: string }[] = [
  * buttons below it move the task). Nothing is drawn for a table with no status column.
  */
 export function StatusStepper({ fields, record }: { fields: FieldItem[]; record: RecordItem }) {
-  const kind = statusKind(fields, record);
-  if (kind === null) return null;
+  const actual = statusKind(fields, record);
+  if (actual === null) return null;
+  // A paused or blocked task is still on the "In progress" step; a tag next to the steps says so.
+  const held = actual === "paused" || actual === "blocked" ? actual : null;
+  const kind: StatusKind = held ? "in_progress" : actual;
   const current = STEPS.findIndex((step) => step.kind === kind);
 
   return (
+    <>
     <ol aria-label="Task progress" className="m-0 flex list-none items-start p-0">
       {STEPS.map((step, index) => {
         const done = index < current || kind === "done";
@@ -64,5 +68,19 @@ export function StatusStepper({ fields, record }: { fields: FieldItem[]; record:
         );
       })}
     </ol>
+    {held && (
+      <p
+        role="status"
+        className={cn(
+          "m-0 mt-2 text-xs font-semibold",
+          held === "blocked" ? "text-danger" : "text-muted",
+        )}
+      >
+        {held === "blocked"
+          ? "Blocked: this task cannot move until the blocker is solved."
+          : "Paused: work on this task is on hold."}
+      </p>
+    )}
+    </>
   );
 }

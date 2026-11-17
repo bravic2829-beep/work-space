@@ -160,7 +160,7 @@ async def test_tasks_template_has_the_fields_a_task_needs(work: Work) -> None:
     assert by_name["Follower"]["grants_view"] is True
     assert by_name["Status"]["semantic"] == "status"
     kinds = [o["kind"] for o in by_name["Status"]["config"]["options"]]
-    assert kinds == ["todo", "in_progress", "review", "done"]
+    assert kinds == ["todo", "in_progress", "review", "done", "paused", "blocked"]
     assert by_name["Due date"]["semantic"] == "due_date"
     assert by_name["Parent task"]["semantic"] == "parent"
     assert by_name["Parent task"]["config"]["multiple"] is False

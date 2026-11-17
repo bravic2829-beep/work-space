@@ -66,7 +66,7 @@ async def test_select_fields_get_ids_for_their_options(work: Work) -> None:
     assert options[0]["id"] != options[1]["id"]
 
 
-async def test_status_field_defaults_to_the_four_states(work: Work) -> None:
+async def test_status_field_defaults_to_the_six_states(work: Work) -> None:
     table = await blank_table(work)
     field = await work.make_field(table["id"], "State", "status", semantic="status")
     assert [o["kind"] for o in field["config"]["options"]] == [
@@ -74,6 +74,8 @@ async def test_status_field_defaults_to_the_four_states(work: Work) -> None:
         "in_progress",
         "review",
         "done",
+        "paused",
+        "blocked",
     ]
 
 

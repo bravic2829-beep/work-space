@@ -60,6 +60,27 @@ async def test_the_overview_counts_late_waiting_and_who_has_what(board: Board) -
     assert body["people"][0]["user_id"] == m
 
 
+async def test_blocked_and_paused_tasks_are_counted_and_still_open(board: Board) -> None:
+    s = board.status_options
+    m, m2 = board.user("member"), board.user("member2")
+    await board.create(
+        Name="Stuck", Assignee=[m], Status=s["Blocked"], **{"Due date": "2026-11-10"}
+    )
+    await board.create(Name="Stuck too", Assignee=[m2], Status=s["Blocked"])
+    await board.create(Name="On hold", Assignee=[m], Status=s["Paused"])
+    await board.create(Name="Going", Assignee=[m], Status=s["In progress"])
+
+    body = await overview(board)
+    assert (body["blocked"], body["paused"]) == (2, 1)
+    # Both kinds are open work, and a blocked task can be late.
+    assert (body["open"], body["done"], body["overdue"]) == (4, 0, 1)
+    counts = {c["name"]: c["count"] for c in body["by_status"]}
+    assert (counts["Blocked"], counts["Paused"]) == (2, 1)
+    people = {p["user_id"]: p for p in body["people"]}
+    assert (people[m]["blocked"], people[m2]["blocked"]) == (1, 1)
+    assert (people[m]["open"], people[m]["overdue"]) == (3, 1)
+
+
 async def test_the_overview_only_counts_what_the_reader_may_open(board: Board) -> None:
     await make_sheet(board, "member")
     await board.create(Name="Mine", Assignee=[board.user("member")])

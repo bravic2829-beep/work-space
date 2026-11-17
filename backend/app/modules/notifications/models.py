@@ -16,6 +16,8 @@ class NotificationType(enum.StrEnum):
     REVIEW_REQUESTED = "review_requested"
     # The reviewer sent the work back with a reason.
     CHANGES_REQUESTED = "changes_requested"
+    # Somebody reported a blocker on a task (the reason is a comment on it).
+    TASK_BLOCKED = "task_blocked"
 
 
 class Notification(Base):

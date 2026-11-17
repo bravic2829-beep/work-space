@@ -1,7 +1,9 @@
 import type { ReviewAction } from "./api";
 import type { FieldItem, RecordItem } from "./schema";
 
-export type StatusKind = "todo" | "in_progress" | "review" | "done";
+export type StatusKind = "todo" | "in_progress" | "review" | "done" | "paused" | "blocked";
+
+const STATUS_KINDS: readonly string[] = ["todo", "in_progress", "review", "done", "paused", "blocked"];
 
 export function fieldBySemantic(fields: FieldItem[], semantic: string): FieldItem | undefined {
   return fields.find((field) => field.semantic === semantic);
@@ -26,9 +28,7 @@ export function statusKind(fields: FieldItem[], record: RecordItem): StatusKind 
         (option as { id?: unknown }).id === chosen
       ) {
         const kind = (option as { kind?: unknown }).kind;
-        if (kind === "todo" || kind === "in_progress" || kind === "review" || kind === "done") {
-          return kind;
-        }
+        if (typeof kind === "string" && STATUS_KINDS.includes(kind)) return kind as StatusKind;
       }
     }
   }
@@ -67,4 +67,37 @@ export function reviewSteps(
     steps.push({ action: "reject", label: "Send back" });
   }
   return steps;
+}
+
+/**
+ * Pause, report a blocker, or pick the work up again. The people who do the work or give it may
+ * (the assignees, the person who created the task, a reviewer, an admin). The backend decides for
+ * real; this only avoids offering buttons that are certain to be refused.
+ */
+export function holdSteps(
+  fields: FieldItem[],
+  record: RecordItem,
+  currentUserId: string,
+  reviewer = false,
+  admin = false,
+): ReviewStep[] {
+  const kind = statusKind(fields, record);
+  if (kind === null || kind === "review" || kind === "done") return [];
+  const may =
+    assigneeIds(fields, record).includes(currentUserId) ||
+    record.created_by === currentUserId ||
+    reviewer ||
+    admin;
+  if (!may) return [];
+  if (kind === "paused") {
+    return [
+      { action: "resume", label: "Resume" },
+      { action: "block", label: "Report a blocker" },
+    ];
+  }
+  if (kind === "blocked") return [{ action: "resume", label: "Unblock" }];
+  return [
+    { action: "pause", label: "Pause" },
+    { action: "block", label: "Report a blocker" },
+  ];
 }

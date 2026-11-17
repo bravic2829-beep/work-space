@@ -30,6 +30,9 @@ class ActivityAction(enum.StrEnum):
     HANDED_OVER = "handed_over"
     ATTACHMENT_ADDED = "attachment_added"
     ATTACHMENT_REMOVED = "attachment_removed"
+    PAUSED = "paused"
+    BLOCKED = "blocked"
+    RESUMED = "resumed"
 
 
 class ActivityEntry(Base):
