@@ -4,9 +4,9 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.db import flush_or_conflict
 from app.core.errors import FORBIDDEN, ProblemError
 from app.modules.fields import service as fields_service
 from app.modules.permissions.service import require_table_read
@@ -78,10 +78,7 @@ async def create_view(
         raise ProblemError(409, f"You can have at most {MAX_VIEWS} views on a table.")
     view = View(table_id=table_id, owner_user_id=actor.id, name=data.name, config=config)
     session.add(view)
-    try:
-        await session.flush()
-    except IntegrityError:
-        raise ProblemError(409, DUPLICATE) from None
+    await flush_or_conflict(session, DUPLICATE)
     return _public(view)
 
 
@@ -113,10 +110,7 @@ async def update_view(
     if data.name is not None:
         view.name = data.name
     view.updated_at = datetime.now(UTC)
-    try:
-        await session.flush()
-    except IntegrityError:
-        raise ProblemError(409, DUPLICATE) from None
+    await flush_or_conflict(session, DUPLICATE)
     return _public(view)
 
 

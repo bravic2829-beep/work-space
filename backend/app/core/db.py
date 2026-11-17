@@ -1,9 +1,12 @@
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
+
+from app.core.errors import ProblemError
 
 
 def create_engine(database_url: str) -> AsyncEngine:
@@ -24,3 +27,15 @@ def create_engine(database_url: str) -> AsyncEngine:
 def create_sessionmaker(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
     # expire_on_commit=False avoids implicit lazy loads after commit, which break in async code.
     return async_sessionmaker(engine, expire_on_commit=False)
+
+
+async def flush_or_conflict(session: AsyncSession, message: str) -> None:
+    """Write pending changes; a unique constraint that fails answers 409 with the given message.
+
+    The checks made before (a name that is taken) can lose a race with another request made at
+    the same moment: the database has the last word.
+    """
+    try:
+        await session.flush()
+    except IntegrityError:
+        raise ProblemError(409, message) from None

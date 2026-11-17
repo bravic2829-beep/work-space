@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import ProblemError
 from app.core.pagination import Page, check_limit, parse_time_cursor, time_cursor
 from app.modules.bases.models import Table, WorkBase
+from app.modules.bases.repository import live_conditions
 from app.modules.fields import repository as fields_repo
 from app.modules.fields.models import FieldAccessLevel
 from app.modules.fields.titles import title_field, title_of
@@ -38,16 +39,6 @@ class TrashItem(BaseModel):
     purge_at: datetime
 
 
-def _alive_in(organization_id: uuid.UUID):  # type: ignore[no-untyped-def]
-    """Conditions: the table, base and workspace of the record still exist."""
-    return (
-        Table.deleted_at.is_(None),
-        WorkBase.deleted_at.is_(None),
-        Workspace.organization_id == organization_id,
-        Workspace.deleted_at.is_(None),
-    )
-
-
 async def list_trash(
     session: AsyncSession, actor: User, *, limit: int, cursor: str | None
 ) -> Page[TrashItem]:
@@ -63,7 +54,7 @@ async def list_trash(
             true() if is_org_admin(actor) else Record.deleted_by == actor.id,
             Record.deleted_at.is_not(None),
             Record.deleted_at >= now - timedelta(days=TRASH_DAYS),
-            *_alive_in(actor.organization_id),
+            *live_conditions(actor.organization_id),
         )
         .order_by(Record.deleted_at.desc(), Record.id.desc())
         .limit(limit + 1)
@@ -106,10 +97,11 @@ async def list_trash(
     return Page[TrashItem](items=items, next_cursor=next_cursor)
 
 
-async def restore_record(
-    session: AsyncSession, actor: User, record_id: uuid.UUID
-) -> tuple[Record, RecordPublic]:
-    """Take a record out of the trash. Only the person who deleted it can, within 30 days."""
+async def _load_trashed(session: AsyncSession, actor: User, record_id: uuid.UUID) -> Record:
+    """A record of this organization that is still in the trash (under 30 days), locked.
+
+    404 when there is none. Who may act on it is checked by the caller.
+    """
     record = (
         await session.execute(
             select(Record)
@@ -119,15 +111,22 @@ async def restore_record(
             .where(
                 Record.id == record_id,
                 Record.deleted_at.is_not(None),
-                *_alive_in(actor.organization_id),
+                Record.deleted_at >= datetime.now(UTC) - timedelta(days=TRASH_DAYS),
+                *live_conditions(actor.organization_id),
             )
             .with_for_update(of=Record)
         )
     ).scalar_one_or_none()
-    if record is None or record.deleted_at is None:
+    if record is None:
         raise ProblemError(404, "The record is not in the trash.")
-    if record.deleted_at < datetime.now(UTC) - timedelta(days=TRASH_DAYS):
-        raise ProblemError(404, "The record is not in the trash.")
+    return record
+
+
+async def restore_record(
+    session: AsyncSession, actor: User, record_id: uuid.UUID
+) -> tuple[Record, RecordPublic]:
+    """Take a record out of the trash. Only the person who deleted it can, within 30 days."""
+    record = await _load_trashed(session, actor, record_id)
     if record.deleted_by != actor.id and not is_org_admin(actor):
         raise ProblemError(
             403, "Only the person who deleted a record, or an admin, can restore it."
@@ -141,31 +140,17 @@ async def restore_record(
     await session.refresh(record)
 
     context = await load_table_context(session, actor, record.table_id)
-    fields = await service._fields_with_access(session, actor, context, is_creator=True)
-    rendered = await service.render(session, actor, context, [record], service._visible(fields))
+    fields = await service.fields_with_access(session, actor, context, is_creator=True)
+    rendered = await service.render(
+        session, actor, context, [record], service.visible_columns(fields)
+    )
     return record, rendered[0]
 
 
 async def delete_forever(session: AsyncSession, actor: User, record_id: uuid.UUID) -> None:
     """Remove a record that is in the trash for good. Same people as restore: whoever deleted
     it, or an organization admin. Links, viewers, comments and notifications go with it."""
-    record = (
-        await session.execute(
-            select(Record)
-            .join(Table, Table.id == Record.table_id)
-            .join(WorkBase, WorkBase.id == Table.base_id)
-            .join(Workspace, Workspace.id == WorkBase.workspace_id)
-            .where(
-                Record.id == record_id,
-                Record.deleted_at.is_not(None),
-                Record.deleted_at >= datetime.now(UTC) - timedelta(days=TRASH_DAYS),
-                *_alive_in(actor.organization_id),
-            )
-            .with_for_update(of=Record)
-        )
-    ).scalar_one_or_none()
-    if record is None:
-        raise ProblemError(404, "The record is not in the trash.")
+    record = await _load_trashed(session, actor, record_id)
     if record.deleted_by != actor.id and not is_org_admin(actor):
         raise ProblemError(
             403, "Only the person who deleted a record, or an admin, can remove it for good."

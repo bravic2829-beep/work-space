@@ -19,16 +19,19 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import FORBIDDEN, STALE_RECORD, ProblemError
+from app.core.errors import FORBIDDEN, ProblemError
 from app.modules.activity.log import diff, record_activity
 from app.modules.activity.models import ActivityAction
 from app.modules.fields.models import Field, FieldAccessLevel, FieldSemantic, FieldType
+from app.modules.fields.semantics import by_semantic
 from app.modules.notifications import service as notifications
 from app.modules.notifications.models import NotificationType
 from app.modules.permissions.service import is_org_admin
-from app.modules.records import review, service
+from app.modules.records import service
 from app.modules.records.models import Record
+from app.modules.records.mutation import check_version, load_locked, render_changed, write_data
 from app.modules.records.schemas import RecordPublic
+from app.modules.records.status import kind_of, option_of_kind
 from app.modules.sheets import access as sheet_access
 from app.modules.sheets.models import SheetRole
 from app.modules.users.models import User
@@ -71,25 +74,21 @@ async def timer_record(
     *,
     field_id: uuid.UUID | None = None,
 ) -> tuple[Record, RecordPublic]:
-    record, context = await service._load(session, actor, record_id, for_update=True)
-    fields = await service._fields_with_access(
-        session, actor, context, is_creator=record.created_by == actor.id
-    )
+    loaded = await load_locked(session, actor, record_id)
+    record, fields = loaded.record, loaded.fields
     timer, level = _pick_timer(fields, field_id)
     if level == FieldAccessLevel.HIDDEN:
         raise ProblemError(403, FORBIDDEN)
 
-    expected = service.parse_if_match(if_match)
-    if expected != record.version:
-        raise ProblemError(412, STALE_RECORD)
+    check_version(record, if_match)
 
     is_creator = record.created_by == actor.id
     sheet_role = await sheet_access.role_for_record(session, actor, record, [f for f, _ in fields])
     allowed_by_role = is_creator or is_org_admin(actor) or sheet_role == SheetRole.MANAGER
     began, ended = _moments(record.data.get(str(timer.id)))
     data: dict[str, Any] = dict(record.data)
-    status = next((f for f, _ in fields if f.semantic == FieldSemantic.STATUS), None)
-    current = review._kind_of(status, record.data.get(str(status.id))) if status else "todo"
+    status = by_semantic((f for f, _ in fields), FieldSemantic.STATUS)
+    current = kind_of(status, record.data.get(str(status.id))) if status else "todo"
     now = _moment()
 
     if action == "start":
@@ -99,7 +98,7 @@ async def timer_record(
             raise ProblemError(409, "The timer was already started.")
         data[str(timer.id)] = {"started_at": now}
         if status is not None and current == "todo":
-            data[str(status.id)] = review._option_of_kind(status, "in_progress")
+            data[str(status.id)] = option_of_kind(status, "in_progress")
     else:
         if not (allowed_by_role or actor.id in service.assignees(record, fields)):
             raise ProblemError(403, "Only a person assigned to the task can stop the timer.")
@@ -109,13 +108,10 @@ async def timer_record(
             raise ProblemError(409, "The timer was already stopped.")
         data[str(timer.id)] = {"started_at": began, "finished_at": now}
         if status is not None and current not in ("review", "done"):
-            data[str(status.id)] = review._option_of_kind(status, "review")
+            data[str(status.id)] = option_of_kind(status, "review")
 
     history = diff(record.data, data)
-    record.data = data
-    record.version = record.version + 1
-    record.updated_at = datetime.now(UTC)
-    await session.flush()
+    await write_data(session, record, data)
     await record_activity(
         session,
         record_id=record.id,
@@ -130,9 +126,7 @@ async def timer_record(
             NotificationType.REVIEW_REQUESTED,
             actor,
             record,
-            [f for f, _ in fields],
+            loaded.columns,
             {record.created_by},
         )
-    await session.refresh(record)
-    rendered = await service.render(session, actor, context, [record], service._visible(fields))
-    return record, rendered[0]
+    return await render_changed(session, actor, loaded)

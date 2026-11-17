@@ -35,6 +35,12 @@ def _public(workspace: Workspace, role: WorkspaceRole) -> WorkspacePublic:
     )
 
 
+def _member_public(user: User, role: WorkspaceRole) -> MemberPublic:
+    return MemberPublic(
+        user_id=user.id, employee_code=user.employee_code, full_name=user.full_name, role=role
+    )
+
+
 async def create_personal_workspace(session: AsyncSession, user: User) -> Workspace:
     """Every employee gets one personal workspace, in the same transaction as the account."""
     workspace = Workspace(
@@ -125,15 +131,7 @@ async def list_members(
 ) -> list[MemberPublic]:
     await require_workspace_role(session, actor, workspace_id)
     rows = await repository.list_members(session, workspace_id=workspace_id)
-    return [
-        MemberPublic(
-            user_id=user.id,
-            employee_code=user.employee_code,
-            full_name=user.full_name,
-            role=member.role,
-        )
-        for member, user in rows
-    ]
+    return [_member_public(user, member.role) for member, user in rows]
 
 
 async def add_member(
@@ -154,9 +152,7 @@ async def add_member(
         session, WorkspaceMember(workspace_id=workspace.id, user_id=user.id, role=data.role)
     )
     await session.flush()
-    return MemberPublic(
-        user_id=user.id, employee_code=user.employee_code, full_name=user.full_name, role=data.role
-    )
+    return _member_public(user, data.role)
 
 
 async def _get_member_or_404(
@@ -184,9 +180,7 @@ async def update_member(
     assert user is not None  # a member always belongs to the organization of the workspace
     member.role = data.role
     await session.flush()
-    return MemberPublic(
-        user_id=user.id, employee_code=user.employee_code, full_name=user.full_name, role=data.role
-    )
+    return _member_public(user, data.role)
 
 
 async def remove_member(

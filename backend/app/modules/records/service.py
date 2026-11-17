@@ -19,6 +19,7 @@ from app.modules.activity.models import ActivityAction
 from app.modules.fields import repository as fields_repo
 from app.modules.fields.access import column_access
 from app.modules.fields.models import Field, FieldAccessLevel, FieldSemantic, FieldType
+from app.modules.fields.semantics import by_semantic
 from app.modules.fields.types import (
     COMPUTED_TYPES,
     DATE_FILL_CREATED,
@@ -123,7 +124,7 @@ async def render(
     return result
 
 
-async def _fields_with_access(
+async def fields_with_access(
     session: AsyncSession,
     actor: User,
     context: TableContext,
@@ -142,7 +143,7 @@ async def _fields_with_access(
     return [(f, access[f.id]) for f in fields]
 
 
-def _visible(
+def visible_columns(
     fields: list[tuple[Field, FieldAccessLevel]],
 ) -> list[tuple[Field, FieldAccessLevel]]:
     return [(f, level) for f, level in fields if level != FieldAccessLevel.HIDDEN]
@@ -250,12 +251,12 @@ async def create_record(
     if sheet_owner is None and not context.can_edit:
         # Not an editor: the only way in is a subtask of a task assigned to a department head.
         await subtasks.require_subtask_right(session, actor, table_id, incoming)
-    fields = await _fields_with_access(
+    fields = await fields_with_access(
         session, actor, context, is_creator=sheet_owner is None, sheet_role=sheet_role
     )
     changes = await _check_changes(session, actor, context, fields, incoming, record=None)
     if sheet_owner is not None:
-        assignee = next((f for f, _ in fields if f.semantic == FieldSemantic.ASSIGNEE), None)
+        assignee = by_semantic((f for f, _ in fields), FieldSemantic.ASSIGNEE)
         if assignee is None:
             raise ProblemError(409, "The table has no assignee column.")
         changes.data[str(assignee.id)] = [str(sheet_owner)]
@@ -283,7 +284,7 @@ async def create_record(
     await session.flush()
     await visibility.rebuild_record(session, record, [f for f, _ in fields])
     await _write_links(session, fields, record, changes)
-    await _notify_newassignees(session, actor, record, fields, before=set(), after=record.data)
+    await notify_new_assignees(session, actor, record, fields, before=set(), after=record.data)
     await record_activity(
         session,
         record_id=record.id,
@@ -292,7 +293,7 @@ async def create_record(
         changes=diff({}, record.data),
     )
     await session.refresh(record)
-    rendered = await render(session, actor, context, [record], _visible(fields))
+    rendered = await render(session, actor, context, [record], visible_columns(fields))
     return record, rendered[0]
 
 
@@ -316,7 +317,7 @@ def _fill_created_dates(fields: list[tuple[Field, FieldAccessLevel]], data: dict
         )
 
 
-async def _notify_newassignees(
+async def notify_new_assignees(
     session: AsyncSession,
     actor: User,
     record: Record,
@@ -326,7 +327,7 @@ async def _notify_newassignees(
     after: dict[str, Any],
 ) -> None:
     """Notify the people who are newly named in the assignee column (UC-K1, UC-K7)."""
-    column = next((f for f, _ in fields if f.semantic == FieldSemantic.ASSIGNEE), None)
+    column = by_semantic((f for f, _ in fields), FieldSemantic.ASSIGNEE)
     if column is None:
         return
     named = {uuid.UUID(str(item)) for item in after.get(str(column.id), [])}
@@ -336,7 +337,7 @@ async def _notify_newassignees(
 
 
 def assignees(record: Record, fields: list[tuple[Field, FieldAccessLevel]]) -> set[uuid.UUID]:
-    column = next((f for f, _ in fields if f.semantic == FieldSemantic.ASSIGNEE), None)
+    column = by_semantic((f for f, _ in fields), FieldSemantic.ASSIGNEE)
     if column is None:
         return set()
     return {uuid.UUID(str(item)) for item in record.data.get(str(column.id), [])}
@@ -358,7 +359,7 @@ async def _write_links(
 # --- read ------------------------------------------------------------------------------------
 
 
-async def _load(
+async def load_record(
     session: AsyncSession, actor: User, record_id: uuid.UUID, *, for_update: bool = False
 ) -> tuple[Record, TableContext]:
     """A record the person may see. 404 when it does not exist, 403 when they may not see it."""
@@ -376,11 +377,11 @@ async def _load(
 async def get_record(
     session: AsyncSession, actor: User, record_id: uuid.UUID
 ) -> tuple[Record, RecordPublic]:
-    record, context = await _load(session, actor, record_id)
-    fields = await _fields_with_access(
+    record, context = await load_record(session, actor, record_id)
+    fields = await fields_with_access(
         session, actor, context, is_creator=record.created_by == actor.id, record=record
     )
-    rendered = await render(session, actor, context, [record], _visible(fields))
+    rendered = await render(session, actor, context, [record], visible_columns(fields))
     return record, rendered[0]
 
 
@@ -388,11 +389,11 @@ async def record_viewers(
     session: AsyncSession, actor: User, record_id: uuid.UUID
 ) -> sharing.RecordViewers:
     """Who can see this record, for a person who may see it themselves."""
-    record, context = await _load(session, actor, record_id)
-    fields = await _fields_with_access(
+    record, context = await load_record(session, actor, record_id)
+    fields = await fields_with_access(
         session, actor, context, is_creator=record.created_by == actor.id, record=record
     )
-    return await sharing.build(session, context, record, _visible(fields))
+    return await sharing.build(session, context, record, visible_columns(fields))
 
 
 async def list_records(
@@ -428,7 +429,7 @@ async def list_in_context(
     conditions the caller adds itself (a sheet adds "names its owner")."""
     check_limit(limit)
     table_id = context.table.id
-    visible = _visible(await _fields_with_access(session, actor, context))
+    visible = visible_columns(await fields_with_access(session, actor, context))
     # Filtering or sorting by a hidden column would reveal its values, so only visible columns
     # are known here.
     by_id = {str(f.id): f for f, _ in visible}
@@ -460,8 +461,8 @@ async def update_record(
     incoming: dict[str, Any],
     if_match: str | None,
 ) -> tuple[Record, RecordPublic]:
-    record, context = await _load(session, actor, record_id, for_update=True)
-    fields = await _fields_with_access(
+    record, context = await load_record(session, actor, record_id, for_update=True)
+    fields = await fields_with_access(
         session, actor, context, is_creator=record.created_by == actor.id, record=record
     )
     expected = parse_if_match(if_match)
@@ -495,7 +496,7 @@ async def update_record(
         if changes.touches_viewers:
             await visibility.rebuild_record(session, record, [f for f, _ in fields])
         await _write_links(session, fields, record, changes)
-        await _notify_newassignees(
+        await notify_new_assignees(
             session, actor, record, fields, before=assigned_before, after=record.data
         )
         await record_activity(
@@ -506,7 +507,7 @@ async def update_record(
             changes=history,
         )
         await session.refresh(record)
-    rendered = await render(session, actor, context, [record], _visible(fields))
+    rendered = await render(session, actor, context, [record], visible_columns(fields))
     return record, rendered[0]
 
 
@@ -520,7 +521,7 @@ async def delete_record(session: AsyncSession, actor: User, record_id: uuid.UUID
     one statement (the database cascades). The subtasks of the record stay, without a parent.
     Records that were put in the trash before this change can still be restored (trash.py).
     """
-    record, _ = await _load(session, actor, record_id, for_update=True)
+    record, _ = await load_record(session, actor, record_id, for_update=True)
     if record.created_by != actor.id and not is_org_admin(actor):
         raise ProblemError(403, "Only the person who created a record, or an admin, can delete it.")
     live.note_change(session.sync_session, record)  # the bulk delete below is invisible to the ORM

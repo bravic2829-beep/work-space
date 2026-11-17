@@ -11,9 +11,9 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.db import flush_or_conflict
 from app.core.errors import FORBIDDEN, ProblemError
 from app.core.pagination import Page
 from app.modules.fields import repository as fields_repo
@@ -47,8 +47,18 @@ def _is_admin(actor: User, context: TableContext) -> bool:
     )
 
 
-async def _owner(session: AsyncSession, sheet: Sheet) -> User:
-    return (await session.execute(select(User).where(User.id == sheet.owner_id))).scalar_one()
+async def _user(session: AsyncSession, user_id: uuid.UUID) -> User:
+    return (await session.execute(select(User).where(User.id == user_id))).scalar_one()
+
+
+def _member_public(user: User, sheet: Sheet, role: SheetRole) -> MemberPublic:
+    return MemberPublic(
+        user_id=user.id,
+        full_name=user.full_name,
+        employee_code=user.employee_code,
+        role=role,
+        is_owner=user.id == sheet.owner_id,
+    )
 
 
 async def _member_role(session: AsyncSession, sheet: Sheet, user: User) -> SheetRole | None:
@@ -91,7 +101,7 @@ async def _public(
         context = cache[sheet.table_id] = await load_table_context(session, actor, sheet.table_id)
     admin = _is_admin(actor, context)
     role = SheetRole.MANAGER if admin else await _member_role(session, sheet, actor)
-    owner = await _owner(session, sheet)
+    owner = await _user(session, sheet.owner_id)
     count = (
         await session.execute(
             select(func.count()).select_from(SheetMember).where(SheetMember.sheet_id == sheet.id)
@@ -183,7 +193,7 @@ async def create_sheet(
     ).first()
     if taken is not None:
         raise ProblemError(409, "This person already has a sheet in this table.")
-    owner = (await session.execute(select(User).where(User.id == data.owner_id))).scalar_one()
+    owner = await _user(session, data.owner_id)
 
     sheet = Sheet(
         organization_id=actor.organization_id,
@@ -193,10 +203,7 @@ async def create_sheet(
         created_by=actor.id,
     )
     session.add(sheet)
-    try:
-        await session.flush()
-    except IntegrityError:
-        raise ProblemError(409, "This person already has a sheet in this table.") from None
+    await flush_or_conflict(session, "This person already has a sheet in this table.")
 
     roles: dict[uuid.UUID, SheetRole] = {m.user_id: m.role for m in data.members}
     # The owner always edits their own sheet; the person who made it manages it.
@@ -257,16 +264,7 @@ async def list_members(
             .where(SheetMember.sheet_id == sheet.id)
         )
     ).all()
-    members = [
-        MemberPublic(
-            user_id=user.id,
-            full_name=user.full_name,
-            employee_code=user.employee_code,
-            role=member.role,
-            is_owner=user.id == sheet.owner_id,
-        )
-        for member, user in rows
-    ]
+    members = [_member_public(user, sheet, member.role) for member, user in rows]
     members.sort(key=lambda m: (not m.is_owner, -SHEET_RANK[m.role], m.full_name))
     return members
 
@@ -286,14 +284,7 @@ async def set_member(
         member.role = role
     await session.flush()
     await _rebuild(session, sheet)
-    user = (await session.execute(select(User).where(User.id == user_id))).scalar_one()
-    return MemberPublic(
-        user_id=user.id,
-        full_name=user.full_name,
-        employee_code=user.employee_code,
-        role=role,
-        is_owner=user.id == sheet.owner_id,
-    )
+    return _member_public(await _user(session, user_id), sheet, role)
 
 
 async def remove_member(

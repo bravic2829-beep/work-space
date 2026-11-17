@@ -17,8 +17,8 @@ import { EmptyState, LinkCard, LoadingState, PageHeader } from "@/components/ui"
 import { useAuth } from "@/features/auth/AuthProvider";
 import { LEVEL_LABELS } from "@/features/auth/schema";
 import { listMyTasks } from "@/features/mytasks/api";
-import { dueInfo, localToday, type MyTask } from "@/features/mytasks/schema";
-import { isOverdue, TaskList } from "@/features/mytasks/TaskList";
+import { dueInfo, isDone, localToday, type MyTask } from "@/features/mytasks/schema";
+import { isDueToday, isOverdue, TaskList } from "@/features/mytasks/TaskList";
 import { cn } from "@/lib/cn";
 
 const SHORTCUTS: { href: string; title: string; text: string; icon: LucideIcon }[] = [
@@ -41,7 +41,7 @@ type Load =
 /** The tasks to look at first: overdue ones, then today's, then the nearest due dates. */
 function upNext(items: MyTask[], today: string): MyTask[] {
   const rank = (task: MyTask): number => {
-    if (task.status?.kind === "done") return 4;
+    if (isDone(task)) return 4;
     const tone = dueInfo(task.due_date, today)?.tone;
     if (tone === "overdue") return 0;
     if (tone === "today") return 1;
@@ -122,10 +122,8 @@ export function HomeScreen() {
   const items = load.kind === "ready" ? load.items : [];
   const plus = load.kind === "ready" && load.more ? "+" : "";
   const overdue = items.filter((task) => isOverdue(task, today)).length;
-  const dueToday = items.filter(
-    (task) => task.status?.kind !== "done" && dueInfo(task.due_date, today)?.tone === "today",
-  ).length;
-  const open = items.filter((task) => task.status?.kind !== "done").length;
+  const dueToday = items.filter((task) => isDueToday(task, today)).length;
+  const open = items.filter((task) => !isDone(task)).length;
   const value = (n: number) => (load.kind === "ready" ? `${n}${plus}` : "–");
 
   return (

@@ -38,7 +38,7 @@ async def list_comments(
 ) -> Page[CommentPublic]:
     """Oldest first, for a record the person may see (404, then 403)."""
     check_limit(limit)
-    await records._load(session, actor, record_id)
+    await records.load_record(session, actor, record_id)
     query = (
         select(Comment, User)
         .join(User, User.id == Comment.author_id)
@@ -67,7 +67,7 @@ async def create_comment(
     Somebody outside the workspace who sees the record because it was given to them (or
     created by them) can comment: that is the point of assigning work to them.
     """
-    record, context = await records._load(session, actor, record_id)
+    record, context = await records.load_record(session, actor, record_id)
     if context.role is not None and not role_at_least(context.role, WorkspaceRole.COMMENTER):
         raise ProblemError(403, FORBIDDEN)
     if context.role is None and record.created_by != actor.id:
@@ -95,7 +95,7 @@ async def delete_comment(session: AsyncSession, actor: User, comment_id: uuid.UU
     if comment is None:
         raise ProblemError(404, "The comment does not exist.")
     try:
-        await records._load(session, actor, comment.record_id)
+        await records.load_record(session, actor, comment.record_id)
     except ProblemError:
         raise ProblemError(404, "The comment does not exist.") from None
     if comment.author_id != actor.id and not is_org_admin(actor):

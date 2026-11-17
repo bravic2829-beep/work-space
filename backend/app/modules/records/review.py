@@ -19,22 +19,24 @@ assignee normally only reads it), but never when the column is hidden from them.
 """
 
 import uuid
-from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import FORBIDDEN, STALE_RECORD, ProblemError
+from app.core.errors import FORBIDDEN, ProblemError
 from app.modules.activity.log import record_activity
 from app.modules.activity.models import ActivityAction
 from app.modules.comments.models import Comment
-from app.modules.fields.models import Field, FieldAccessLevel, FieldSemantic
+from app.modules.fields.models import FieldAccessLevel, FieldSemantic
+from app.modules.fields.semantics import by_semantic
 from app.modules.notifications import service as notifications
 from app.modules.notifications.models import NotificationType
 from app.modules.permissions.service import is_org_admin
 from app.modules.records import service
 from app.modules.records.models import Record
+from app.modules.records.mutation import check_version, load_locked, render_changed, write_data
 from app.modules.records.schemas import RecordPublic
+from app.modules.records.status import kind_of, option_of_kind
 from app.modules.sheets import access as sheet_access
 from app.modules.sheets.models import SheetRole
 from app.modules.users.models import User
@@ -44,23 +46,6 @@ _ACTIVITY = {
     "approve": ActivityAction.APPROVED,
     "reject": ActivityAction.SENT_BACK,
 }
-
-
-def _kind_of(status: Field, option_id: str | None) -> str:
-    """The kind of the current option. A task with no status yet counts as "todo"."""
-    if option_id is None:
-        return "todo"
-    for option in status.config.get("options", []):
-        if option["id"] == option_id:
-            return str(option["kind"])
-    return "todo"
-
-
-def _option_of_kind(status: Field, kind: str) -> str:
-    for option in status.config.get("options", []):
-        if option.get("kind") == kind:
-            return str(option["id"])
-    raise ProblemError(409, f"The status column has no option of kind '{kind}'.")
 
 
 async def review_record(
@@ -79,22 +64,18 @@ async def review_record(
             "Say what needs to change.",
             errors=[{"field": "reason", "message": "Give a reason to send the task back."}],
         )
-    record, context = await service._load(session, actor, record_id, for_update=True)
-    fields = await service._fields_with_access(
-        session, actor, context, is_creator=record.created_by == actor.id
-    )
-    status = next((f for f, _ in fields if f.semantic == FieldSemantic.STATUS), None)
+    loaded = await load_locked(session, actor, record_id)
+    record, fields = loaded.record, loaded.fields
+    status = by_semantic((f for f, _ in fields), FieldSemantic.STATUS)
     if status is None:
         raise ProblemError(409, "The table has no status column.")
     levels = {f.id: level for f, level in fields}
     if levels[status.id] == FieldAccessLevel.HIDDEN:
         raise ProblemError(403, FORBIDDEN)
 
-    expected = service.parse_if_match(if_match)
-    if expected != record.version:
-        raise ProblemError(412, STALE_RECORD)
+    check_version(record, if_match)
 
-    current = _kind_of(status, record.data.get(str(status.id)))
+    current = kind_of(status, record.data.get(str(status.id)))
     assignee_ids = service.assignees(record, fields)
 
     admin = is_org_admin(actor)  # the admin may do every step, for anybody
@@ -103,7 +84,7 @@ async def review_record(
             raise ProblemError(403, "Only a person assigned to the task can report it as done.")
         if current in ("review", "done"):
             raise ProblemError(409, "The task is already waiting for review or done.")
-        target = _option_of_kind(status, "review")
+        target = option_of_kind(status, "review")
     else:
         sheet_role = await sheet_access.role_for_record(
             session, actor, record, [f for f, _ in fields]
@@ -115,17 +96,14 @@ async def review_record(
             )
         if current != "review":
             raise ProblemError(409, "The task is not waiting for review.")
-        target = _option_of_kind(status, "done" if action == "approve" else "in_progress")
+        target = option_of_kind(status, "done" if action == "approve" else "in_progress")
 
     before = record.data.get(str(status.id))
     data: dict[str, Any] = dict(record.data)
     data[str(status.id)] = target
-    record.data = data
-    record.version = record.version + 1
-    record.updated_at = datetime.now(UTC)
-    await session.flush()
+    await write_data(session, record, data)
 
-    columns = [f for f, _ in fields]
+    columns = loaded.columns
     await record_activity(
         session,
         record_id=record.id,
@@ -147,6 +125,4 @@ async def review_record(
         await notifications.notify(
             session, NotificationType.CHANGES_REQUESTED, actor, record, columns, assignee_ids
         )
-    await session.refresh(record)
-    rendered = await service.render(session, actor, context, [record], service._visible(fields))
-    return record, rendered[0]
+    return await render_changed(session, actor, loaded)

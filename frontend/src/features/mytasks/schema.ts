@@ -37,6 +37,10 @@ export function localToday(now: Date = new Date()): string {
   return `${now.getFullYear()}-${month}-${day}`;
 }
 
+export function isDone(task: MyTask): boolean {
+  return task.status?.kind === "done";
+}
+
 export type DueTone = "overdue" | "today" | "normal";
 export type DueInfo = { label: string; tone: DueTone };
 

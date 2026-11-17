@@ -16,8 +16,10 @@ from sqlalchemy.orm import aliased
 from app.core.dates import day_or_today
 from app.core.pagination import Page, check_limit, parse_time_cursor, time_cursor
 from app.modules.bases.models import Table, WorkBase
+from app.modules.bases.repository import live_conditions
 from app.modules.fields import repository as fields_repo
 from app.modules.fields.models import Field, FieldAccessLevel, FieldSemantic
+from app.modules.fields.semantics import by_semantic
 from app.modules.fields.titles import title_field, title_of
 from app.modules.my_tasks.schemas import MyTask, TaskStatus
 from app.modules.permissions.service import is_org_admin
@@ -69,10 +71,7 @@ async def list_my_tasks(
         )
         .where(
             Record.deleted_at.is_(None),
-            Table.deleted_at.is_(None),
-            WorkBase.deleted_at.is_(None),
-            Workspace.deleted_at.is_(None),
-            Workspace.organization_id == actor.organization_id,
+            *live_conditions(actor.organization_id),
             can_open,
         )
         .order_by(Record.created_at.desc(), Record.id.desc())
@@ -173,8 +172,8 @@ def _item(
             return False
         return hide_nothing or overrides.get(column.id) != FieldAccessLevel.HIDDEN
 
-    due = next((f for f in fields if f.semantic == FieldSemantic.DUE_DATE), None)
-    status = next((f for f in fields if f.semantic == FieldSemantic.STATUS), None)
+    due = by_semantic(fields, FieldSemantic.DUE_DATE)
+    status = by_semantic(fields, FieldSemantic.STATUS)
     title = title_field(fields)
 
     due_value: Any = record.data.get(str(due.id)) if due and visible(due) else None

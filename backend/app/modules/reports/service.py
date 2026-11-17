@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dates import day_or_today
 from app.modules.bases.models import Table, WorkBase
+from app.modules.bases.repository import live_conditions
 from app.modules.fields.models import Field, FieldAccessLevel, FieldSemantic
 from app.modules.permissions.service import is_org_admin, require_table_read
 from app.modules.records import service as records
@@ -74,10 +75,7 @@ async def report_tables(session: AsyncSession, actor: User) -> list[ReportTable]
         .join(WorkBase, WorkBase.id == Table.base_id)
         .join(Workspace, Workspace.id == WorkBase.workspace_id)
         .where(
-            Workspace.organization_id == actor.organization_id,
-            Table.deleted_at.is_(None),
-            WorkBase.deleted_at.is_(None),
-            Workspace.deleted_at.is_(None),
+            *live_conditions(actor.organization_id),
             _has_semantic(FieldSemantic.ASSIGNEE),
             _has_semantic(FieldSemantic.STATUS),
         )
@@ -107,7 +105,7 @@ async def overview(
 ) -> Overview:
     today = day_or_today(day)
     context = await require_table_read(session, actor, table_id)
-    fields = await records._fields_with_access(session, actor, context)
+    fields = await records.fields_with_access(session, actor, context)
     shown = {
         f.semantic: f for f, level in fields if level != FieldAccessLevel.HIDDEN and f.semantic
     }
@@ -137,6 +135,12 @@ async def overview(
         value = data.get(str(due.id))
         return isinstance(value, str) and value[:10] < today and kind(data) != "done"
 
+    def tally(counts: dict[str, int], k: str, is_late: bool) -> None:
+        """Count one task into open or done, and into in review and overdue when it is."""
+        counts["done" if k == "done" else "open"] += 1
+        counts["in_review"] += k == "review"
+        counts["overdue"] += is_late
+
     people: dict[uuid.UUID, dict[str, int]] = {}
     totals = {"open": 0, "in_review": 0, "done": 0, "overdue": 0, "due_today": 0, "unassigned": 0}
     for data in rows:
@@ -147,10 +151,8 @@ async def overview(
             key = chosen if chosen in by_option else first
             if key is not None:
                 by_option[key] += 1
-        totals["done" if k == "done" else "open"] += 1
-        totals["in_review"] += k == "review"
         is_late = late(data)
-        totals["overdue"] += is_late
+        tally(totals, k, is_late)
         if due is not None:
             value = data.get(str(due.id))
             totals["due_today"] += isinstance(value, str) and value[:10] == today and k != "done"
@@ -162,9 +164,7 @@ async def overview(
                 load = people.setdefault(
                     person, {"open": 0, "overdue": 0, "in_review": 0, "done": 0}
                 )
-                load["done" if k == "done" else "open"] += 1
-                load["overdue"] += is_late
-                load["in_review"] += k == "review"
+                tally(load, k, is_late)
 
     loads: list[PersonLoad] | None = None
     if assignee is not None:

@@ -4,6 +4,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.bases.models import Table, WorkBase
+from app.modules.bases.repository import live_conditions
 from app.modules.fields.models import Field
 from app.modules.records.models import Record
 from app.modules.users.models import User, UserStatus
@@ -64,10 +65,7 @@ async def get_record(
         .where(
             Record.id == record_id,
             Record.deleted_at.is_(None),
-            Table.deleted_at.is_(None),
-            WorkBase.deleted_at.is_(None),
-            Workspace.organization_id == organization_id,
-            Workspace.deleted_at.is_(None),
+            *live_conditions(organization_id),
         )
     )
     if for_update:
