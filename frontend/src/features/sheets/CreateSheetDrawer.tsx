@@ -14,7 +14,8 @@ import {
   Select,
 } from "@/components/ui";
 import { UserPicker } from "@/features/tables/UserPicker";
-import { ApiError } from "@/lib/api/client";
+import { firstProblem } from "@/lib/api/errors";
+import { useAsyncAction } from "@/lib/useAsyncAction";
 
 import { createSheet } from "./api";
 import { SHEET_ROLE_LABELS, SHEET_ROLES, type SheetItem, type SheetRole } from "./schema";
@@ -35,31 +36,23 @@ export function CreateSheetDrawer({ tableId, onCreated, onClose }: Props) {
   const [name, setName] = useState("");
   const [others, setOthers] = useState<string[]>([]);
   const [role, setRole] = useState<SheetRole>("viewer");
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const { busy, message, run } = useAsyncAction();
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (owner.length !== 1) return;
-    setBusy(true);
-    setMessage(null);
-    try {
-      const created = await createSheet(tableId, {
-        owner_id: owner[0],
-        ...(name.trim() ? { name: name.trim() } : {}),
-        members: others.filter((id) => id !== owner[0]).map((user_id) => ({ user_id, role })),
-      });
-      onCreated(created);
-      onClose();
-    } catch (error) {
-      setMessage(
-        error instanceof ApiError
-          ? (error.fieldErrors[0]?.message ?? error.message)
-          : "Could not create the sheet.",
-      );
-    } finally {
-      setBusy(false);
-    }
+    await run(
+      async () => {
+        const created = await createSheet(tableId, {
+          owner_id: owner[0],
+          ...(name.trim() ? { name: name.trim() } : {}),
+          members: others.filter((id) => id !== owner[0]).map((user_id) => ({ user_id, role })),
+        });
+        onCreated(created);
+        onClose();
+      },
+      (error) => firstProblem(error, "Could not create the sheet."),
+    );
   }
 
   return (

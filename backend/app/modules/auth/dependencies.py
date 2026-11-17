@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_app_settings, get_session
 from app.core.config import Settings
-from app.core.errors import ProblemError
+from app.core.errors import FORBIDDEN, ProblemError
 from app.modules.auth import service
 from app.modules.auth.service import AuthContext
 from app.modules.permissions.service import is_org_admin
@@ -40,5 +40,5 @@ async def get_current_user(user: User = Depends(get_user_pending_password)) -> U
 async def require_admin(user: User = Depends(get_current_user)) -> User:
     """Only organization admins (owner or admin) pass. Everyone else gets 403."""
     if not is_org_admin(user):
-        raise ProblemError(403, "You do not have permission to do this.")
+        raise ProblemError(403, FORBIDDEN)
     return user

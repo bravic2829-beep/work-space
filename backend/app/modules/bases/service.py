@@ -1,8 +1,8 @@
 import uuid
 
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.db import flush_or_conflict
 from app.core.errors import ProblemError
 from app.modules.bases import repository
 from app.modules.bases.models import Table, WorkBase
@@ -59,10 +59,7 @@ async def create_base(
         raise ProblemError(409, DUPLICATE_BASE)
     base = WorkBase(workspace_id=workspace.id, name=data.name)
     repository.add(session, base)
-    try:
-        await session.flush()
-    except IntegrityError:  # two requests with the same name at the same time
-        raise ProblemError(409, DUPLICATE_BASE) from None
+    await flush_or_conflict(session, DUPLICATE_BASE)
     return _base(base)
 
 
@@ -80,10 +77,7 @@ async def rename_base(
     ):
         raise ProblemError(409, DUPLICATE_BASE)
     base.name = data.name
-    try:
-        await session.flush()
-    except IntegrityError:
-        raise ProblemError(409, DUPLICATE_BASE) from None
+    await flush_or_conflict(session, DUPLICATE_BASE)
     return _base(base)
 
 
@@ -110,10 +104,7 @@ async def create_table(
         raise ProblemError(409, DUPLICATE_TABLE)
     table = Table(base_id=base.id, name=data.name)
     repository.add(session, table)
-    try:
-        await session.flush()
-    except IntegrityError:
-        raise ProblemError(409, DUPLICATE_TABLE) from None
+    await flush_or_conflict(session, DUPLICATE_TABLE)
     await fields_service.create_template_fields(session, table, data.template)
     fields = await fields_service.list_fields(session, actor, table.id)
     return TableDetail(**_table(table).model_dump(), fields=fields, my_role=role.value)
@@ -139,10 +130,7 @@ async def rename_table(
     ):
         raise ProblemError(409, DUPLICATE_TABLE)
     table.name = data.name
-    try:
-        await session.flush()
-    except IntegrityError:
-        raise ProblemError(409, DUPLICATE_TABLE) from None
+    await flush_or_conflict(session, DUPLICATE_TABLE)
     return _table(table)
 
 

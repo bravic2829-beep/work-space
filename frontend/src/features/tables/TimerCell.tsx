@@ -4,12 +4,13 @@ import { Play, Square } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui";
-import { ApiError } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
 
 import { timerRecord, type TimerAction } from "./api";
 import type { FieldItem, RecordItem } from "./schema";
 import { elapsedMs, formatDuration, timerRights, timerState } from "./timer";
+import { errorMessage, hasStatus } from "@/lib/api/errors";
+import { useAsyncAction } from "@/lib/useAsyncAction";
 
 type Props = {
   /** All the columns of the table (who is assigned is read from them). */
@@ -41,26 +42,18 @@ export function TimerCell({ fields, field, record, currentUserId, isAdmin, onCha
   const state = timerState(field, record);
   const rights = timerRights(fields, field, record, currentUserId, isAdmin);
   const now = useNow(state.phase === "running");
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const { busy, message, run } = useAsyncAction();
 
-  async function press(action: TimerAction) {
-    setBusy(true);
-    setMessage(null);
-    try {
-      onChanged(await timerRecord(record.id, record.version, action, field.id));
-    } catch (error) {
-      setMessage(
-        error instanceof ApiError && error.status === 412
+  const press = (action: TimerAction) =>
+    run(
+      async () => {
+        onChanged(await timerRecord(record.id, record.version, action, field.id));
+      },
+      (error) =>
+        hasStatus(error, 412)
           ? "Somebody else changed this task. Reload the page."
-          : error instanceof ApiError
-            ? error.message
-            : "Could not change the timer.",
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
+          : errorMessage(error, "Could not change the timer."),
+    );
 
   return (
     <span className="inline-flex flex-wrap items-center gap-2">

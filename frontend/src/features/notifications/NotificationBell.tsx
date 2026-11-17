@@ -14,6 +14,7 @@ import {
 } from "./api";
 import { describe, type Notification, type NotificationType } from "./schema";
 import { useNotificationSocket } from "./useNotificationSocket";
+import { formatDateTime } from "@/lib/format";
 
 /**
  * The live socket brings news at once. This slow refresh is only a safety net for the time the
@@ -199,7 +200,7 @@ export function NotificationBell() {
                           >
                             {describe(n)}
                           </span>
-                          <small className="block">{new Date(n.created_at).toLocaleString()}</small>
+                          <small className="block">{formatDateTime(n.created_at)}</small>
                         </span>
                         {isUnread && (
                           <span

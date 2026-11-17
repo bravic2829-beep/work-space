@@ -1,3 +1,5 @@
+import { isRecord, pageOf } from "@/lib/api/guards";
+
 export type MyTask = {
   id: string;
   table_id: string;
@@ -9,10 +11,6 @@ export type MyTask = {
 };
 
 export type MyTaskPage = { items: MyTask[]; next_cursor: string | null };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 export function isMyTask(value: unknown): value is MyTask {
   return (
@@ -30,20 +28,17 @@ export function isMyTask(value: unknown): value is MyTask {
   );
 }
 
-export function isMyTaskPage(value: unknown): value is MyTaskPage {
-  return (
-    isRecord(value) &&
-    Array.isArray(value.items) &&
-    value.items.every(isMyTask) &&
-    (value.next_cursor === null || typeof value.next_cursor === "string")
-  );
-}
+export const isMyTaskPage = pageOf(isMyTask);
 
 /** Today in the browser's own time zone, as 2026-11-13 (the server cannot know the person's day). */
 export function localToday(now: Date = new Date()): string {
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
   return `${now.getFullYear()}-${month}-${day}`;
+}
+
+export function isDone(task: MyTask): boolean {
+  return task.status?.kind === "done";
 }
 
 export type DueTone = "overdue" | "today" | "normal";

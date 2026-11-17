@@ -1,12 +1,25 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.bases.models import Table, WorkBase
 from app.modules.workspaces.models import Workspace
+
+
+def live_conditions(organization_id: uuid.UUID) -> tuple[ColumnElement[bool], ...]:
+    """The table, its base and its workspace all still exist, in this organization.
+
+    For a query that already joins Table, WorkBase and Workspace.
+    """
+    return (
+        Table.deleted_at.is_(None),
+        WorkBase.deleted_at.is_(None),
+        Workspace.organization_id == organization_id,
+        Workspace.deleted_at.is_(None),
+    )
 
 
 async def get_base(
@@ -37,10 +50,7 @@ async def get_table(
         .join(Workspace, Workspace.id == WorkBase.workspace_id)
         .where(
             Table.id == table_id,
-            Table.deleted_at.is_(None),
-            WorkBase.deleted_at.is_(None),
-            Workspace.organization_id == organization_id,
-            Workspace.deleted_at.is_(None),
+            *live_conditions(organization_id),
         )
     )
     row = result.first()

@@ -46,8 +46,8 @@ async def list_for_record(
     session: AsyncSession, actor: User, record_id: uuid.UUID
 ) -> list[ActivityPublic]:
     """The newest first, at most MAX_ENTRIES."""
-    record, context = await records._load(session, actor, record_id)
-    fields = await records._fields_with_access(
+    record, context = await records.load_record(session, actor, record_id)
+    fields = await records.fields_with_access(
         session, actor, context, is_creator=record.created_by == actor.id, record=record
     )
     visible = {str(f.id): f for f, level in fields if level != FieldAccessLevel.HIDDEN}

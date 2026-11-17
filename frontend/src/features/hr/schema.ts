@@ -1,4 +1,5 @@
 import { isUser, type User } from "@/features/auth/schema";
+import { isRecord, pageOf } from "@/lib/api/guards";
 
 export type DepartmentKind = "division" | "department";
 
@@ -11,10 +12,6 @@ export type Department = {
 };
 
 export type UserPage = { items: User[]; next_cursor: string | null };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 export function isDepartment(value: unknown): value is Department {
   return (
@@ -31,11 +28,4 @@ export function isDepartmentList(value: unknown): value is Department[] {
   return Array.isArray(value) && value.every(isDepartment);
 }
 
-export function isUserPage(value: unknown): value is UserPage {
-  return (
-    isRecord(value) &&
-    Array.isArray(value.items) &&
-    value.items.every(isUser) &&
-    (value.next_cursor === null || typeof value.next_cursor === "string")
-  );
-}
+export const isUserPage = pageOf(isUser);

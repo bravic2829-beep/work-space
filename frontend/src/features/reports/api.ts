@@ -1,5 +1,6 @@
 import { localToday } from "@/features/mytasks/schema";
 import { apiRequest } from "@/lib/api/client";
+import { isRecord } from "@/lib/api/guards";
 
 export type ReportTable = { id: string; name: string; workspace_name: string };
 
@@ -31,10 +32,6 @@ export type Overview = {
   people: PersonLoad[] | null;
 };
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 const count = (value: unknown) => value === null || typeof value === "number";
 
 export function isReportTables(value: unknown): value is ReportTable[] {
@@ -42,7 +39,7 @@ export function isReportTables(value: unknown): value is ReportTable[] {
     Array.isArray(value) &&
     value.every(
       (t) =>
-        isObject(t) &&
+        isRecord(t) &&
         typeof t.id === "string" &&
         typeof t.name === "string" &&
         typeof t.workspace_name === "string",
@@ -52,7 +49,7 @@ export function isReportTables(value: unknown): value is ReportTable[] {
 
 function isPerson(value: unknown): value is PersonLoad {
   return (
-    isObject(value) &&
+    isRecord(value) &&
     typeof value.user_id === "string" &&
     typeof value.full_name === "string" &&
     typeof value.employee_code === "string" &&
@@ -62,7 +59,7 @@ function isPerson(value: unknown): value is PersonLoad {
 
 export function isOverview(value: unknown): value is Overview {
   return (
-    isObject(value) &&
+    isRecord(value) &&
     typeof value.table_id === "string" &&
     typeof value.table_name === "string" &&
     typeof value.day === "string" &&
@@ -74,7 +71,7 @@ export function isOverview(value: unknown): value is Overview {
       (Array.isArray(value.by_status) &&
         value.by_status.every(
           (s) =>
-            isObject(s) &&
+            isRecord(s) &&
             typeof s.kind === "string" &&
             typeof s.name === "string" &&
             typeof s.count === "number",

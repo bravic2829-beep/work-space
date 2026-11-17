@@ -8,13 +8,14 @@ import { Alert, Button, EmptyState, LoadingState, Select } from "@/components/ui
 import { useAuth } from "@/features/auth/AuthProvider";
 import { isOrgAdmin } from "@/features/auth/schema";
 import { TableScreen } from "@/features/tables/TableScreen";
-import { ApiError } from "@/lib/api/client";
 
 import { listSheets } from "./api";
 import { CreateSheetDrawer } from "./CreateSheetDrawer";
 import type { SheetItem } from "./schema";
 import { ShareSheetDrawer } from "./ShareSheetDrawer";
 import { ALL_TASKS, SheetTabs } from "./SheetTabs";
+import { errorMessage } from "@/lib/api/errors";
+import { readStored, writeStored } from "@/lib/storage";
 
 type State =
   | { kind: "loading" }
@@ -29,23 +30,6 @@ function firstTab(sheets: SheetItem[], showAll: boolean, me: string): string {
 
 const PINS_KEY = "workbase.work.pins";
 const lastKey = (tableId: string) => `workbase.work.last.${tableId}`;
-
-// Remembered in this browser only: a convenience, so a failure just means nothing is remembered.
-function readStored(key: string): string | null {
-  try {
-    return window.localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function store(key: string, value: string): void {
-  try {
-    window.localStorage.setItem(key, value);
-  } catch {
-    // not remembered
-  }
-}
 
 function readPins(): string[] {
   try {
@@ -89,7 +73,7 @@ export function WorkScreen() {
         if (controller.signal.aborted) return;
         setState({
           kind: "error",
-          message: error instanceof ApiError ? error.message : "Could not load the sheets.",
+          message: errorMessage(error, "Could not load the sheets."),
         });
       }
     }
@@ -160,13 +144,13 @@ export function WorkScreen() {
 
   function choose(id: string) {
     setChosen(id);
-    store(lastKey(currentTable), id);
+    writeStored(lastKey(currentTable), id);
   }
 
   function togglePin(id: string) {
     const next = pins.includes(id) ? pins.filter((p) => p !== id) : [...pins, id];
     setPins(next);
-    store(PINS_KEY, JSON.stringify(next));
+    writeStored(PINS_KEY, JSON.stringify(next));
   }
   const sheet = tabSheets.find((s) => s.id === active);
   const canMake = tabSheets.some((s) => s.is_admin);

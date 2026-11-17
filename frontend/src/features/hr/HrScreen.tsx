@@ -3,11 +3,10 @@
 import { Building2, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { LoadingState, PageHeader, Tabs } from "@/components/ui";
+import { ErrorMessage, LoadingState, PageHeader, Tabs } from "@/components/ui";
 
 import { listDepartments } from "./api";
 import { DepartmentsPanel } from "./DepartmentsPanel";
-import { ErrorMessage } from "./ErrorMessage";
 import type { Department } from "./schema";
 import { UsersPanel } from "./UsersPanel";
 

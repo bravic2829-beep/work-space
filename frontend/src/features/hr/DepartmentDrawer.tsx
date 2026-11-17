@@ -8,6 +8,7 @@ import {
   Drawer,
   DrawerBody,
   DrawerFooter,
+  ErrorMessage,
   FormField,
   Input,
   SegmentedControl,
@@ -15,7 +16,6 @@ import {
 } from "@/components/ui";
 
 import { createDepartment } from "./api";
-import { ErrorMessage } from "./ErrorMessage";
 import type { Department, DepartmentKind } from "./schema";
 
 type Props = {

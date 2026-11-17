@@ -1,8 +1,6 @@
-import { apiRequest } from "@/lib/api/client";
+import { API, apiRequest } from "@/lib/api/client";
 
 import { isRestoredRecord, isTrashPage, type TrashPage } from "./schema";
-
-const API = "/api/v1";
 
 export function listTrash(cursor: string | null, signal?: AbortSignal): Promise<TrashPage> {
   const params = new URLSearchParams({ limit: "50" });

@@ -1,3 +1,5 @@
+import { isRecord } from "@/lib/api/guards";
+
 export type SheetRole = "viewer" | "commenter" | "editor" | "manager";
 
 export const SHEET_ROLES: SheetRole[] = ["viewer", "commenter", "editor", "manager"];
@@ -33,10 +35,6 @@ export type SheetMemberItem = {
   role: SheetRole;
   is_owner: boolean;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 export function isSheetRole(value: unknown): value is SheetRole {
   return typeof value === "string" && (SHEET_ROLES as string[]).includes(value);

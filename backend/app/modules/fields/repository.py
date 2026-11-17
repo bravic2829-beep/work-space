@@ -5,6 +5,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.bases.models import Table, WorkBase
+from app.modules.bases.repository import live_conditions
 from app.modules.fields.models import Field, FieldAccess, FieldAccessLevel, FieldSemantic
 from app.modules.workspaces.models import Workspace
 
@@ -23,10 +24,7 @@ async def get_field(
         .where(
             Field.id == field_id,
             Field.deleted_at.is_(None),
-            Table.deleted_at.is_(None),
-            WorkBase.deleted_at.is_(None),
-            Workspace.organization_id == organization_id,
-            Workspace.deleted_at.is_(None),
+            *live_conditions(organization_id),
         )
     )
     return result.scalar_one_or_none()

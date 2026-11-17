@@ -8,26 +8,25 @@ handover is kept (`handovers`), written to the task's history, and the recipient
 """
 
 import uuid
-from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import ProblemError
+from app.core.errors import FORBIDDEN, ProblemError
 from app.modules.activity.log import record_activity
 from app.modules.activity.models import ActivityAction, Handover
 from app.modules.fields.models import FieldAccessLevel, FieldSemantic
+from app.modules.fields.semantics import by_semantic
 from app.modules.permissions.service import is_org_admin, workspace_role
 from app.modules.records import service, visibility
 from app.modules.records.models import Record
+from app.modules.records.mutation import check_version, load_locked, render_changed, write_data
 from app.modules.records.schemas import RecordPublic
 from app.modules.sheets import access as sheet_access
 from app.modules.sheets.models import SheetRole
 from app.modules.users.models import User, UserStatus
-
-FORBIDDEN = "You do not have permission to do this."
 
 
 class HandoverRequest(BaseModel):
@@ -54,20 +53,15 @@ async def hand_over(
             "Say what was done.",
             errors=[{"field": "result", "message": "Describe the result being handed over."}],
         )
-    record, context = await service._load(session, actor, record_id, for_update=True)
-    fields = await service._fields_with_access(
-        session, actor, context, is_creator=record.created_by == actor.id, record=record
-    )
-    columns = [f for f, _ in fields]
-    assignee = next((f for f in columns if f.semantic == FieldSemantic.ASSIGNEE), None)
+    loaded = await load_locked(session, actor, record_id, sheet_aware=True)
+    record, context, fields, columns = loaded.record, loaded.context, loaded.fields, loaded.columns
+    assignee = by_semantic(columns, FieldSemantic.ASSIGNEE)
     if assignee is None:
         raise ProblemError(409, "The table has no assignee column.")
     if dict((f.id, level) for f, level in fields)[assignee.id] == FieldAccessLevel.HIDDEN:
         raise ProblemError(403, FORBIDDEN)
 
-    expected = service.parse_if_match(if_match)
-    if expected != record.version:
-        raise ProblemError(412, "The record was changed by somebody else. Reload it and try again.")
+    check_version(record, if_match)
 
     current = service.assignees(record, fields)
     sheet_role = await sheet_access.role_for_record(session, actor, record, columns)
@@ -110,10 +104,7 @@ async def hand_over(
     before: Any = record.data.get(str(assignee.id))
     new_data = dict(record.data)
     new_data[str(assignee.id)] = [str(recipient.id)]
-    record.data = new_data
-    record.version = record.version + 1
-    record.updated_at = datetime.now(UTC)
-    await session.flush()
+    await write_data(session, record, new_data)
     await visibility.rebuild_record(session, record, columns)
 
     session.add(
@@ -135,9 +126,7 @@ async def hand_over(
         changes={str(assignee.id): {"from": before, "to": [str(recipient.id)]}},
         note=note,
     )
-    await service._notify_newassignees(
+    await service.notify_new_assignees(
         session, actor, record, fields, before=current, after=record.data
     )
-    await session.refresh(record)
-    rendered = await service.render(session, actor, context, [record], service._visible(fields))
-    return record, rendered[0]
+    return await render_changed(session, actor, loaded)

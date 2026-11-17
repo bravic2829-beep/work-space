@@ -2,11 +2,13 @@
 
 import { useCallback, useState } from "react";
 
+import { readStored, removeStored, writeStored } from "@/lib/storage";
+
 const key = (tableId: string) => `table-hidden-columns:${tableId}`;
 
 function read(tableId: string): string[] {
   try {
-    const parsed: unknown = JSON.parse(window.localStorage.getItem(key(tableId)) ?? "[]");
+    const parsed: unknown = JSON.parse(readStored(key(tableId)) ?? "[]");
     return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
   } catch {
     // No window (server), blocked storage or broken JSON: start with every column shown.
@@ -15,12 +17,8 @@ function read(tableId: string): string[] {
 }
 
 function write(tableId: string, hidden: string[]) {
-  try {
-    if (hidden.length === 0) window.localStorage.removeItem(key(tableId));
-    else window.localStorage.setItem(key(tableId), JSON.stringify(hidden));
-  } catch {
-    // Storage full or blocked: the choice still works until the page is reloaded.
-  }
+  if (hidden.length === 0) removeStored(key(tableId));
+  else writeStored(key(tableId), JSON.stringify(hidden));
 }
 
 /**

@@ -4,13 +4,14 @@ import { ListPlus } from "lucide-react";
 import { useState } from "react";
 
 import { Alert, Button, FormField, Input } from "@/components/ui";
-import { ApiError } from "@/lib/api/client";
 
 import { createRecord } from "./api";
 import type { FieldItem, RecordItem } from "./schema";
 import { assigneeIds, fieldBySemantic, titleField } from "./taskWorkflow";
 import { UserPicker } from "./UserPicker";
 import { createdDateValue } from "./values";
+import { errorMessage, hasStatus } from "@/lib/api/errors";
+import { useAsyncAction } from "@/lib/useAsyncAction";
 
 type Props = {
   tableId: string;
@@ -41,8 +42,7 @@ export function SubtaskForm({
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [assignees, setAssignees] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const { busy, message, run } = useAsyncAction();
 
   if (!parentField || !nameField || !(canCreate || mine)) return null;
   const parentFieldId = parentField.id;
@@ -50,35 +50,29 @@ export function SubtaskForm({
 
   async function create(event: React.FormEvent) {
     event.preventDefault();
-    setBusy(true);
-    setMessage(null);
-    try {
-      const data: Record<string, unknown> = {
-        [parentFieldId]: [parent.id],
-        [nameFieldId]: name.trim(),
-      };
-      if (assigneeField && assignees.length > 0) data[assigneeField.id] = assignees;
-      // A date column filled "when the record is created" gets the date of this computer.
-      for (const column of fields) {
-        const filled = createdDateValue(column);
-        if (filled !== null) data[column.id] = filled;
-      }
-      const created = await createRecord(tableId, data);
-      setName("");
-      setAssignees([]);
-      setOpen(false);
-      onCreated(created);
-    } catch (error) {
-      setMessage(
-        error instanceof ApiError && error.status === 403
+    await run(
+      async () => {
+        const data: Record<string, unknown> = {
+          [parentFieldId]: [parent.id],
+          [nameFieldId]: name.trim(),
+        };
+        if (assigneeField && assignees.length > 0) data[assigneeField.id] = assignees;
+        // A date column filled "when the record is created" gets the date of this computer.
+        for (const column of fields) {
+          const filled = createdDateValue(column);
+          if (filled !== null) data[column.id] = filled;
+        }
+        const created = await createRecord(tableId, data);
+        setName("");
+        setAssignees([]);
+        setOpen(false);
+        onCreated(created);
+      },
+      (error) =>
+        hasStatus(error, 403)
           ? "Only an editor, or a department head assigned to this task, can add subtasks."
-          : error instanceof ApiError
-            ? error.message
-            : "Could not add the subtask.",
-      );
-    } finally {
-      setBusy(false);
-    }
+          : errorMessage(error, "Could not add the subtask."),
+    );
   }
 
   if (!open) {

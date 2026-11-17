@@ -1,4 +1,4 @@
-import { apiRequest } from "@/lib/api/client";
+import { API, apiRequest } from "@/lib/api/client";
 import {
   recordQueryString,
   type RecordQuery,
@@ -19,8 +19,6 @@ import {
   type SheetMemberItem,
   type SheetRole,
 } from "./schema";
-
-const API = "/api/v1";
 
 /** The sheets the caller may open (an admin gets every sheet). */
 export function listSheets(signal?: AbortSignal): Promise<SheetItem[]> {
