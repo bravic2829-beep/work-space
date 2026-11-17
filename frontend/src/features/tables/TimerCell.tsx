@@ -20,6 +20,8 @@ type Props = {
   record: RecordItem;
   currentUserId: string;
   isAdmin: boolean;
+  /** What to show when the timer has not started and the person cannot start it. */
+  idle?: React.ReactNode;
   onChanged: (record: RecordItem) => void;
 };
 
@@ -38,7 +40,15 @@ function useNow(active: boolean): number {
  * The task timer of one record: a Start button for the person who gave the task, the time running
  * while the work is done, a Stop button for the assignee, and the time spent in the end.
  */
-export function TimerCell({ fields, field, record, currentUserId, isAdmin, onChanged }: Props) {
+export function TimerCell({
+  fields,
+  field,
+  record,
+  currentUserId,
+  isAdmin,
+  idle = <span className="text-muted">Not started</span>,
+  onChanged,
+}: Props) {
   const state = timerState(field, record);
   const rights = timerRights(fields, field, record, currentUserId, isAdmin);
   const now = useNow(state.phase === "running");
@@ -57,7 +67,7 @@ export function TimerCell({ fields, field, record, currentUserId, isAdmin, onCha
 
   return (
     <span className="inline-flex flex-wrap items-center gap-2">
-      {state.phase === "idle" && !rights.start && <span className="text-muted">Not started</span>}
+      {state.phase === "idle" && !rights.start && idle}
       {state.phase !== "idle" && (
         <span
           role="timer"

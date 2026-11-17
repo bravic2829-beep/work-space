@@ -198,26 +198,32 @@ describe("the timer columns of the table", () => {
     );
   }
 
-  it("draws one timer field as Started at, Finished at and Time, with the buttons of each row", () => {
+  it("draws one timer field as one Time column, with the buttons of each row", () => {
     grid();
     const headers = screen.getAllByRole("columnheader").map((h) => h.textContent);
-    expect(headers.slice(-3)).toEqual(["Started at", "Finished at", "Time"]);
+    expect(headers.slice(-1)).toEqual(["Time"]);
+    expect(headers).not.toContain("Started at");
     expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
   });
 
-  it("shows the moments of the cell in the first two columns", () => {
+  it("shows the time spent, with when it started and finished in the tooltip", () => {
     grid(FIELDS, [task({ started_at: BEGAN, finished_at: ENDED })]);
-    const cells = screen.getAllByRole("cell");
-    expect(cells[2]).not.toHaveTextContent("");
-    expect(cells[3]).not.toHaveTextContent("");
-    expect(cells[4]).toHaveTextContent("1:30:05");
+    const cell = screen.getByText("1:30:05").closest("td");
+    expect(cell).toHaveAttribute("title", expect.stringContaining("1:30:05"));
+    expect(cell).toHaveAttribute("title", expect.stringContaining("→"));
+  });
+
+  it("shows a dash for a timer that has not started and cannot be started by the person", () => {
+    grid(FIELDS, [{ ...task(), created_by: "u-other" }]);
+    expect(screen.queryByText("Not started")).not.toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
 
   it("keeps two timers apart by the name of their column", () => {
     const second = { ...makeField("f-second", "Review time", "timer"), position: 3 };
     grid([...FIELDS, second]);
     const headers = screen.getAllByRole("columnheader").map((h) => h.textContent);
-    expect(headers).toContain("Timer · Started at");
+    expect(headers).toContain("Timer · Time");
     expect(headers).toContain("Review time · Time");
   });
 

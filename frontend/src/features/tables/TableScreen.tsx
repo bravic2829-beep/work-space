@@ -485,7 +485,6 @@ export function TableScreen({ tableId, sheet, addTaskSignal = 0 }: Props) {
               onSort={toggleSort}
               onSelect={(record) => setSelected(record.id)}
               onLoadMore={() => void loadMore()}
-              canEdit={canEdit}
               currentUserId={me}
               isAdmin={isAdmin || sheetManager}
               canDeleteAny={isAdmin}

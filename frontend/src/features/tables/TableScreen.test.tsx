@@ -209,23 +209,24 @@ describe("who can change things", () => {
 });
 
 describe("editing and deleting from the row", () => {
-  it("has an Edit button on every row for an editor, and none for a viewer", async () => {
+  it("opens a record when its row is clicked", async () => {
+    const user = userEvent.setup();
     await renderTable("editor");
-    expect(screen.getByRole("button", { name: "Edit record Alpha" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Edit record Beta" })).toBeInTheDocument();
+    await user.click(within(rowOf("Beta")).getAllByRole("cell")[1]);
+    expect(screen.getByRole("dialog", { name: "Record" })).toBeInTheDocument();
   });
 
-  it("shows no row buttons to a viewer", async () => {
+  it("shows only Delete as a row button to a viewer who created the records", async () => {
     await renderTable("viewer");
     expect(screen.queryByRole("button", { name: /^Edit record/ })).not.toBeInTheDocument();
     // A viewer who created the record can still delete it.
     expect(screen.getAllByRole("button", { name: "Delete" })).toHaveLength(2);
   });
 
-  it("opens the record, ready to edit, from the Edit button", async () => {
+  it("opens the record, ready to edit, from the row", async () => {
     const user = userEvent.setup();
     await renderTable("editor");
-    await user.click(screen.getByRole("button", { name: "Edit record Alpha" }));
+    await user.click(within(rowOf("Alpha")).getAllByRole("cell")[1]);
     const panel = screen.getByRole("dialog", { name: "Record" });
     expect(within(panel).getByLabelText("Name")).toBeEnabled();
   });
@@ -252,7 +253,7 @@ describe("editing and deleting from the row", () => {
     const user = userEvent.setup();
     deleteRecordMock.mockResolvedValue(undefined);
     await renderTable("editor");
-    await user.click(screen.getByRole("button", { name: "Edit record Alpha" }));
+    await user.click(within(rowOf("Alpha")).getAllByRole("cell")[1]);
     expect(screen.getByRole("dialog", { name: "Record" })).toBeInTheDocument();
 
     await user.click(within(rowOf("Alpha")).getByRole("button", { name: "Delete" }));
@@ -269,7 +270,7 @@ describe("editing and deleting from the row", () => {
     await renderTable("editor");
     expect(within(rowOf("Alpha")).getByRole("button", { name: "Delete" })).toBeInTheDocument();
     expect(within(rowOf("Gamma")).queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
-    expect(within(rowOf("Gamma")).getByRole("button", { name: /^Edit record/ })).toBeInTheDocument();
+    expect(within(rowOf("Gamma")).getByRole("button", { name: /^Open record/ })).toBeInTheDocument();
   });
 
   it("shows the server's refusal and keeps the row", async () => {
