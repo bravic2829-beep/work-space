@@ -13,9 +13,9 @@ có quyền riêng, cập nhật tiến độ, duyệt, bàn giao, đính kèm f
 | --- | --- |
 | Công nghệ | Next.js 16 + React 19 + TypeScript (giao diện), FastAPI + SQLAlchemy + Alembic (backend), PostgreSQL 16, Docker Compose |
 | Ngôn ngữ giao diện | Tiếng Anh. Dữ liệu mẫu bằng tiếng Việt |
-| Nhánh | `ui-redesign`. `main` trên GitHub đang ở `8b495f4`; máy local hơn 4 commit (`4330665`, `2abcc56`, `ea29260` và commit cập nhật ghi chú này), **chưa đẩy lên** |
+| Nhánh | `ui-redesign`. `main` trên GitHub đang ở `c4c6698`; máy local hơn 6 commit (gồm commit gộp `03cc83f`), **chưa đẩy lên** |
 | Việc cần làm ngay | `git push origin HEAD:main` (cần đăng nhập GitHub, chỉ chủ dự án làm được) |
-| Test | Frontend 528 qua. Backend 726 qua (ruff, mypy sạch) |
+| Test | Frontend 549 qua. Backend 756 qua (ruff, mypy sạch) |
 
 ## 2. Những gì web đang làm được
 
@@ -39,7 +39,9 @@ Thanh bên thu gọn được. Chuông thông báo cập nhật tức thời (We
 - Thêm cột, đổi kiểu, quy tắc quyền theo cột.
 - **Assign task:** giao một việc cho nhiều người, có bảng xem trước ai được quyền gì.
 - **Start / Stop bấm giờ:** người giao bấm Start (việc chuyển sang In progress), nhân viên bấm
-  Stop khi xong (việc chuyển sang Pending review). Cột Time có đồng hồ chạy và tổng thời gian.
+  Stop khi xong (việc chuyển sang Pending review). Bấm giờ là **một cột kiểu `timer`**, mỗi ô lưu
+  `{started_at, finished_at}` và hiện thành 3 cột Started at / Finished at / Time (đồng hồ chạy và
+  tổng thời gian). Một bảng có thể có nhiều cột bấm giờ. Form Assign task chưa có lựa chọn bấm giờ.
 - **Khung chi tiết bên phải:** thanh trạng thái 4 bước, ai xem được task, việc con, file đính kèm,
   bình luận, lịch sử.
 
@@ -96,7 +98,23 @@ mỗi cột chọn *As their role allows*, *Read only* hoặc *Hidden*, lưu m�
 
 ## 5. Nhật ký thay đổi
 
-### 17/11/2026 (commit `4330665`, `2abcc56`, `ea29260`; chưa đẩy lên GitHub)
+### 17/11/2026, lần gộp thứ hai (commit gộp `03cc83f`; chưa đẩy lên GitHub)
+- **Kéo thêm 2 commit từ GitHub:** `00def26` (đổi mật khẩu, xóa hẳn khỏi thùng rác) và `c4c6698`
+  (bấm giờ thành một cột). Có 10 file xung đột, đã giữ cả hai bên: hai kiểu cột `attachment` và
+  `timer` cùng tồn tại; mẫu bảng task có 1 cột bấm giờ và cột Files (13 cột); "xóa hẳn" và dọn thùng
+  rác đều xóa luôn file đính kèm; giao diện giữ cột bấm giờ mới và liên kết tải file.
+- **Migration đổi số:** hai bên cùng đặt `0012`. Bản của GitHub giữ `0012_must_change_password` và
+  `0013_timer_field`; bản đính kèm file của tôi đổi thành **`0014`**. Danh sách kiểu cột cũ trong
+  `0014` đã có thêm `'timer'`.
+- **Database local:** đã đưa về `0011` rồi chạy lại `0012 → 0013 → 0014` (cột Files giữ nguyên,
+  bảng `attachments` trống). Nếu một máy khác đã chạy `0012` bản cũ (file đính kèm) thì phải làm
+  tương tự, hoặc tạo lại database.
+- **Tài khoản:** đã có chức năng đổi mật khẩu (từ GitHub); khi admin đặt lại mật khẩu, người dùng
+  bị buộc đổi ở lần đăng nhập sau (`must_change_password`).
+- Sau khi gộp: backend **756** test qua, frontend **549** test qua; kiểm tra thật qua cổng 3000:
+  đăng nhập, Start/Stop một cột, tải file lên/tải về/xóa.
+
+### 17/11/2026, lần gộp thứ nhất (commit `4330665`, `2abcc56`, `ea29260`)
 - **Kéo `origin/main` về và gộp** (`git pull`): GitHub có thêm commit `8b495f4` "Live record updates,
   searchable link picker and UI polish". Gộp xong, giữ cả hai bên ở 3 file xung đột
   (`records/service.py`, `RecordSidebar.tsx`, `TableScreen.tsx`).
@@ -106,8 +124,8 @@ mỗi cột chọn *As their role allows*, *Read only* hoặc *Hidden*, lưu m�
   ghi "This task will be given to …"; tiêu đề trang ẩn khỏi màn hình (chỉ còn cho trình đọc màn
   hình); bỏ thẻ "System status" ở Home; nút xóa lựa chọn hình tròn có dấu X; avatar bỏ mã trong ngoặc.
 - **Tài khoản:** Super Admin duy nhất là `ADMIN001` (vai trò `owner`). Mật khẩu đã được đặt lại
-  trực tiếp trong database local ngày 17/11 (không ghi vào repo). Hiện chưa có lệnh hay trang đặt
-  lại/đổi mật khẩu.
+  trực tiếp trong database local ngày 17/11 (không ghi vào repo). Lúc đó chưa có chức năng đổi
+  mật khẩu; từ lần gộp thứ hai đã có.
 - Sau khi gộp: backend 726 test qua, frontend 528 test qua. Server dev frontend cần khởi động lại
   sau khi kéo code có file mới, nếu không báo "Module not found".
 
@@ -172,13 +190,15 @@ khởi động lại frontend. Dockerfile đổi thì `up -d --build backend`.
 | 0009 | Hai vai trò cột `timer_start`, `timer_stop` cho bấm giờ |
 | 0010 | Bảng `sheets`, `sheet_members`; vai trò cột `feedback`; lý do `sheet` trong `record_viewers` |
 | 0011 | Bảng `activity_log`, `handovers`; thông báo `changes_requested` |
-| 0012 | Bảng `attachments`; kiểu cột `attachment`; hai hành động lịch sử về file |
+| 0012 | Cột `users.must_change_password` (bắt đổi mật khẩu sau khi admin đặt lại) |
+| 0013 | Kiểu cột `timer`: gộp hai cột bấm giờ cũ thành một cột |
+| 0014 | Bảng `attachments`; kiểu cột `attachment`; hai hành động lịch sử về file (trước đây đánh số 0012) |
 
 ## 8. Kiểm thử
 
-- Frontend: 528 test qua (vitest), lint và kiểm tra kiểu sạch.
-- Backend: bộ đầy đủ ngày 17/11 là **726 test qua** (sau khi gộp commit "Live record updates" từ GitHub), cộng ruff, kiểm tra định dạng và mypy sạch.
-  Lần chạy đầu có 1 test cũ lỗi vì bảng công việc đã thêm cột "Files"; test đã sửa và chạy lại qua.
+- Frontend: 549 test qua (vitest), lint và kiểm tra kiểu sạch.
+- Backend: bộ đầy đủ ngày 17/11, sau lần gộp thứ hai, là **756 test qua**, cộng ruff, kiểm tra
+  định dạng và mypy sạch.
 - Đã chạy thật trên server (qua cổng 3000) với tài khoản mẫu: luồng admin → sheet → giao việc →
   cập nhật → báo hoàn thành → duyệt → báo cáo; tải file lên, tải về, xóa; chọn cột cho một người.
 
