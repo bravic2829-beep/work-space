@@ -28,6 +28,8 @@ class ActivityAction(enum.StrEnum):
     TIMER_STARTED = "timer_started"
     TIMER_STOPPED = "timer_stopped"
     HANDED_OVER = "handed_over"
+    ATTACHMENT_ADDED = "attachment_added"
+    ATTACHMENT_REMOVED = "attachment_removed"
 
 
 class ActivityEntry(Base):

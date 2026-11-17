@@ -79,6 +79,7 @@ async def test_editor_creates_a_record(board: Board) -> None:
         board.f["Name"]: "Write report",
         board.f["Parent task"]: [],
         board.f["Subtasks"]: [],
+        board.f["Files"]: [],
     }
     assert body["created_by"] == board.user("editor")
     assert body["version"] == 1

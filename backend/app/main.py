@@ -49,7 +49,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_origins=settings.cors_allowed_origins,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Content-Type", "If-Match"],
+        allow_headers=["Content-Type", "If-Match", "X-File-Name"],
         expose_headers=["ETag", "Location", "Retry-After"],
     )
     app.include_router(api_router, prefix="/api/v1")

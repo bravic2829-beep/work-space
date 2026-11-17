@@ -15,6 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ProblemError
 from app.core.pagination import MAX_PAGE_SIZE, Page, decode_cursor, encode_cursor
+from app.modules.attachments import repository as attachment_repository
+from app.modules.attachments import storage as attachment_storage
 from app.modules.bases.models import Table, WorkBase
 from app.modules.fields import repository as fields_repo
 from app.modules.fields.models import FieldAccessLevel
@@ -160,10 +162,16 @@ async def restore_record(
     return record, rendered[0]
 
 
-async def purge_expired(session: AsyncSession, *, now: datetime | None = None) -> int:
-    """Remove for good every record that has been in the trash for more than 30 days."""
+async def purge_expired(
+    session: AsyncSession, *, now: datetime | None = None, attachments_dir: str | None = None
+) -> int:
+    """Remove for good every record that has been in the trash for more than 30 days, and the
+    files attached to them (once the removal is saved)."""
     limit = (now or datetime.now(UTC)) - timedelta(days=TRASH_DAYS)
-    result = await session.execute(
-        delete(Record).where(Record.deleted_at.is_not(None), Record.deleted_at < limit)
-    )
+    expired = Record.deleted_at.is_not(None), Record.deleted_at < limit
+    if attachments_dir is not None:
+        ids = list((await session.execute(select(Record.id).where(*expired))).scalars())
+        keys = await attachment_repository.keys_of_records(session, ids)
+        attachment_storage.remove_after_commit(session.sync_session, attachments_dir, keys)
+    result = await session.execute(delete(Record).where(*expired))
     return int(result.rowcount or 0)  # type: ignore[attr-defined]

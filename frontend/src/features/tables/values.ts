@@ -1,9 +1,22 @@
 /** How each field type is shown, edited, filtered and sorted. Mirrors the backend rules. */
 
-import type { Condition, FieldItem, FieldType, RecordItem, SelectOption } from "./schema";
+import {
+  filesOf,
+  type Condition,
+  type FieldItem,
+  type FieldType,
+  type RecordItem,
+  type SelectOption,
+} from "./schema";
 
-/** Types whose value is made by the system: nobody edits them. */
-const COMPUTED: ReadonlySet<FieldType> = new Set(["created_by", "created_time", "auto_number"]);
+/** Types whose value is made by the system: nobody edits them as a cell (files have their own
+ * buttons for adding and removing). */
+const COMPUTED: ReadonlySet<FieldType> = new Set([
+  "created_by",
+  "created_time",
+  "auto_number",
+  "attachment",
+]);
 const SORTABLE: ReadonlySet<FieldType> = new Set([
   "text",
   "long_text",
@@ -93,6 +106,10 @@ export function displayValue(
       return names.get(String(value)) ?? "…";
     case "link_record":
       return Array.isArray(value) && value.length > 0 ? `${value.length} linked` : "";
+    case "attachment":
+      return filesOf(value)
+        .map((file) => file.name)
+        .join(", ");
     case "created_time":
     case "date": {
       const text = String(value);
@@ -282,7 +299,8 @@ export function operatorsFor(field: FieldItem): OperatorChoice[] {
       return [{ op: "contains", label: "contains", needsValue: true }, ...IS_EMPTY];
     default:
       // People, links and the creator are compared by id, which is not something to type.
-      return field.type === "created_by" ? [] : IS_EMPTY;
+      // Files are not searched or filtered.
+      return field.type === "created_by" || field.type === "attachment" ? [] : IS_EMPTY;
   }
 }
 

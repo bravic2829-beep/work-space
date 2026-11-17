@@ -10,7 +10,9 @@ export type ActivityAction =
   | "sent_back"
   | "timer_started"
   | "timer_stopped"
-  | "handed_over";
+  | "handed_over"
+  | "attachment_added"
+  | "attachment_removed";
 
 const ACTIONS: string[] = [
   "created",
@@ -21,6 +23,8 @@ const ACTIONS: string[] = [
   "timer_started",
   "timer_stopped",
   "handed_over",
+  "attachment_added",
+  "attachment_removed",
 ];
 
 export type ActivityChange = {
@@ -102,4 +106,6 @@ export const ACTION_TEXT: Record<ActivityAction, string> = {
   timer_started: "started the timer",
   timer_stopped: "stopped the timer",
   handed_over: "handed it over",
+  attachment_added: "added a file",
+  attachment_removed: "removed a file",
 };

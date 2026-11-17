@@ -120,7 +120,9 @@ async def _purge_trash(args: argparse.Namespace) -> int:
     engine = create_engine(database_url)
     try:
         async with create_sessionmaker(engine)() as session, session.begin():
-            removed = await trash.purge_expired(session)
+            removed = await trash.purge_expired(
+                session, attachments_dir=get_settings().attachments_dir
+            )
     finally:
         await engine.dispose()
     print(f"Removed {removed} record(s) from the trash for good.")

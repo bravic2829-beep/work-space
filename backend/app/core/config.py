@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     session_cookie_name: str = "workbase_session"
     cookie_secure: bool = False
 
+    # Files attached to tasks live here (a volume in Docker, so they outlive the container).
+    attachments_dir: str = "./data/attachments"
+    # The biggest file accepted, in bytes. Kept under 10 MiB, the size the Next.js proxy in front
+    # of the API lets through by default.
+    attachment_max_bytes: int = 10_000_000
+
     # Brute-force protection on login: lock one employee code for a short time after N failures.
     login_max_failures: int = 5
     login_lock_minutes: int = 5

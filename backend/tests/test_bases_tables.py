@@ -143,6 +143,7 @@ async def test_tasks_template_has_the_fields_a_task_needs(work: Work) -> None:
         "Finished at",
         "Progress update",
         "Result",
+        "Files",
         "Manager feedback",
         "Parent task",
         "Subtasks",

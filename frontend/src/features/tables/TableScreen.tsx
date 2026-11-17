@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Save, Settings2, Timer, Trash2, UserPlus, Users, X } from "lucide-react";
+import { Lock, Plus, Save, Settings2, Timer, Trash2, UserPlus, Users, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { usePageCrumb } from "@/components/Breadcrumb";
@@ -23,6 +23,7 @@ import {
   listRecords,
   listViews,
 } from "./api";
+import { ColumnAccessDrawer } from "./ColumnAccessDrawer";
 import { ColumnsMenu } from "./ColumnsMenu";
 import { FilterBar } from "./FilterBar";
 import { ManageFieldsPanel } from "./ManageFieldsPanel";
@@ -102,6 +103,7 @@ export function TableScreen({ tableId, sheet }: Props) {
   const [flash, setFlash] = useState<string | null>(null);
   const [addingTimer, setAddingTimer] = useState(false);
   const [showCreateSheet, setShowCreateSheet] = useState(false);
+  const [showAccess, setShowAccess] = useState(false);
 
   // A column deleted (here or by someone else) must not stay in the filter, sort or hidden list:
   // the server would answer 422 for a column it no longer knows. So these are derived, not stored.
@@ -200,6 +202,8 @@ export function TableScreen({ tableId, sheet }: Props) {
   const canAddTimer = !sheet && canEdit && isTaskTable && timerFields(table.fields) === null;
   // The admin of the table's workspace may give a person a sheet of it.
   const canMakeSheet = !sheet && (isAdmin || table.my_role === "admin") && isTaskTable;
+  // Workspace admins choose which columns each person sees.
+  const canSetAccess = !sheet && (isAdmin || table.my_role === "admin");
   const selectedRecord = selected && selected !== "new" ? items.find((r) => r.id === selected) : null;
 
   function reloadRecords() {
@@ -371,11 +375,16 @@ export function TableScreen({ tableId, sheet }: Props) {
           )}
         </section>
 
-        {(canEdit || canMakeSheet) && (
+        {(canEdit || canMakeSheet || canSetAccess) && (
           <div className="flex flex-wrap items-center gap-2">
             {canMakeSheet && (
               <Button size="sm" icon={Users} onClick={() => setShowCreateSheet(true)}>
                 Create sheet
+              </Button>
+            )}
+            {canSetAccess && (
+              <Button size="sm" icon={Lock} onClick={() => setShowAccess(true)}>
+                Column access
               </Button>
             )}
             {canEdit && !sheet && (
@@ -487,6 +496,18 @@ export function TableScreen({ tableId, sheet }: Props) {
           onClose={() => setShowAssign(false)}
           onAssigned={(_record, taskName, assignee) => {
             setFlash(`Assigned “${taskName}” to ${assignee}.`);
+            reloadRecords();
+          }}
+        />
+      )}
+
+      {showAccess && canSetAccess && (
+        <ColumnAccessDrawer
+          tableId={table.id}
+          fields={table.fields}
+          onClose={() => {
+            setShowAccess(false);
+            // What the admin just set may change what they preview, and what others see.
             reloadRecords();
           }}
         />

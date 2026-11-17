@@ -23,6 +23,8 @@ type RequestOptions<T> = {
   acceptErrorBody?: boolean;
   /** Extra request headers, for example `If-Match` when changing a record. */
   headers?: Record<string, string>;
+  /** Send this as the raw body (a file) instead of JSON. Set the Content-Type in `headers`. */
+  rawBody?: BodyInit;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -62,14 +64,21 @@ export async function apiRequest<T = void>(
   options: RequestOptions<T> = {},
 ): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json", ...options.headers };
-  if (options.body !== undefined) headers["Content-Type"] = "application/json";
+  if (options.body !== undefined && options.rawBody === undefined) {
+    headers["Content-Type"] = "application/json";
+  }
 
   let response: Response;
   try {
     response = await fetch(path, {
       method,
       headers,
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      body:
+        options.rawBody !== undefined
+          ? options.rawBody
+          : options.body === undefined
+            ? undefined
+            : JSON.stringify(options.body),
       credentials: "same-origin",
       cache: "no-store",
       signal: options.signal,

@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, Header, Query, Response
+from fastapi import APIRouter, Depends, Header, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_session
@@ -91,10 +91,13 @@ async def update_record(
 @router.delete("/records/{record_id}", status_code=204)
 async def delete_record(
     record_id: uuid.UUID,
+    request: Request,
     actor: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> None:
-    await service.delete_record(session, actor, record_id)
+    await service.delete_record(
+        session, actor, record_id, request.app.state.settings.attachments_dir
+    )
     await session.commit()
 
 

@@ -15,6 +15,7 @@ import { ApiError } from "@/lib/api/client";
 
 import { createRecord, deleteRecord, updateRecord } from "./api";
 import { ActivityPanel } from "./ActivityPanel";
+import { AttachmentsField } from "./AttachmentsField";
 import { CommentsPanel } from "./CommentsPanel";
 import { FieldEditor } from "./FieldEditor";
 import { HandoverForm } from "./HandoverForm";
@@ -187,7 +188,16 @@ export function RecordSidebar({
       <DrawerBody>
         {record && <StatusStepper fields={fields} record={record} />}
         <form id={FORM_ID} onSubmit={(event) => void save(event)} className="flex flex-col gap-3">
-          {shown.map((field) => (
+          {shown.map((field) =>
+            field.type === "attachment" ? (
+              <AttachmentsField
+                key={field.id}
+                field={field}
+                record={record}
+                canEdit={field.access === "edit"}
+                onChanged={(updated) => onSaved(updated, false)}
+              />
+            ) : (
             <FieldEditor
               key={field.id}
               field={field}
@@ -198,7 +208,8 @@ export function RecordSidebar({
               error={errors[field.id]}
               onChange={(draft) => setDrafts((current) => ({ ...current, [field.id]: draft }))}
             />
-          ))}
+            ),
+          )}
           {message && <Alert>{message}</Alert>}
           {conflict && (
             <Button icon={RefreshCw} onClick={onReload}>

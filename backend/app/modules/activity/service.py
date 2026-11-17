@@ -19,6 +19,13 @@ from app.modules.records import service as records
 from app.modules.users.models import User
 
 MAX_ENTRIES = 200
+# Entries that are only about columns: with every column hidden from the reader there is nothing
+# left to say, so they are not shown at all.
+ABOUT_COLUMNS = (
+    ActivityAction.UPDATED,
+    ActivityAction.ATTACHMENT_ADDED,
+    ActivityAction.ATTACHMENT_REMOVED,
+)
 
 
 class ActivityActor(BaseModel):
@@ -73,8 +80,8 @@ async def list_for_record(
             for key, change in entry.changes.items()
             if key in visible
         ]
-        if entry.action == ActivityAction.UPDATED and not changes:
-            continue  # only hidden columns changed: say nothing
+        if entry.action in ABOUT_COLUMNS and not changes:
+            continue  # only hidden columns were touched: say nothing
         result.append(
             ActivityPublic(
                 id=entry.id,

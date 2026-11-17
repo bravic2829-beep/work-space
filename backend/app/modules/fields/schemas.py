@@ -60,3 +60,24 @@ class FieldAccessPublic(BaseModel):
     field_id: uuid.UUID
     user_id: uuid.UUID
     access: FieldAccessLevel
+
+
+class ColumnRule(BaseModel):
+    field_id: uuid.UUID
+    access: FieldAccessLevel
+
+
+class PersonAccess(BaseModel):
+    """What one person is restricted to on the columns of a table (columns not listed: default)."""
+
+    user_id: uuid.UUID
+    rules: list[ColumnRule]
+
+
+class PersonAccessSet(BaseModel):
+    """The new rules of one person on a table: column id -> hidden/read/edit, or null to go back
+    to the default. Columns that are not named are left as they are."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    fields: dict[uuid.UUID, FieldAccessLevel | None]

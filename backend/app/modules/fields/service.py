@@ -16,11 +16,14 @@ from app.modules.fields.models import (
     FieldType,
 )
 from app.modules.fields.schemas import (
+    ColumnRule,
     FieldAccessPublic,
     FieldAccessSet,
     FieldCreate,
     FieldPublic,
     FieldUpdate,
+    PersonAccess,
+    PersonAccessSet,
 )
 from app.modules.fields.types import (
     FieldConfigError,
@@ -334,16 +337,17 @@ async def create_template_fields(session: AsyncSession, table: Table, template: 
         is_required=False,
     )
     await add_timer_fields(session, table)
-    for name, semantic in (
-        ("Progress update", None),
-        ("Result", None),
-        ("Manager feedback", FieldSemantic.FEEDBACK),
+    for name, kind, semantic in (
+        ("Progress update", FieldType.LONG_TEXT, None),
+        ("Result", FieldType.LONG_TEXT, None),
+        ("Files", FieldType.ATTACHMENT, None),
+        ("Manager feedback", FieldType.LONG_TEXT, FieldSemantic.FEEDBACK),
     ):
         await _insert(
             session,
             table,
             name=name,
-            field_type=FieldType.LONG_TEXT,
+            field_type=kind,
             config={},
             semantic=semantic,
             grants_view=False,
@@ -410,6 +414,8 @@ async def update_field(
         if data.is_required and not field.is_required:
             if field.type in (FieldType.LINK_RECORD,):
                 raise _invalid("A link field cannot be required.")
+            if field.type == FieldType.ATTACHMENT:
+                raise _invalid("A files column cannot be required.")
             missing = await records.count_missing_value(session, field=field)
             if missing:
                 raise ProblemError(
@@ -534,6 +540,66 @@ async def remove_access(
         raise ProblemError(404, "This employee has no special access to the field.")
     await session.delete(row)
     await session.flush()
+
+
+async def table_access(
+    session: AsyncSession, actor: User, table_id: uuid.UUID
+) -> list[PersonAccess]:
+    """Everybody who has a column rule on this table, with their rules. For workspace admins."""
+    await require_table_role(session, actor, table_id, WorkspaceRole.ADMIN)
+    rows = await repository.list_access_for_table(session, table_id=table_id)
+    grouped: dict[uuid.UUID, list[ColumnRule]] = {}
+    for row in rows:
+        grouped.setdefault(row.user_id, []).append(
+            ColumnRule(field_id=row.field_id, access=row.access)
+        )
+    return [PersonAccess(user_id=user_id, rules=rules) for user_id, rules in grouped.items()]
+
+
+async def person_access(
+    session: AsyncSession, actor: User, table_id: uuid.UUID, user_id: uuid.UUID
+) -> PersonAccess:
+    await require_table_role(session, actor, table_id, WorkspaceRole.ADMIN)
+    rules = await repository.get_access_overrides(session, user_id=user_id, table_id=table_id)
+    ordered = [f for f in await repository.list_fields(session, table_id=table_id) if f.id in rules]
+    return PersonAccess(
+        user_id=user_id, rules=[ColumnRule(field_id=f.id, access=rules[f.id]) for f in ordered]
+    )
+
+
+async def set_person_access(
+    session: AsyncSession,
+    actor: User,
+    table_id: uuid.UUID,
+    user_id: uuid.UUID,
+    data: PersonAccessSet,
+) -> PersonAccess:
+    """Give one person their rules for several columns at once, all or nothing."""
+    await require_table_role(session, actor, table_id, WorkspaceRole.ADMIN)
+    target = await users.get_in_organization(
+        session, organization_id=actor.organization_id, user_id=user_id
+    )
+    if target is None or target.status != UserStatus.ACTIVE:
+        raise _invalid("The employee does not exist or is disabled.")
+    live = {f.id for f in await repository.list_fields(session, table_id=table_id)}
+    unknown = [str(field_id) for field_id in data.fields if field_id not in live]
+    if unknown:
+        raise ProblemError(
+            422,
+            "One or more columns do not exist in this table.",
+            errors=[{"field": field_id, "message": "Unknown column."} for field_id in unknown],
+        )
+    for field_id, level in data.fields.items():
+        row = await session.get(FieldAccess, (field_id, user_id))
+        if level is None:
+            if row is not None:
+                await session.delete(row)
+        elif row is None:
+            session.add(FieldAccess(field_id=field_id, user_id=user_id, access=level))
+        else:
+            row.access = level
+    await session.flush()
+    return await person_access(session, actor, table_id, user_id)
 
 
 async def list_access(

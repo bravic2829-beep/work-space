@@ -115,5 +115,16 @@ async def list_access(session: AsyncSession, *, field_id: uuid.UUID) -> list[Fie
     return list(result.scalars())
 
 
+async def list_access_for_table(session: AsyncSession, *, table_id: uuid.UUID) -> list[FieldAccess]:
+    """Every column rule of the table (of its live columns), grouped by person by the caller."""
+    result = await session.execute(
+        select(FieldAccess)
+        .join(Field, Field.id == FieldAccess.field_id)
+        .where(Field.table_id == table_id, Field.deleted_at.is_(None))
+        .order_by(FieldAccess.user_id, Field.position, Field.id)
+    )
+    return list(result.scalars())
+
+
 def soft_delete(field: Field) -> None:
     field.deleted_at = datetime.now(UTC)

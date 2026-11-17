@@ -17,8 +17,54 @@ export const FIELD_TYPES = [
   "created_by",
   "created_time",
   "auto_number",
+  "attachment",
 ] as const;
 export type FieldType = (typeof FIELD_TYPES)[number];
+
+/** One column rule of a person: what they get of that column, narrower than their role. */
+export type ColumnRule = { field_id: string; access: FieldAccess };
+
+/** What one person is restricted to on a table (columns not listed follow their role). */
+export type PersonAccess = { user_id: string; rules: ColumnRule[] };
+
+function isAccess(value: unknown): value is FieldAccess {
+  return value === "hidden" || value === "read" || value === "edit";
+}
+
+export function isPersonAccess(value: unknown): value is PersonAccess {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as PersonAccess).user_id === "string" &&
+    Array.isArray((value as PersonAccess).rules) &&
+    (value as PersonAccess).rules.every(
+      (rule) => typeof rule?.field_id === "string" && isAccess(rule.access),
+    )
+  );
+}
+
+export function isPersonAccessList(value: unknown): value is PersonAccess[] {
+  return Array.isArray(value) && value.every(isPersonAccess);
+}
+
+/** A file kept in a column of type "attachment" (the bytes stay on the server). */
+export type AttachmentItem = { id: string; name: string; size: number; content_type: string };
+
+export function isAttachmentItem(value: unknown): value is AttachmentItem {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as AttachmentItem).id === "string" &&
+    typeof (value as AttachmentItem).name === "string" &&
+    typeof (value as AttachmentItem).size === "number" &&
+    typeof (value as AttachmentItem).content_type === "string"
+  );
+}
+
+/** The files of a cell: the server always sends a list, and a bad entry is simply left out. */
+export function filesOf(value: unknown): AttachmentItem[] {
+  return Array.isArray(value) ? value.filter(isAttachmentItem) : [];
+}
 
 export type FieldAccess = "hidden" | "read" | "edit";
 

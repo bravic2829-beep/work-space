@@ -12,6 +12,8 @@ from app.modules.fields.schemas import (
     FieldCreate,
     FieldPublic,
     FieldUpdate,
+    PersonAccess,
+    PersonAccessSet,
 )
 from app.modules.users.models import User
 
@@ -70,6 +72,41 @@ async def delete_field(
 ) -> None:
     await service.delete_field(session, actor, field_id)
     await session.commit()
+
+
+@router.get("/tables/{table_id}/field-access", response_model=list[PersonAccess])
+async def table_access(
+    table_id: uuid.UUID,
+    actor: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> list[PersonAccess]:
+    """Everybody who has a column rule on the table, with their rules (workspace admins)."""
+    return await service.table_access(session, actor, table_id)
+
+
+@router.get("/tables/{table_id}/field-access/{user_id}", response_model=PersonAccess)
+async def person_access(
+    table_id: uuid.UUID,
+    user_id: uuid.UUID,
+    actor: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> PersonAccess:
+    return await service.person_access(session, actor, table_id, user_id)
+
+
+@router.put("/tables/{table_id}/field-access/{user_id}", response_model=PersonAccess)
+async def set_person_access(
+    table_id: uuid.UUID,
+    user_id: uuid.UUID,
+    body: PersonAccessSet,
+    actor: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> PersonAccess:
+    """Set what one person sees of several columns in one go: hidden, read, edit, or null to
+    go back to the default. All or nothing."""
+    access = await service.set_person_access(session, actor, table_id, user_id, body)
+    await session.commit()
+    return access
 
 
 @router.get("/fields/{field_id}/access", response_model=list[FieldAccessPublic])

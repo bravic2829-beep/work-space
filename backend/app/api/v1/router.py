@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.v1 import health
 from app.modules.activity.router import router as activity_router
+from app.modules.attachments.router import router as attachments_router
 from app.modules.auth.router import router as auth_router
 from app.modules.bases.router import router as bases_router
 from app.modules.comments.router import router as comments_router
@@ -29,6 +30,7 @@ api_router.include_router(fields_router)
 api_router.include_router(records_router)
 api_router.include_router(sheets_router)
 api_router.include_router(activity_router)
+api_router.include_router(attachments_router)
 api_router.include_router(reports_router)
 api_router.include_router(views_router)
 api_router.include_router(notifications_router)

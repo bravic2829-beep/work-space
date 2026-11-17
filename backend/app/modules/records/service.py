@@ -16,6 +16,8 @@ from app.core.errors import ProblemError
 from app.core.pagination import MAX_PAGE_SIZE, Page
 from app.modules.activity.log import diff, record_activity
 from app.modules.activity.models import ActivityAction
+from app.modules.attachments import repository as attachments
+from app.modules.attachments import storage as attachment_storage
 from app.modules.fields import repository as fields_repo
 from app.modules.fields.access import column_access
 from app.modules.fields.models import Field, FieldAccessLevel, FieldSemantic, FieldType
@@ -97,6 +99,8 @@ async def render(
         actor=actor,
         sees_all=sees_everything(actor, context),
     )
+    file_fields = [f.id for f, _ in visible if f.type == FieldType.ATTACHMENT]
+    files = await attachments.load_for_records(session, [r.id for r in records], file_fields)
     result: list[RecordPublic] = []
     for record in records:
         data: dict[str, Any] = {}
@@ -111,6 +115,8 @@ async def render(
                 data[key] = _iso(record.created_at)
             elif column.type == FieldType.LINK_RECORD:
                 data[key] = [str(t) for t in targets.get((record.id, column.id), [])]
+            elif column.type == FieldType.ATTACHMENT:
+                data[key] = files.get((record.id, column.id), [])
         result.append(
             RecordPublic(
                 id=record.id,
@@ -517,7 +523,12 @@ async def update_record(
 # --- delete ----------------------------------------------------------------------------------
 
 
-async def delete_record(session: AsyncSession, actor: User, record_id: uuid.UUID) -> None:
+async def delete_record(
+    session: AsyncSession,
+    actor: User,
+    record_id: uuid.UUID,
+    attachments_dir: str | None = None,
+) -> None:
     """Delete a record for good. Only the person who created it may do that.
 
     There is no trash step: the record, its links, viewers, comments and notifications go in
@@ -527,5 +538,9 @@ async def delete_record(session: AsyncSession, actor: User, record_id: uuid.UUID
     record, _ = await _load(session, actor, record_id, for_update=True)
     if record.created_by != actor.id and not is_org_admin(actor):
         raise ProblemError(403, "Only the person who created a record, or an admin, can delete it.")
+    if attachments_dir is not None:
+        # The files go with the record, once the deletion is saved.
+        keys = await attachments.keys_of_records(session, [record.id])
+        attachment_storage.remove_after_commit(session.sync_session, attachments_dir, keys)
     await session.execute(delete(Record).where(Record.id == record.id))
     await session.flush()

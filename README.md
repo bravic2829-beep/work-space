@@ -1,6 +1,6 @@
 # WorkBase (tên tạm)
 
-Nền tảng quản lý công việc và dữ liệu nội bộ (kiểu Notion + Feishu Base). Đã có: xác thực, nhân sự, workspace và bảng dữ liệu, sheet theo từng nhân viên có phân quyền riêng, giao việc, duyệt (kèm lý do khi trả lại), bấm giờ, bàn giao, lịch sử, thông báo, My tasks và báo cáo tổng quan. Thiết kế, ma trận quyền, API và phần còn thiếu: [`docs/DESIGN.md`](docs/DESIGN.md).
+Nền tảng quản lý công việc và dữ liệu nội bộ (kiểu Notion + Feishu Base). Đã có: xác thực, nhân sự, workspace và bảng dữ liệu, sheet theo từng nhân viên có phân quyền riêng, giao việc, duyệt (kèm lý do khi trả lại), bấm giờ, bàn giao, lịch sử, thông báo, My tasks và báo cáo tổng quan. Tình trạng và nhật ký thay đổi: [`CHANGELOG.md`](CHANGELOG.md). Thiết kế, ma trận quyền, API và phần còn thiếu: `docs/DESIGN.md` (thư mục `docs/` đang bị `.gitignore` bỏ qua).
 
 - Frontend: Next.js (App Router) + TypeScript
 - Backend: Python 3.12 + FastAPI (async) + SQLAlchemy 2.x + Alembic

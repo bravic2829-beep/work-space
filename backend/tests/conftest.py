@@ -1,6 +1,7 @@
 import asyncio
 import uuid
 from collections.abc import AsyncIterator, Iterator
+from pathlib import Path
 
 import asyncpg
 import pytest
@@ -89,9 +90,17 @@ async def migrated_database_url(shared_migrated_database_url: str) -> AsyncItera
 
 
 @pytest.fixture
-async def client(migrated_database_url: str) -> AsyncIterator[AsyncClient]:
+def files_dir(tmp_path: Path) -> Path:
+    """Where the attached files of a test are kept: a folder of its own, gone after the test."""
+    return tmp_path / "attachments"
+
+
+@pytest.fixture
+async def client(migrated_database_url: str, files_dir: Path) -> AsyncIterator[AsyncClient]:
     """An HTTP client against the app and the (empty) shared migrated database."""
-    async with app_client(migrated_database_url) as c:
+    async with app_client(
+        migrated_database_url, attachments_dir=str(files_dir), attachment_max_bytes=50_000
+    ) as c:
         yield c
 
 

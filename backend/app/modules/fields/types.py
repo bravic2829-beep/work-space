@@ -7,7 +7,8 @@ Stored value per type (in `records.data`, keyed by field id), see docs/erd.md se
 text, long_text, url: string. number: JSON number. date: ISO 8601 string. checkbox: boolean.
 single_select, status: option id. multi_select: list of option ids. user: list of user ids.
 link_record is stored in `record_links`; created_by, created_time are read from the record;
-auto_number is an integer made when the record is created.
+auto_number is an integer made when the record is created; attachment is read from the
+`attachments` table (a list of {id, name, size, content_type}).
 """
 
 import math
@@ -38,11 +39,15 @@ DEFAULT_STATUS_OPTIONS = (
 )
 
 SELECT_TYPES = frozenset({FieldType.SINGLE_SELECT, FieldType.MULTI_SELECT, FieldType.STATUS})
-# Values that are made by the system. Nobody can write them.
-COMPUTED_TYPES = frozenset({FieldType.CREATED_BY, FieldType.CREATED_TIME, FieldType.AUTO_NUMBER})
+# Values that are made by the system. Nobody can write them through a record change (files are
+# added and removed through the attachment endpoints, which check the column's access).
+COMPUTED_TYPES = frozenset(
+    {FieldType.CREATED_BY, FieldType.CREATED_TIME, FieldType.AUTO_NUMBER, FieldType.ATTACHMENT}
+)
 # Types whose values live in the record's JSONB `data`.
 STORED_IN_DATA = frozenset(
-    set(FieldType) - {FieldType.LINK_RECORD, FieldType.CREATED_BY, FieldType.CREATED_TIME}
+    set(FieldType)
+    - {FieldType.LINK_RECORD, FieldType.CREATED_BY, FieldType.CREATED_TIME, FieldType.ATTACHMENT}
 )
 
 SEMANTIC_TYPES: dict[FieldSemantic, FieldType] = {

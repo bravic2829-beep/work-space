@@ -66,7 +66,9 @@ export function ActivityPanel({ recordId, version, fields }: Props) {
   function value(change: ActivityChange, side: unknown): string {
     const field = byId.get(change.field_id);
     if (side === null || side === undefined || side === "") return "empty";
-    if (!field) return typeof side === "string" ? side : JSON.stringify(side);
+    if (!field || field.type === "attachment") {
+      return typeof side === "string" ? side : JSON.stringify(side);
+    }
     if (field.type === "link_record") return Array.isArray(side) ? `${side.length} linked` : "linked";
     return displayValue(field, side, names) || "empty";
   }

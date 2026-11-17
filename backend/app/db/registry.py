@@ -6,6 +6,7 @@ keep it to one line per module).
 
 from app.db.base import Base
 from app.modules.activity import models as activity_models
+from app.modules.attachments import models as attachments_models
 from app.modules.auth import models as auth_models
 from app.modules.bases import models as bases_models
 from app.modules.comments import models as comments_models
@@ -21,6 +22,7 @@ from app.modules.workspaces import models as workspaces_models
 __all__ = [
     "Base",
     "activity_models",
+    "attachments_models",
     "auth_models",
     "bases_models",
     "comments_models",

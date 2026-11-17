@@ -18,8 +18,11 @@ COPY alembic.ini ./
 COPY alembic ./alembic
 COPY app ./app
 
-# Do not run as root inside the container.
-RUN useradd --system --uid 10001 appuser && chown -R appuser /app
+# Do not run as root inside the container. /data/attachments is where task files are kept; it is
+# created here, owned by appuser, so a Docker volume mounted on it starts writable.
+RUN useradd --system --uid 10001 appuser \
+    && mkdir -p /data/attachments \
+    && chown -R appuser /app /data
 USER appuser
 
 EXPOSE 8000

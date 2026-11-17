@@ -6,6 +6,7 @@ import {
   ArrowUp,
   ChevronsUpDown,
   FileSearch,
+  Paperclip,
   Pencil,
   Trash2,
 } from "lucide-react";
@@ -16,7 +17,8 @@ import { Avatar, Badge, Button, DataTable, EmptyState, InlineConfirm } from "@/c
 import { dueInfo, localToday, type DueTone } from "@/features/mytasks/schema";
 import { cn } from "@/lib/cn";
 
-import type { FieldItem, RecordItem, SortColumn } from "./schema";
+import { attachmentUrl, formatSize } from "./attachments";
+import { filesOf, type AttachmentItem, type FieldItem, type RecordItem, type SortColumn } from "./schema";
 import { StatusBadge } from "./StatusBadge";
 import { statusKind } from "./taskWorkflow";
 import { formatMoment, isTimerField } from "./timer";
@@ -61,6 +63,26 @@ function DueCell({ text, done }: { text: string; done: boolean }) {
     <span className={cn("inline-flex items-center gap-1", DUE_TONE[info.tone])} title={text}>
       {info.tone === "overdue" && <AlertTriangle className="size-3.5" aria-hidden />}
       {info.label}
+    </span>
+  );
+}
+
+/** The files of a files column: each name downloads the file; a paperclip tells there are some. */
+function FileLinks({ files }: { files: AttachmentItem[] }) {
+  if (files.length === 0) return null;
+  return (
+    <span className="inline-flex items-center gap-2 whitespace-nowrap">
+      <Paperclip className="size-3.5 shrink-0 text-muted" aria-label={`${files.length} files`} />
+      {files.map((file) => (
+        <a
+          key={file.id}
+          href={attachmentUrl(file.id)}
+          download={file.name}
+          title={`Download ${file.name} (${formatSize(file.size)})`}
+        >
+          {file.name}
+        </a>
+      ))}
     </span>
   );
 }
@@ -216,6 +238,8 @@ export function RecordGrid({
                         <Choice field={field} value={value} />
                       ) : field.semantic === "due_date" && field.type === "date" && text ? (
                         <DueCell text={text} done={statusKind(fields, record) === "done"} />
+                      ) : field.type === "attachment" ? (
+                        <FileLinks files={filesOf(value)} />
                       ) : isTimerField(field) && text ? (
                         <span className="whitespace-nowrap text-muted" title={text}>
                           {formatMoment(value)}

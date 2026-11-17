@@ -37,6 +37,8 @@ class FieldType(enum.StrEnum):
     CREATED_BY = "created_by"
     CREATED_TIME = "created_time"
     AUTO_NUMBER = "auto_number"
+    # Files kept on the server's disk (`attachments` table), not in the record's data.
+    ATTACHMENT = "attachment"
 
 
 class FieldSemantic(enum.StrEnum):

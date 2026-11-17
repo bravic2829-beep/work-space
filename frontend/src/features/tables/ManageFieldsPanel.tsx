@@ -23,7 +23,12 @@ function optionsOf(field: FieldItem): SelectOption[] {
 
 /** A column that has a role, grants viewing or links to another table keeps its type. */
 function typeIsLocked(field: FieldItem): boolean {
-  return field.semantic !== null || field.grants_view || field.type === "link_record";
+  return (
+    field.semantic !== null ||
+    field.grants_view ||
+    field.type === "link_record" ||
+    field.type === "attachment"
+  );
 }
 
 type RowProps = { field: FieldItem; all: FieldItem[]; onChanged: () => void };
@@ -125,7 +130,7 @@ function FieldRow({ field, all, onChanged }: RowProps) {
       <Checkbox
         label="Required"
         checked={field.is_required}
-        disabled={busy || field.type === "link_record"}
+        disabled={busy || field.type === "link_record" || field.type === "attachment"}
         aria-label={`${label} is required`}
         onChange={(event) =>
           void patch({ is_required: event.target.checked }, "Could not change this setting.")
@@ -276,7 +281,7 @@ function FieldRow({ field, all, onChanged }: RowProps) {
               value={type}
               onChange={(event) => setType(event.target.value as FieldType)}
             >
-              {FIELD_TYPES.filter((t) => t !== "link_record").map((t) => (
+              {FIELD_TYPES.filter((t) => t !== "link_record" && t !== "attachment").map((t) => (
                 <option key={t} value={t}>
                   {LABELS[t]}
                 </option>

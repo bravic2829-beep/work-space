@@ -7,6 +7,8 @@ import {
   isCommentPage,
   isDirectoryList,
   isFieldItem,
+  isPersonAccess,
+  isPersonAccessList,
   isMemberItem,
   isMemberList,
   isRecordItem,
@@ -23,9 +25,11 @@ import {
   type CommentPage,
   type Condition,
   type DirectoryUser,
+  type FieldAccess,
   type FieldItem,
   type FieldType,
   type MemberItem,
+  type PersonAccess,
   type RecordItem,
   type RecordPage,
   type RecordViewers,
@@ -121,6 +125,31 @@ export function updateField(id: string, patch: FieldPatch): Promise<FieldItem> {
 
 export function deleteField(id: string): Promise<void> {
   return apiRequest("DELETE", `${API}/fields/${id}`);
+}
+
+// --- who sees which column ---
+
+/** Everybody who has a column rule on the table (for workspace admins). */
+export function getTableAccess(tableId: string, signal?: AbortSignal): Promise<PersonAccess[]> {
+  return apiRequest("GET", `${API}/tables/${tableId}/field-access`, {
+    guard: isPersonAccessList,
+    signal,
+  });
+}
+
+/**
+ * Sets what one person sees of several columns at once: hidden, read, edit, or null to go back to
+ * the default. Columns that are not named stay as they are. All or nothing.
+ */
+export function setPersonAccess(
+  tableId: string,
+  userId: string,
+  fields: Record<string, FieldAccess | null>,
+): Promise<PersonAccess> {
+  return apiRequest("PUT", `${API}/tables/${tableId}/field-access/${userId}`, {
+    body: { fields },
+    guard: isPersonAccess,
+  });
 }
 
 // --- workspace members ---
