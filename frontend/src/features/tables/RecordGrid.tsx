@@ -11,9 +11,18 @@ import {
 
 import { Fragment } from "react";
 
-import { Avatar, Badge, Button, DataTable, EmptyState, InlineConfirm } from "@/components/ui";
+import {
+  Avatar,
+  Badge,
+  Button,
+  DataTable,
+  EmptyState,
+  InlineConfirm,
+  plainName,
+} from "@/components/ui";
 import { dueInfo, localToday, type DueTone } from "@/features/mytasks/schema";
 import { cn } from "@/lib/cn";
+import { formatShortDay } from "@/lib/format";
 
 import type { FieldItem, RecordItem, SortColumn } from "./schema";
 import { StatusBadge } from "./StatusBadge";
@@ -57,10 +66,21 @@ const DUE_TONE: Record<DueTone, string> = {
   normal: "",
 };
 
-/** A due date in words ("Today", "Overdue 2 days") with a colour and, when late, an icon. */
-function DueCell({ text, done }: { text: string; done: boolean }) {
+/**
+ * A due date: "Today" or "Overdue 2 days" with a colour and, when late, an icon; any other day as
+ * "Nov 18" (a date with a time is shown as it is).
+ */
+function DueCell({ text, done, withTime }: { text: string; done: boolean; withTime: boolean }) {
   const info = done ? null : dueInfo(text, localToday());
-  if (!info || info.tone === "normal") return <>{text}</>;
+  if (!info || info.tone === "normal") {
+    if (withTime) return <>{text}</>;
+    return (
+      <>
+        {formatShortDay(text)}
+        {info?.label === "Tomorrow" && <span className="text-muted"> · Tomorrow</span>}
+      </>
+    );
+  }
   return (
     <span className={cn("inline-flex items-center gap-1", DUE_TONE[info.tone])} title={text}>
       {info.tone === "overdue" && <AlertTriangle className="size-3.5" aria-hidden />}
@@ -78,9 +98,13 @@ function PeopleCell({ ids, names }: { ids: unknown[]; names: ReadonlyMap<string,
         .map((id) => {
           const label = names.get(id) ?? "…";
           return (
-            <span key={id} className="inline-flex items-center gap-1.5 whitespace-nowrap">
+            <span
+              key={id}
+              title={label}
+              className="inline-flex items-center gap-1.5 whitespace-nowrap"
+            >
               <Avatar name={label} className="size-5 text-[10px]" />
-              {label}
+              {plainName(label)}
             </span>
           );
         })}
@@ -248,7 +272,11 @@ export function RecordGrid({
                         text ? (
                         <Choice field={field} value={value} />
                       ) : field.semantic === "due_date" && field.type === "date" && text ? (
-                        <DueCell text={text} done={statusKind(fields, record) === "done"} />
+                        <DueCell
+                          text={text}
+                          done={statusKind(fields, record) === "done"}
+                          withTime={field.config.include_time === true}
+                        />
                       ) : field.type === "user" && Array.isArray(value) && value.length > 0 ? (
                         <PeopleCell ids={value} names={names} />
                       ) : field.type === "url" && isWebLink(text) ? (

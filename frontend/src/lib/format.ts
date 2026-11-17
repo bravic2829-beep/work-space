@@ -3,12 +3,13 @@ export function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString();
 }
 
-/** A day written 2026-11-15 as "Nov 15". */
+/** A day written 2026-11-15 as "Nov 15" (with the year when it is not this year). */
 export function formatShortDay(ymd: string): string {
   const [year, month, day] = ymd.slice(0, 10).split("-").map(Number);
   return new Date(year, month - 1, day).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
+    year: year === new Date().getFullYear() ? undefined : "numeric",
   });
 }
 

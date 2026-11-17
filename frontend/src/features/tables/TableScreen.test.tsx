@@ -79,13 +79,14 @@ beforeEach(() => {
 
 async function renderTable(role: Role | null = "editor") {
   getTableMock.mockResolvedValue(makeTable(role));
-  render(
+  const view = render(
     <AuthProvider>
       <TableScreen tableId="t-1" />
     </AuthProvider>,
   );
   await screen.findByRole("heading", { name: "Tasks" });
   await screen.findByText("Alpha");
+  return view;
 }
 
 function lastQuery() {
@@ -105,7 +106,7 @@ describe("loading", () => {
 
   it("shows the names of the people it finds in the records", async () => {
     await renderTable();
-    expect(await screen.findByText("Binh (E2)")).toBeInTheDocument();
+    expect(await screen.findByText("Binh")).toBeInTheDocument();
     expect(lookupUsersMock).toHaveBeenCalledWith(["u-2"]);
   });
 
@@ -539,5 +540,31 @@ describe("hidden columns survive a reload", () => {
     await renderTable();
     expect(await screen.findByRole("columnheader", { name: /Name/ })).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: /Points/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("hiding the columns that are empty", () => {
+  it("leaves out the columns with no value in any row, and remembers the choice", async () => {
+    const user = userEvent.setup();
+    const view = await renderTable();
+    expect(screen.getByRole("columnheader", { name: /Tags/ })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Show or hide columns" }));
+    await user.click(screen.getByRole("checkbox", { name: /Hide empty columns/ }));
+    expect(screen.queryByRole("columnheader", { name: /Tags/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /Points/ })).toBeInTheDocument();
+    expect(window.localStorage.getItem("table-hide-empty:t-1")).toBe("1");
+
+    // Opened again later in the same browser: still hidden.
+    view.unmount();
+    await renderTable();
+    expect(screen.queryByRole("columnheader", { name: /Tags/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("the counts above the table", () => {
+  it("shows none for a table without a status column", async () => {
+    await renderTable();
+    expect(screen.queryByRole("list", { name: "Task counts" })).not.toBeInTheDocument();
   });
 });

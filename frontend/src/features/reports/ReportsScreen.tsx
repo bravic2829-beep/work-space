@@ -8,12 +8,11 @@ import {
   ClipboardCheck,
   ListTodo,
   UserX,
-  type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { Alert, Avatar, EmptyState, LoadingState, PageHeader, Select } from "@/components/ui";
+import { Alert, Avatar, StatCard, EmptyState, LoadingState, PageHeader, Select } from "@/components/ui";
 import { cn } from "@/lib/cn";
 
 import { getOverview, listReportTables, type Overview } from "./api";
@@ -105,54 +104,19 @@ export function ReportsScreen() {
   );
 }
 
-function Stat({
-  label,
-  value,
-  icon: Icon,
-  tone = "neutral",
-}: {
-  label: string;
-  value: number | null;
-  icon: LucideIcon;
-  tone?: "neutral" | "danger" | "warning" | "success" | "info";
-}) {
-  const hidden = value === null;
-  return (
-    <li
-      className="flex items-center gap-3 rounded-lg border border-line bg-surface px-4 py-3"
-      title={hidden ? "A column this number needs is hidden from you" : undefined}
-    >
-      <span
-        className={cn(
-          "flex size-9 shrink-0 items-center justify-center rounded-md",
-          tone === "danger" && "bg-danger-soft text-danger",
-          tone === "warning" && "bg-warning-soft text-warning",
-          tone === "success" && "bg-success-soft text-success",
-          tone === "info" && "bg-primary-soft text-primary",
-          tone === "neutral" && "bg-surface-muted text-muted",
-        )}
-      >
-        <Icon className="size-4" aria-hidden />
-      </span>
-      <span className="flex flex-col leading-tight">
-        <span className="text-xl font-bold tabular-nums">{hidden ? "—" : value}</span>
-        <span className="text-[13px] text-muted">{label}</span>
-      </span>
-    </li>
-  );
-}
+const HIDDEN_HINT = "A column this number needs is hidden from you";
 
 function OverviewView({ data }: { data: Overview }) {
   const statusTotal = (data.by_status ?? []).reduce((sum, s) => sum + s.count, 0);
   return (
     <div className="grid gap-5">
       <ul aria-label="Totals" className="m-0 grid list-none grid-cols-2 gap-3 p-0 md:grid-cols-3 xl:grid-cols-6">
-        <Stat label="Open" value={data.open} icon={ListTodo} tone="info" />
-        <Stat label="Overdue" value={data.overdue} icon={AlertTriangle} tone="danger" />
-        <Stat label="Due today" value={data.due_today} icon={CalendarDays} tone="info" />
-        <Stat label="Waiting for review" value={data.in_review} icon={ClipboardCheck} tone="warning" />
-        <Stat label="Done" value={data.done} icon={CheckCircle2} tone="success" />
-        <Stat label="Unassigned" value={data.unassigned} icon={UserX} />
+        <StatCard unavailableHint={HIDDEN_HINT} label="Open" value={data.open} icon={ListTodo} tone="info" />
+        <StatCard unavailableHint={HIDDEN_HINT} label="Overdue" value={data.overdue} icon={AlertTriangle} tone="danger" />
+        <StatCard unavailableHint={HIDDEN_HINT} label="Due today" value={data.due_today} icon={CalendarDays} tone="info" />
+        <StatCard unavailableHint={HIDDEN_HINT} label="Waiting for review" value={data.in_review} icon={ClipboardCheck} tone="warning" />
+        <StatCard unavailableHint={HIDDEN_HINT} label="Done" value={data.done} icon={CheckCircle2} tone="success" />
+        <StatCard unavailableHint={HIDDEN_HINT} label="Unassigned" value={data.unassigned} icon={UserX} />
       </ul>
 
       {data.by_status && statusTotal > 0 && (

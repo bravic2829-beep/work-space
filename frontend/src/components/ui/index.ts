@@ -18,6 +18,7 @@ export { Popover, PopoverContent, PopoverTrigger, usePopoverClose } from "./Popo
 export { SearchInput } from "./SearchInput";
 export { SegmentedControl, type SegmentOption } from "./SegmentedControl";
 export { SplitButton } from "./SplitButton";
+export { StatCard, type StatTone } from "./StatCard";
 export { Skeleton, SkeletonTable } from "./Skeleton";
 export { Tabs, type TabItem } from "./Tabs";
 export { ToastProvider, useToast } from "./Toast";
