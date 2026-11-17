@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import ProblemError
 from app.modules.organizations import repository
 from app.modules.organizations.models import Department, DepartmentKind
-from app.modules.organizations.schemas import DepartmentCreate, DepartmentUpdate
+from app.modules.organizations.schemas import DepartmentCreate, DepartmentPublic, DepartmentUpdate
 from app.modules.users import repository as users
 from app.modules.users.models import User, UserStatus
 
@@ -42,6 +42,28 @@ async def _validate_head(
     )
     if head is None or head.status != UserStatus.ACTIVE:
         raise ProblemError(422, "The head does not exist or is disabled.")
+
+
+def to_public(department: Department, member_count: int) -> DepartmentPublic:
+    return DepartmentPublic(
+        id=department.id,
+        name=department.name,
+        kind=department.kind,
+        parent_id=department.parent_id,
+        head_user_id=department.head_user_id,
+        member_count=member_count,
+    )
+
+
+async def public_of(session: AsyncSession, department: Department) -> DepartmentPublic:
+    """One department as the API shows it, with the number of employees in it."""
+    return to_public(department, await users.count_in_department(session, department.id))
+
+
+async def list_public(session: AsyncSession, actor: User) -> list[DepartmentPublic]:
+    departments = await repository.list_departments(session, organization_id=actor.organization_id)
+    counts = await repository.member_counts(session, organization_id=actor.organization_id)
+    return [to_public(department, counts.get(department.id, 0)) for department in departments]
 
 
 async def get_department(

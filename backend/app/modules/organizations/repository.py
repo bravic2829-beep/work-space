@@ -4,6 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.organizations.models import Department, Organization
+from app.modules.users.models import User
 
 
 async def get_first(session: AsyncSession) -> Organization | None:
@@ -37,6 +38,18 @@ async def list_departments(
         .order_by(Department.kind, Department.name)
     )
     return list(result.scalars())
+
+
+async def member_counts(
+    session: AsyncSession, *, organization_id: uuid.UUID
+) -> dict[uuid.UUID, int]:
+    """Employees per department, for the departments that have any."""
+    result = await session.execute(
+        select(User.department_id, func.count())
+        .where(User.organization_id == organization_id, User.department_id.is_not(None))
+        .group_by(User.department_id)
+    )
+    return {department_id: int(count) for department_id, count in result.all() if department_id}
 
 
 async def sibling_name_exists(
