@@ -13,8 +13,8 @@ có quyền riêng, cập nhật tiến độ, duyệt, bàn giao, đính kèm f
 | --- | --- |
 | Công nghệ | Next.js 16 + React 19 + TypeScript (giao diện), FastAPI + SQLAlchemy + Alembic (backend), PostgreSQL 16, Docker Compose |
 | Ngôn ngữ giao diện | Tiếng Anh. Dữ liệu mẫu bằng tiếng Việt |
-| Nhánh | `ui-redesign`. `main` trên GitHub đang ở commit `776d3ee` |
-| Chưa commit | Đợt 16 đến 17/11: file đính kèm, "Column access", `CHANGELOG.md` |
+| Nhánh | `ui-redesign`. `main` trên GitHub đang ở `8b495f4`; máy local hơn 4 commit (`4330665`, `2abcc56`, `ea29260` và commit cập nhật ghi chú này), **chưa đẩy lên** |
+| Việc cần làm ngay | `git push origin HEAD:main` (cần đăng nhập GitHub, chỉ chủ dự án làm được) |
 | Test | Frontend 528 qua. Backend 726 qua (ruff, mypy sạch) |
 
 ## 2. Những gì web đang làm được
@@ -96,7 +96,22 @@ mỗi cột chọn *As their role allows*, *Read only* hoặc *Hidden*, lưu m�
 
 ## 5. Nhật ký thay đổi
 
-### 16 đến 17/11/2026 (chưa commit)
+### 17/11/2026 (commit `4330665`, `2abcc56`, `ea29260`; chưa đẩy lên GitHub)
+- **Kéo `origin/main` về và gộp** (`git pull`): GitHub có thêm commit `8b495f4` "Live record updates,
+  searchable link picker and UI polish". Gộp xong, giữ cả hai bên ở 3 file xung đột
+  (`records/service.py`, `RecordSidebar.tsx`, `TableScreen.tsx`).
+- **Từ commit `8b495f4`:** cập nhật bản ghi trực tiếp qua WebSocket (`records/live.py`, chỉ gửi tín
+  hiệu `records.changed`, trình duyệt tải lại qua API nên quyền vẫn được kiểm tra); ô chọn liên kết
+  có tìm kiếm (`LinkPicker`); nút **Add task** nằm trên thanh tab của sheet; form tạo việc trên sheet
+  ghi "This task will be given to …"; tiêu đề trang ẩn khỏi màn hình (chỉ còn cho trình đọc màn
+  hình); bỏ thẻ "System status" ở Home; nút xóa lựa chọn hình tròn có dấu X; avatar bỏ mã trong ngoặc.
+- **Tài khoản:** Super Admin duy nhất là `ADMIN001` (vai trò `owner`). Mật khẩu đã được đặt lại
+  trực tiếp trong database local ngày 17/11 (không ghi vào repo). Hiện chưa có lệnh hay trang đặt
+  lại/đổi mật khẩu.
+- Sau khi gộp: backend 726 test qua, frontend 528 test qua. Server dev frontend cần khởi động lại
+  sau khi kéo code có file mới, nếu không báo "Module not found".
+
+### 16 đến 17/11/2026 (đã commit `4330665`)
 - **Đính kèm file** (migration `0012`): kiểu cột `attachment`, bảng `attachments`, API tải lên
   (thân thô, tên trong header `X-File-Name`, không cần thư viện multipart), tải về, xóa; lưu trên
   volume; xóa file khi xóa task; ghi lịch sử "added a file / removed a file". Giao diện
@@ -106,7 +121,7 @@ mỗi cột chọn *As their role allows*, *Read only* hoặc *Hidden*, lưu m�
 - Sửa lỗi trùng khóa React ở Home (hai thẻ cùng trỏ `/workspaces`).
 - `Dockerfile` backend tạo sẵn `/data/attachments` cho người dùng `appuser`; `docker-compose.yml`
   thêm volume `attachments` và biến `ATTACHMENTS_DIR`.
-- Đẩy `main` lên GitHub (commit `776d3ee`).
+- Đã đẩy `main` lên GitHub tới commit `776d3ee` trước đợt này.
 
 ### 14 đến 16/11/2026 (đã lên GitHub, `ad6c753` và `776d3ee`)
 - **Admin có toàn quyền** (6 chỗ trước đây còn chặn Admin).
@@ -129,7 +144,11 @@ Bật Docker Desktop, rồi trong thư mục `work-space`:
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 ```
 Mở http://localhost:3000. Tài khoản mẫu (mật khẩu chung do chủ dự án giữ, không ghi vào repo):
-`QL01` (quản lý), `NV101`, `NV102`, `NV103` (nhân viên), `DEMOADMIN` (Admin).
+`ADMIN001` (Super Admin), `DEMOADMIN` (Admin), `QL01` (quản lý), `NV101`, `NV102`, `NV103` (nhân viên).
+
+**Ai được tạo tài khoản:** chỉ Super Admin và Admin (mục Human resources, API `POST /users`).
+Không ai khác tạo được, chưa có trang đăng ký. Super Admin đầu tiên chỉ tạo bằng lệnh
+`seed-superadmin`; hệ thống không cho tạo thêm `owner` qua giao diện.
 
 Nạp dữ liệu mẫu (chạy lại không thêm trùng):
 ```powershell
@@ -182,6 +201,8 @@ khởi động lại frontend. Dockerfile đổi thì `up -d --build backend`.
 
 ## 11. Cần nhớ
 
+- Việc nên làm khi tiếp tục: đẩy 4 commit chưa lên GitHub; chọn một mục ở phần 9; cân nhắc thêm
+  chức năng đổi/đặt lại mật khẩu và cho trưởng phòng tạo nhân viên trong phòng mình.
 - Cấu hình git của repo đang dùng danh tính `bravic2829-beep` (theo các commit cũ). Đẩy lên
   GitHub phải đăng nhập, nên bạn tự chạy: `git push origin HEAD:main`.
 - `docs/` và `AGENTS.md`, `CLAUDE.md` nằm trong `.gitignore`.
