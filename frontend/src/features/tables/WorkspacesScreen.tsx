@@ -4,7 +4,16 @@ import { FolderKanban, FolderOpen, Plus, User } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { Alert, Badge, Button, EmptyState, Input, LoadingState, PageHeader } from "@/components/ui";
+import {
+  Alert,
+  Badge,
+  Button,
+  EmptyState,
+  Input,
+  LinkCard,
+  LoadingState,
+  PageHeader,
+} from "@/components/ui";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { isOrgAdmin } from "@/features/auth/schema";
 
@@ -120,10 +129,7 @@ export function WorkspacesScreen() {
           {state.items.map((workspace) => {
             const Icon = workspace.kind === "personal" ? User : FolderKanban;
             return (
-              <li
-                key={workspace.id}
-                className="relative flex items-start gap-3 rounded-lg border border-line bg-surface p-3 transition-colors hover:border-primary hover:bg-primary-soft/40"
-              >
+              <LinkCard key={workspace.id} className="items-start rounded-lg p-3">
                 <span className="flex size-9 shrink-0 items-center justify-center rounded bg-primary-soft text-primary">
                   <Icon className="size-4.5" aria-hidden />
                 </span>
@@ -141,7 +147,7 @@ export function WorkspacesScreen() {
                     </Badge>
                   </small>
                 </span>
-              </li>
+              </LinkCard>
             );
           })}
         </ul>

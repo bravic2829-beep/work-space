@@ -13,7 +13,7 @@ import {
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { EmptyState, LoadingState, PageHeader } from "@/components/ui";
+import { EmptyState, LinkCard, LoadingState, PageHeader } from "@/components/ui";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { LEVEL_LABELS } from "@/features/auth/schema";
 import { listMyTasks } from "@/features/mytasks/api";
@@ -69,7 +69,7 @@ function Stat({
   tone: "danger" | "primary" | "neutral";
 }) {
   return (
-    <li className="relative flex items-center gap-3 rounded-xl border border-line bg-surface p-4 transition-colors hover:border-primary hover:bg-primary-soft/40">
+    <LinkCard className="items-center rounded-xl p-4">
       <span
         className={cn(
           "flex size-10 shrink-0 items-center justify-center rounded-lg",
@@ -89,7 +89,7 @@ function Stat({
           {label}
         </Link>
       </span>
-    </li>
+    </LinkCard>
   );
 }
 
@@ -182,10 +182,7 @@ export function HomeScreen() {
 
         <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] gap-3 p-0">
             {SHORTCUTS.map(({ href, title, text, icon: Icon }) => (
-              <li
-                key={title}
-                className="relative flex items-center gap-3 rounded-lg border border-line bg-surface p-3 transition-colors hover:border-primary hover:bg-primary-soft/40"
-              >
+              <LinkCard key={title} className="items-center rounded-lg p-3">
                 <span className="flex size-8 shrink-0 items-center justify-center rounded bg-primary-soft text-primary">
                   <Icon className="size-4" aria-hidden />
                 </span>
@@ -198,7 +195,7 @@ export function HomeScreen() {
                   </Link>
                   <span className="text-xs text-muted">{text}</span>
                 </span>
-              </li>
+              </LinkCard>
             ))}
           </ul>
       </div>

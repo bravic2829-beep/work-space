@@ -1,18 +1,19 @@
 "use client";
 
 import { Archive, Check, Minus, UserPlus, X } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
 import {
   Alert,
-  Avatar,
   Badge,
   Button,
   Drawer,
   DrawerBody,
-  Input,
   InlineConfirm,
+  Input,
   LoadingState,
+  PersonIdentity,
+  PersonRow,
   Select,
 } from "@/components/ui";
 import { UserPicker } from "@/features/tables/UserPicker";
@@ -28,10 +29,10 @@ import {
   SHEET_ROLE_LABELS,
   SHEET_ROLES,
   type SheetItem,
-  type SheetMemberItem,
   type SheetRole,
 } from "./schema";
 import { errorMessage } from "@/lib/api/errors";
+import { useApiResource } from "@/lib/useApiResource";
 import { useAsyncAction } from "@/lib/useAsyncAction";
 
 type Props = {
@@ -61,17 +62,11 @@ const COLUMNS: { id: SheetRole | "admin"; label: string }[] = [
   { id: "viewer", label: "View" },
 ];
 
-type Members =
-  | { kind: "loading" }
-  | { kind: "error" }
-  | { kind: "ready"; items: SheetMemberItem[] };
-
 /**
  * "Share": who is on the sheet and what each person may do, from two levels: system admins see
  * every sheet; everybody else has the role given here. The sheet's admins also rename or archive it.
  */
 export function ShareSheetDrawer({ sheet, onRenamed, onArchived, onMembersChanged, onClose }: Props) {
-  const [members, setMembers] = useState<Members>({ kind: "loading" });
   const [adding, setAdding] = useState<string[]>([]);
   const [role, setRole] = useState<SheetRole>("viewer");
   const [name, setName] = useState(sheet.name);
@@ -80,18 +75,11 @@ export function ShareSheetDrawer({ sheet, onRenamed, onArchived, onMembersChange
   const [loadKey, setLoadKey] = useState(0);
   const load = useCallback(async () => setLoadKey((n) => n + 1), []);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    async function fetchMembers() {
-      try {
-        setMembers({ kind: "ready", items: await listSheetMembers(sheet.id, controller.signal) });
-      } catch {
-        if (!controller.signal.aborted) setMembers({ kind: "error" });
-      }
-    }
-    void fetchMembers();
-    return () => controller.abort();
-  }, [sheet.id, loadKey]);
+  const members = useApiResource(
+    (signal) => listSheetMembers(sheet.id, signal),
+    "Could not load the people on this sheet.",
+    [sheet.id, loadKey],
+  );
 
   const run = (action: () => Promise<void>, failure: string) =>
     execute(action, (error) => errorMessage(error, failure));
@@ -172,18 +160,9 @@ export function ShareSheetDrawer({ sheet, onRenamed, onArchived, onMembersChange
             )}
             {members.kind === "ready" && (
               <ul aria-label="Sheet members" className="m-0 grid list-none gap-1 p-0">
-                {members.items.map((member) => (
-                  <li
-                    key={member.user_id}
-                    className="flex items-center gap-2 rounded-md border border-line bg-surface px-2.5 py-1.5"
-                  >
-                    <Avatar name={member.full_name} />
-                    <span className="flex min-w-0 flex-1 flex-col leading-tight">
-                      <span className="truncate text-[13px] font-medium">{member.full_name}</span>
-                      <span className="truncate font-mono text-[11px] text-muted">
-                        {member.employee_code}
-                      </span>
-                    </span>
+                {members.data.map((member) => (
+                  <PersonRow key={member.user_id}>
+                    <PersonIdentity name={member.full_name} code={member.employee_code} />
                     {member.is_owner && <Badge tone="info">Owner</Badge>}
                     <Select
                       aria-label={`Role of ${member.full_name}`}
@@ -211,7 +190,7 @@ export function ShareSheetDrawer({ sheet, onRenamed, onArchived, onMembersChange
                     >
                       <X className="size-4" aria-hidden />
                     </Button>
-                  </li>
+                  </PersonRow>
                 ))}
               </ul>
             )}

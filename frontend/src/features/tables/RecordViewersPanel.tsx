@@ -1,16 +1,24 @@
 "use client";
 
 import { Eye, X } from "lucide-react";
-import { useEffect, useState } from "react";
 
-import { Alert, Avatar, Badge, Button, LoadingState, type Tone } from "@/components/ui";
+import {
+  Alert,
+  Badge,
+  Button,
+  LoadingState,
+  PersonIdentity,
+  PersonRow,
+  type Tone,
+} from "@/components/ui";
 
 import { getRecordViewers, updateRecord } from "./api";
-import type { FieldItem, RecordItem, RecordViewers, ViewerReason } from "./schema";
+import type { FieldItem, RecordItem, ViewerReason } from "./schema";
 import { fieldBySemantic } from "./taskWorkflow";
 import { UserPicker } from "./UserPicker";
 import { canEditField } from "./values";
 import { errorMessage, hasStatus } from "@/lib/api/errors";
+import { useApiResource } from "@/lib/useApiResource";
 import { useAsyncAction } from "@/lib/useAsyncAction";
 
 type Props = {
@@ -36,11 +44,6 @@ const REASON_TONE: Record<ViewerReason, Tone> = {
   sheet: "neutral",
 };
 
-type State =
-  | { kind: "loading" }
-  | { kind: "error" }
-  | { kind: "ready"; viewers: RecordViewers };
-
 function followerIds(field: FieldItem, record: RecordItem): string[] {
   const value = record.data[field.id];
   return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : [];
@@ -52,21 +55,15 @@ function followerIds(field: FieldItem, record: RecordItem): string[] {
  * take that away. The backend decides who sees what; this only shows its answer.
  */
 export function RecordViewersPanel({ fields, record, onChanged }: Props) {
-  const [state, setState] = useState<State>({ kind: "loading" });
+  const state = useApiResource(
+    (signal) => getRecordViewers(record.id, signal),
+    "Could not load who can see this task.",
+    [record.id, record.version],
+  );
   const { busy, message, run } = useAsyncAction();
 
   const follower = fieldBySemantic(fields, "follower");
   const canShare = follower !== undefined && canEditField(follower);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    getRecordViewers(record.id, controller.signal)
-      .then((viewers) => setState({ kind: "ready", viewers }))
-      .catch(() => {
-        if (!controller.signal.aborted) setState({ kind: "error" });
-      });
-    return () => controller.abort();
-  }, [record.id, record.version]);
 
   async function setFollowers(next: string[]) {
     if (!follower) return;
@@ -96,20 +93,11 @@ export function RecordViewersPanel({ fields, record, onChanged }: Props) {
       {state.kind === "ready" && (
         <>
           <ul aria-label="People who can see this task" className="m-0 grid list-none gap-1 p-0">
-            {state.viewers.people.map((person) => {
+            {state.data.people.map((person) => {
               const removable = canShare && person.reasons.includes("follower");
               return (
-                <li
-                  key={person.user_id}
-                  className="flex items-center gap-2 rounded-md border border-line bg-surface px-2.5 py-1.5"
-                >
-                  <Avatar name={person.full_name} />
-                  <span className="flex min-w-0 flex-1 flex-col leading-tight">
-                    <span className="truncate text-[13px] font-medium">{person.full_name}</span>
-                    <span className="truncate font-mono text-[11px] text-muted">
-                      {person.employee_code}
-                    </span>
-                  </span>
+                <PersonRow key={person.user_id}>
+                  <PersonIdentity name={person.full_name} code={person.employee_code} />
                   {person.reasons.map((reason) => (
                     <Badge key={reason} tone={REASON_TONE[reason]}>
                       {REASON_LABEL[reason]}
@@ -130,13 +118,13 @@ export function RecordViewersPanel({ fields, record, onChanged }: Props) {
                       <X className="size-3.5" aria-hidden />
                     </Button>
                   )}
-                </li>
+                </PersonRow>
               );
             })}
           </ul>
           <p className="m-0 text-xs text-muted">
-            Everyone in “{state.viewers.workspace_name}” ({state.viewers.workspace_member_count}{" "}
-            {state.viewers.workspace_member_count === 1 ? "person" : "people"}) can see it too.
+            Everyone in “{state.data.workspace_name}” ({state.data.workspace_member_count}{" "}
+            {state.data.workspace_member_count === 1 ? "person" : "people"}) can see it too.
             People listed here can open it even if they are not in the workspace.
           </p>
         </>

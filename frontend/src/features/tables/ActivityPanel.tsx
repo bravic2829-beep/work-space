@@ -1,9 +1,10 @@
 "use client";
 
 import { History } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import { LoadingState } from "@/components/ui";
+import { useApiResource } from "@/lib/useApiResource";
 
 import { ACTION_TEXT, listActivity, type ActivityChange, type ActivityItem } from "./activity";
 import type { FieldItem } from "./schema";
@@ -16,8 +17,6 @@ type Props = {
   version: number;
   fields: FieldItem[];
 };
-
-type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; items: ActivityItem[] };
 
 function when(iso: string): string {
   return new Date(iso).toLocaleString("en-GB", {
@@ -44,22 +43,13 @@ function userIds(items: ActivityItem[], fields: FieldItem[]): string[] {
 
 /** "History": who did what to the task, newest first, in words. */
 export function ActivityPanel({ recordId, version, fields }: Props) {
-  const [state, setState] = useState<State>({ kind: "loading" });
+  const state = useApiResource(
+    (signal) => listActivity(recordId, signal),
+    "Could not load the history of this task.",
+    [recordId, version],
+  );
 
-  useEffect(() => {
-    const controller = new AbortController();
-    async function load() {
-      try {
-        setState({ kind: "ready", items: await listActivity(recordId, controller.signal) });
-      } catch {
-        if (!controller.signal.aborted) setState({ kind: "error" });
-      }
-    }
-    void load();
-    return () => controller.abort();
-  }, [recordId, version]);
-
-  const items = useMemo(() => (state.kind === "ready" ? state.items : []), [state]);
+  const items = useMemo(() => (state.kind === "ready" ? state.data : []), [state]);
   const names = useUserNames(userIds(items, fields));
   const byId = useMemo(() => new Map(fields.map((f) => [f.id, f])), [fields]);
 

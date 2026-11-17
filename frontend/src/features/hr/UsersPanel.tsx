@@ -1,9 +1,17 @@
 "use client";
 
-import { Plus, Search, UserX } from "lucide-react";
+import { Plus, UserX } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { Button, DataTable, EmptyState, ErrorMessage, Input, LoadingState, SegmentedControl } from "@/components/ui";
+import {
+  Button,
+  DataTable,
+  EmptyState,
+  ErrorMessage,
+  LoadingState,
+  SearchInput,
+  SegmentedControl,
+} from "@/components/ui";
 import { useAuth } from "@/features/auth/AuthProvider";
 import type { User } from "@/features/auth/schema";
 
@@ -126,21 +134,14 @@ export function UsersPanel({ departments }: { departments: Department[] }) {
   return (
     <section aria-label="Employees" className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative">
-          <Search
-            className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted"
-            aria-hidden
-          />
-          <Input
-            type="search"
-            aria-label="Search employees"
-            placeholder="Search code or name…"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            maxLength={100}
-            className="h-7 w-72 pl-7 text-[13px]"
-          />
-        </div>
+        <SearchInput
+          aria-label="Search employees"
+          placeholder="Search code or name…"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          maxLength={100}
+          className="w-72"
+        />
         <SegmentedControl
           label="Status"
           options={STATUS_OPTIONS}

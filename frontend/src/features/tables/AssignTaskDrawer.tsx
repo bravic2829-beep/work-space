@@ -12,6 +12,7 @@ import {
   DrawerFooter,
   FormField,
   Input,
+  PersonRow,
   Textarea,
 } from "@/components/ui";
 import { firstProblem } from "@/lib/api/errors";
@@ -172,28 +173,22 @@ export function AssignTaskDrawer({ tableId, fields, onAssigned, onClose }: Props
               </h3>
               <ul className="m-0 grid list-none gap-1 p-0">
                 {assignee.map((id) => (
-                  <li
-                    key={id}
-                    className="flex items-center gap-2 rounded-md border border-line bg-surface px-2.5 py-1.5"
-                  >
+                  <PersonRow key={id}>
                     <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
                       {names.get(id) ?? "…"}
                     </span>
                     <Badge tone="info">Assignee</Badge>
                     <span className="text-xs text-muted">Opens it, reports it done</span>
-                  </li>
+                  </PersonRow>
                 ))}
                 {viewOnly.map((id) => (
-                  <li
-                    key={id}
-                    className="flex items-center gap-2 rounded-md border border-line bg-surface px-2.5 py-1.5"
-                  >
+                  <PersonRow key={id}>
                     <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
                       {names.get(id) ?? "…"}
                     </span>
                     <Badge tone="success">Can view</Badge>
                     <span className="text-xs text-muted">Read only</span>
-                  </li>
+                  </PersonRow>
                 ))}
               </ul>
             </section>

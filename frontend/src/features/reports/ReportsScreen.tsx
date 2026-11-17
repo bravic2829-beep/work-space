@@ -16,13 +16,9 @@ import { useEffect, useState } from "react";
 import { Alert, Avatar, EmptyState, LoadingState, PageHeader, Select } from "@/components/ui";
 import { cn } from "@/lib/cn";
 
-import { getOverview, listReportTables, type Overview, type ReportTable } from "./api";
+import { getOverview, listReportTables, type Overview } from "./api";
 import { errorMessage } from "@/lib/api/errors";
-
-type Tables =
-  | { kind: "loading" }
-  | { kind: "error"; message: string }
-  | { kind: "ready"; items: ReportTable[] };
+import { useApiResource } from "@/lib/useApiResource";
 
 type Report =
   | { kind: "idle" }
@@ -43,26 +39,11 @@ const KIND_BAR: Record<string, string> = {
  * is shown as "—".
  */
 export function ReportsScreen() {
-  const [tables, setTables] = useState<Tables>({ kind: "loading" });
+  const tables = useApiResource(listReportTables, "Could not load the tables.", []);
   const [tableId, setTableId] = useState<string | null>(null);
   const [report, setReport] = useState<Report>({ kind: "idle" });
 
-  useEffect(() => {
-    const controller = new AbortController();
-    async function load() {
-      try {
-        setTables({ kind: "ready", items: await listReportTables(controller.signal) });
-      } catch (error) {
-        if (!controller.signal.aborted) {
-          setTables({ kind: "error", message: errorMessage(error, "Could not load the tables.") });
-        }
-      }
-    }
-    void load();
-    return () => controller.abort();
-  }, []);
-
-  const items = tables.kind === "ready" ? tables.items : [];
+  const items = tables.kind === "ready" ? tables.data : [];
   const current = items.find((t) => t.id === tableId)?.id ?? items[0]?.id ?? null;
 
   useEffect(() => {

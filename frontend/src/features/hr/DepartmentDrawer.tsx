@@ -2,7 +2,18 @@
 
 import { useRef, useState } from "react";
 
-import { Alert, Button, Drawer, DrawerBody, DrawerFooter, ErrorMessage, FormField, Input, SegmentedControl, Select } from "@/components/ui";
+import {
+  Alert,
+  Button,
+  Drawer,
+  DrawerBody,
+  DrawerFooter,
+  ErrorMessage,
+  FormField,
+  Input,
+  SegmentedControl,
+  Select,
+} from "@/components/ui";
 
 import { createDepartment } from "./api";
 import type { Department, DepartmentKind } from "./schema";
