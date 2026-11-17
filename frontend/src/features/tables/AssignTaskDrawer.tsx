@@ -14,7 +14,8 @@ import {
   Input,
   Textarea,
 } from "@/components/ui";
-import { ApiError } from "@/lib/api/client";
+import { firstProblem } from "@/lib/api/errors";
+import { useAsyncAction } from "@/lib/useAsyncAction";
 
 import { createRecord } from "./api";
 import type { FieldItem, RecordItem } from "./schema";
@@ -61,8 +62,7 @@ export function AssignTaskDrawer({ tableId, fields, onAssigned, onClose }: Props
   const [description, setDescription] = useState("");
   const [viewers, setViewers] = useState<string[]>([]);
   const [another, setAnother] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const { busy, message, run } = useAsyncAction();
   const names = useUserNames([...assignee, ...viewers]);
 
   if (!targets) {
@@ -87,37 +87,30 @@ export function AssignTaskDrawer({ tableId, fields, onAssigned, onClose }: Props
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!ready) return;
-    setBusy(true);
-    setMessage(null);
-    try {
-      const data: Record<string, unknown> = {
-        [t.name.id]: name.trim(),
-        [t.assignee.id]: assignee,
-      };
-      if (t.due && due) data[t.due.id] = due;
-      if (t.description && description.trim()) data[t.description.id] = description.trim();
-      if (t.follower && viewers.length > 0) data[t.follower.id] = viewers;
-      const created = await createRecord(tableId, data);
-      const who = assignee.map((id) => names.get(id) ?? "the assignee").join(", ");
-      onAssigned(created, name.trim(), who);
-      if (another) {
-        setName("");
-        setDue("");
-        setDescription("");
-        setViewers([]);
-        // The person stays: several tasks for the same person is the usual case.
-      } else {
-        onClose();
-      }
-    } catch (error) {
-      setMessage(
-        error instanceof ApiError
-          ? (error.fieldErrors[0]?.message ?? error.message)
-          : "Could not assign the task.",
-      );
-    } finally {
-      setBusy(false);
-    }
+    await run(
+      async () => {
+        const data: Record<string, unknown> = {
+          [t.name.id]: name.trim(),
+          [t.assignee.id]: assignee,
+        };
+        if (t.due && due) data[t.due.id] = due;
+        if (t.description && description.trim()) data[t.description.id] = description.trim();
+        if (t.follower && viewers.length > 0) data[t.follower.id] = viewers;
+        const created = await createRecord(tableId, data);
+        const who = assignee.map((id) => names.get(id) ?? "the assignee").join(", ");
+        onAssigned(created, name.trim(), who);
+        if (another) {
+          setName("");
+          setDue("");
+          setDescription("");
+          setViewers([]);
+          // The person stays: several tasks for the same person is the usual case.
+        } else {
+          onClose();
+        }
+      },
+      (error) => firstProblem(error, "Could not assign the task."),
+    );
   }
 
   return (

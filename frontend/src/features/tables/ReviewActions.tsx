@@ -9,6 +9,7 @@ import { reviewRecord, type ReviewAction } from "./api";
 import type { FieldItem, RecordItem } from "./schema";
 import { reviewSteps } from "./taskWorkflow";
 import { errorMessage, hasStatus } from "@/lib/api/errors";
+import { useAsyncAction } from "@/lib/useAsyncAction";
 
 type Props = {
   fields: FieldItem[];
@@ -41,8 +42,7 @@ export function ReviewActions({
   onChanged,
   onReload,
 }: Props) {
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const { busy, message, run: execute } = useAsyncAction();
   const [conflict, setConflict] = useState(false);
   const [asking, setAsking] = useState(false);
   const [reason, setReason] = useState("");
@@ -50,27 +50,24 @@ export function ReviewActions({
   const steps = reviewSteps(fields, record, currentUserId, reviewer, admin);
   if (steps.length === 0) return null;
 
-  async function run(action: ReviewAction) {
-    setBusy(true);
-    setMessage(null);
-    try {
-      onChanged(
-        action === "reject"
-          ? await reviewRecord(record.id, record.version, action, reason.trim())
-          : await reviewRecord(record.id, record.version, action),
-      );
-    } catch (error) {
-      if (hasStatus(error, 412)) {
-        setConflict(true);
-        setMessage("Somebody else changed this task. Reload it and try again.");
-      } else {
+  const run = (action: ReviewAction) =>
+    execute(
+      async () => {
+        onChanged(
+          action === "reject"
+            ? await reviewRecord(record.id, record.version, action, reason.trim())
+            : await reviewRecord(record.id, record.version, action),
+        );
+      },
+      (error) => {
+        if (hasStatus(error, 412)) {
+          setConflict(true);
+          return "Somebody else changed this task. Reload it and try again.";
+        }
         // The reason stays in the box, so nothing typed is lost.
-        setMessage(errorMessage(error, "Could not update the task."));
-      }
-    } finally {
-      setBusy(false);
-    }
-  }
+        return errorMessage(error, "Could not update the task.");
+      },
+    );
 
   return (
     <section aria-label="Review" className="grid gap-2">

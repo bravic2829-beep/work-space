@@ -7,6 +7,7 @@ export { Checkbox, Input, Select, Textarea } from "./controls";
 export { DataTable } from "./DataTable";
 export { Drawer, DrawerBody, DrawerFooter } from "./Drawer";
 export { EmptyState, LoadingState } from "./feedback";
+export { ErrorMessage } from "./ErrorMessage";
 export { FormField } from "./FormField";
 export { InlineConfirm } from "./InlineConfirm";
 export { PageHeader } from "./PageHeader";

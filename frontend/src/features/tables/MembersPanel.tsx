@@ -7,6 +7,7 @@ import { Alert, Button, Card, Input, Select } from "@/components/ui";
 import { addMember, changeMemberRole, listMembers, removeMember, searchDirectory } from "./api";
 import type { DirectoryUser, MemberItem, Role } from "./schema";
 import { errorMessage } from "@/lib/api/errors";
+import { useAsyncAction } from "@/lib/useAsyncAction";
 
 const ROLES: Role[] = ["viewer", "commenter", "editor", "admin"];
 
@@ -28,8 +29,7 @@ type Props = {
 export function MembersPanel({ workspaceId, canManage, currentUserId }: Props) {
   const [members, setMembers] = useState<MemberItem[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { busy, message: error, run } = useAsyncAction();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<DirectoryUser[]>([]);
   const [newRole, setNewRole] = useState<Role>("editor");
@@ -68,18 +68,14 @@ export function MembersPanel({ workspaceId, canManage, currentUserId }: Props) {
     };
   }, [query, canManage]);
 
-  async function change(action: () => Promise<unknown>, fallback: string) {
-    setError(null);
-    setBusy(true);
-    try {
-      await action();
-      setReload((n) => n + 1);
-    } catch (caught) {
-      setError(errorMessage(caught, fallback));
-    } finally {
-      setBusy(false);
-    }
-  }
+  const change = (action: () => Promise<unknown>, fallback: string) =>
+    run(
+      async () => {
+        await action();
+        setReload((n) => n + 1);
+      },
+      (caught) => errorMessage(caught, fallback),
+    );
 
   const memberIds = new Set((members ?? []).map((m) => m.user_id));
   const candidates = results.filter((user) => !memberIds.has(user.id));

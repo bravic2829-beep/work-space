@@ -3,19 +3,11 @@
 import { Plus, Search, UserX } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import {
-  Button,
-  DataTable,
-  EmptyState,
-  Input,
-  LoadingState,
-  SegmentedControl,
-} from "@/components/ui";
+import { Button, DataTable, EmptyState, ErrorMessage, Input, LoadingState, SegmentedControl } from "@/components/ui";
 import { useAuth } from "@/features/auth/AuthProvider";
 import type { User } from "@/features/auth/schema";
 
 import { listUsers, updateUser, type UserFilters } from "./api";
-import { ErrorMessage } from "./ErrorMessage";
 import type { Department } from "./schema";
 import { UserDrawer, type UserDrawerTarget } from "./UserDrawer";
 import { UserRow } from "./UserRow";

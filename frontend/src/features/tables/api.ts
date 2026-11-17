@@ -1,4 +1,4 @@
-import { API, apiRequest } from "@/lib/api/client";
+import { API, apiRequest, ifMatch } from "@/lib/api/client";
 
 import {
   isBaseItem,
@@ -205,7 +205,7 @@ export function updateRecord(
   return apiRequest("PATCH", `${API}/records/${id}`, {
     body: { data },
     guard: isRecordItem,
-    headers: { "If-Match": `"${version}"` },
+    headers: ifMatch(version),
   });
 }
 
@@ -226,7 +226,7 @@ export function reviewRecord(
   return apiRequest("POST", `${API}/records/${id}/review`, {
     body: reason === undefined ? { action } : { action, reason },
     guard: isRecordItem,
-    headers: { "If-Match": `"${version}"` },
+    headers: ifMatch(version),
   });
 }
 
@@ -245,7 +245,7 @@ export function timerRecord(
   return apiRequest("POST", `${API}/records/${id}/timer`, {
     body: fieldId === undefined ? { action } : { action, field_id: fieldId },
     guard: isRecordItem,
-    headers: { "If-Match": `"${version}"` },
+    headers: ifMatch(version),
   });
 }
 

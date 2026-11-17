@@ -2,20 +2,9 @@
 
 import { useRef, useState } from "react";
 
-import {
-  Alert,
-  Button,
-  Drawer,
-  DrawerBody,
-  DrawerFooter,
-  FormField,
-  Input,
-  SegmentedControl,
-  Select,
-} from "@/components/ui";
+import { Alert, Button, Drawer, DrawerBody, DrawerFooter, ErrorMessage, FormField, Input, SegmentedControl, Select } from "@/components/ui";
 
 import { createDepartment } from "./api";
-import { ErrorMessage } from "./ErrorMessage";
 import type { Department, DepartmentKind } from "./schema";
 
 type Props = {

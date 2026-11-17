@@ -11,6 +11,7 @@ import { fieldBySemantic } from "./taskWorkflow";
 import { UserPicker } from "./UserPicker";
 import { canEditField } from "./values";
 import { errorMessage, hasStatus } from "@/lib/api/errors";
+import { useAsyncAction } from "@/lib/useAsyncAction";
 
 type Props = {
   fields: FieldItem[];
@@ -52,8 +53,7 @@ function followerIds(field: FieldItem, record: RecordItem): string[] {
  */
 export function RecordViewersPanel({ fields, record, onChanged }: Props) {
   const [state, setState] = useState<State>({ kind: "loading" });
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const { busy, message, run } = useAsyncAction();
 
   const follower = fieldBySemantic(fields, "follower");
   const canShare = follower !== undefined && canEditField(follower);
@@ -70,19 +70,15 @@ export function RecordViewersPanel({ fields, record, onChanged }: Props) {
 
   async function setFollowers(next: string[]) {
     if (!follower) return;
-    setBusy(true);
-    setMessage(null);
-    try {
-      onChanged(await updateRecord(record.id, record.version, { [follower.id]: next }));
-    } catch (error) {
-      setMessage(
+    await run(
+      async () => {
+        onChanged(await updateRecord(record.id, record.version, { [follower.id]: next }));
+      },
+      (error) =>
         hasStatus(error, 412)
           ? "Somebody else changed this task. Close it and open it again."
           : errorMessage(error, "Could not change who can see this task."),
-      );
-    } finally {
-      setBusy(false);
-    }
+    );
   }
 
   const current = follower ? followerIds(follower, record) : [];

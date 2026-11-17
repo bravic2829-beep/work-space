@@ -2,21 +2,11 @@
 
 import { useRef, useState } from "react";
 
-import {
-  Alert,
-  Button,
-  Drawer,
-  DrawerBody,
-  DrawerFooter,
-  FormField,
-  Input,
-  Select,
-} from "@/components/ui";
+import { Alert, Button, Drawer, DrawerBody, DrawerFooter, ErrorMessage, FormField, Input, Select } from "@/components/ui";
 import { LEVEL_LABELS, type User, type UserLevel } from "@/features/auth/schema";
 
 import { createUser, resetPassword, updateUser, type UserChanges } from "./api";
 import { departmentLabel } from "./departmentTree";
-import { ErrorMessage } from "./ErrorMessage";
 import type { Department } from "./schema";
 
 const LEVELS = Object.keys(LEVEL_LABELS) as UserLevel[];

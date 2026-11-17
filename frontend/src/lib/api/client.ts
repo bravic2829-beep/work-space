@@ -3,6 +3,11 @@ import { isRecord } from "./guards";
 /** The root of every backend endpoint. */
 export const API = "/api/v1";
 
+/** The If-Match header: change a record only if it is still at the version the person saw. */
+export function ifMatch(version: number): Record<string, string> {
+  return { "If-Match": `"${version}"` };
+}
+
 export type FieldError = { field: string; message: string };
 
 export class ApiError extends Error {

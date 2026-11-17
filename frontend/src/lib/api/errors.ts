@@ -5,6 +5,11 @@ export function errorMessage(error: unknown, fallback: string): string {
   return error instanceof ApiError ? error.message : fallback;
 }
 
+/** Like errorMessage, but a form field's own message (a 422) comes first. */
+export function firstProblem(error: unknown, fallback: string): string {
+  return error instanceof ApiError ? (error.fieldErrors[0]?.message ?? error.message) : fallback;
+}
+
 /** Is this an API error with exactly this HTTP status? */
 export function hasStatus(error: unknown, status: number): boolean {
   return error instanceof ApiError && error.status === status;

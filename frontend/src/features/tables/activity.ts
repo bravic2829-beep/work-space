@@ -1,4 +1,4 @@
-import { apiRequest } from "@/lib/api/client";
+import { apiRequest, ifMatch } from "@/lib/api/client";
 
 import { isRecordItem, type RecordItem } from "./schema";
 import { isRecord } from "@/lib/api/guards";
@@ -85,7 +85,7 @@ export function handOver(recordId: string, version: number, body: Handover): Pro
   return apiRequest("POST", `/api/v1/records/${recordId}/handover`, {
     body,
     guard: isRecordItem,
-    headers: { "If-Match": `"${version}"` },
+    headers: ifMatch(version),
   });
 }
 

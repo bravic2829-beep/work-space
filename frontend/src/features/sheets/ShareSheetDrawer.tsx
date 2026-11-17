@@ -32,6 +32,7 @@ import {
   type SheetRole,
 } from "./schema";
 import { errorMessage } from "@/lib/api/errors";
+import { useAsyncAction } from "@/lib/useAsyncAction";
 
 type Props = {
   sheet: SheetItem;
@@ -74,8 +75,7 @@ export function ShareSheetDrawer({ sheet, onRenamed, onArchived, onMembersChange
   const [adding, setAdding] = useState<string[]>([]);
   const [role, setRole] = useState<SheetRole>("viewer");
   const [name, setName] = useState(sheet.name);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const { busy, message, run: execute } = useAsyncAction();
 
   const [loadKey, setLoadKey] = useState(0);
   const load = useCallback(async () => setLoadKey((n) => n + 1), []);
@@ -93,17 +93,8 @@ export function ShareSheetDrawer({ sheet, onRenamed, onArchived, onMembersChange
     return () => controller.abort();
   }, [sheet.id, loadKey]);
 
-  async function run(action: () => Promise<void>, failure: string) {
-    setBusy(true);
-    setMessage(null);
-    try {
-      await action();
-    } catch (error) {
-      setMessage(errorMessage(error, failure));
-    } finally {
-      setBusy(false);
-    }
-  }
+  const run = (action: () => Promise<void>, failure: string) =>
+    execute(action, (error) => errorMessage(error, failure));
 
   const add = () =>
     run(async () => {
