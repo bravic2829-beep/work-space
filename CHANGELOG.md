@@ -15,7 +15,7 @@ có quyền riêng, cập nhật tiến độ, duyệt, bàn giao, đính kèm f
 | Ngôn ngữ giao diện | Tiếng Anh. Dữ liệu mẫu bằng tiếng Việt |
 | Nhánh | `ui-redesign`. `main` trên GitHub đang ở commit `776d3ee` |
 | Chưa commit | Đợt 16 đến 17/11: file đính kèm, "Column access", `CHANGELOG.md` |
-| Test | Frontend 515 qua. Backend 719 qua (ruff, mypy sạch) |
+| Test | Frontend 528 qua. Backend 726 qua (ruff, mypy sạch) |
 
 ## 2. Những gì web đang làm được
 
@@ -157,8 +157,8 @@ khởi động lại frontend. Dockerfile đổi thì `up -d --build backend`.
 
 ## 8. Kiểm thử
 
-- Frontend: 515 test qua (vitest), lint và kiểm tra kiểu sạch.
-- Backend: bộ đầy đủ ngày 17/11 là **719 test qua**, cộng ruff, kiểm tra định dạng và mypy sạch.
+- Frontend: 528 test qua (vitest), lint và kiểm tra kiểu sạch.
+- Backend: bộ đầy đủ ngày 17/11 là **726 test qua** (sau khi gộp commit "Live record updates" từ GitHub), cộng ruff, kiểm tra định dạng và mypy sạch.
   Lần chạy đầu có 1 test cũ lỗi vì bảng công việc đã thêm cột "Files"; test đã sửa và chạy lại qua.
 - Đã chạy thật trên server (qua cổng 3000) với tài khoản mẫu: luồng admin → sheet → giao việc →
   cập nhật → báo hoàn thành → duyệt → báo cáo; tải file lên, tải về, xóa; chọn cột cho một người.
