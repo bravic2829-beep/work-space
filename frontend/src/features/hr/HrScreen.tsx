@@ -21,6 +21,9 @@ export function HrScreen() {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [reloadKey, setReloadKey] = useState(0);
   const [tab, setTab] = useState<TabId>("employees");
+  // The department the Employees tab is narrowed to ("" for all).
+  const [departmentId, setDepartmentId] = useState("");
+  const refreshDepartments = () => setReloadKey((value) => value + 1);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -71,7 +74,12 @@ export function HrScreen() {
         aria-labelledby="hr-tab-employees"
         hidden={tab !== "employees"}
       >
-        <UsersPanel departments={state.departments} />
+        <UsersPanel
+          departments={state.departments}
+          departmentId={departmentId}
+          onDepartmentChange={setDepartmentId}
+          onChanged={refreshDepartments}
+        />
       </div>
       <div
         role="tabpanel"
@@ -81,7 +89,11 @@ export function HrScreen() {
       >
         <DepartmentsPanel
           departments={state.departments}
-          onChanged={() => setReloadKey((value) => value + 1)}
+          onChanged={refreshDepartments}
+          onShowPeople={(id) => {
+            setDepartmentId(id);
+            setTab("employees");
+          }}
         />
       </div>
     </div>

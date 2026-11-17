@@ -1,21 +1,24 @@
 "use client";
 
 import { Plus, UserX } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   Button,
   DataTable,
   EmptyState,
   ErrorMessage,
-  LoadingState,
   SearchInput,
   SegmentedControl,
+  Select,
+  SkeletonTable,
 } from "@/components/ui";
 import { useAuth } from "@/features/auth/AuthProvider";
 import type { User } from "@/features/auth/schema";
+import { useUserNames } from "@/features/tables/useUserNames";
 
 import { listUsers, updateUser, type UserFilters } from "./api";
+import { departmentLabel } from "./departmentTree";
 import type { Department } from "./schema";
 import { UserDrawer, type UserDrawerTarget } from "./UserDrawer";
 import { UserRow } from "./UserRow";
@@ -25,7 +28,9 @@ type ListState =
   | { kind: "error"; error: unknown }
   | { kind: "ready"; items: User[]; nextCursor: string | null };
 
-const NO_FILTERS: UserFilters = { q: "", status: "" };
+type TextFilters = { q: string; status: UserFilters["status"] };
+
+const NO_FILTERS: TextFilters = { q: "", status: "" };
 /** Wait for a pause in typing before asking the server, so each letter is not a request. */
 const SEARCH_DELAY_MS = 300;
 
@@ -35,12 +40,28 @@ const STATUS_OPTIONS: { value: UserFilters["status"]; label: string }[] = [
   { value: "disabled", label: "Disabled" },
 ];
 
-export function UsersPanel({ departments }: { departments: Department[] }) {
+export function UsersPanel({
+  departments,
+  departmentId,
+  onDepartmentChange,
+  onChanged,
+}: {
+  departments: Department[];
+  /** The department the list is narrowed to, "" for all. The screen keeps it, so the Departments tab can set it. */
+  departmentId: string;
+  onDepartmentChange: (departmentId: string) => void;
+  /** The people changed (added, edited, disabled), so the head counts of the departments are stale. */
+  onChanged: () => void;
+}) {
   const { state } = useAuth();
   const meId = state.status === "authenticated" ? state.user.id : null;
 
   const [query, setQuery] = useState("");
-  const [filters, setFilters] = useState<UserFilters>(NO_FILTERS);
+  const [textFilters, setFilters] = useState<TextFilters>(NO_FILTERS);
+  const filters = useMemo<UserFilters>(
+    () => ({ ...textFilters, departmentId }),
+    [textFilters, departmentId],
+  );
   const [reloadKey, setReloadKey] = useState(0);
   const [list, setList] = useState<ListState>({ kind: "loading" });
   // Rows stay on screen (dimmed) while a new search loads, instead of the table blinking away.
@@ -73,17 +94,18 @@ export function UsersPanel({ departments }: { departments: Department[] }) {
   // Typing: apply the search after a short pause.
   useEffect(() => {
     const trimmed = query.trim();
-    if (trimmed === filters.q) return;
+    if (trimmed === textFilters.q) return;
     const timer = setTimeout(() => {
       setRefreshing(true);
       setFilters((current) => ({ ...current, q: trimmed }));
     }, SEARCH_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [query, filters.q]);
+  }, [query, textFilters.q]);
 
   function reload() {
     setRefreshing(true);
     setReloadKey((value) => value + 1);
+    onChanged();
   }
 
   function chooseStatus(status: UserFilters["status"]) {
@@ -122,7 +144,9 @@ export function UsersPanel({ departments }: { departments: Department[] }) {
     }
   }
 
-  const filtering = filters.q !== "" || filters.status !== "";
+  const filtering = filters.q !== "" || filters.status !== "" || departmentId !== "";
+  // The managers are looked up together, so each row finds its manager already known.
+  useUserNames(list.kind === "ready" ? list.items.flatMap((u) => (u.manager_id ? [u.manager_id] : [])) : []);
   // "50+" when there is another page behind "Load more".
   const countText =
     list.kind === "ready"
@@ -148,6 +172,22 @@ export function UsersPanel({ departments }: { departments: Department[] }) {
           value={filters.status}
           onChange={chooseStatus}
         />
+        <Select
+          aria-label="Department"
+          className="h-7 w-auto py-0 text-[13px] leading-5"
+          value={departmentId}
+          onChange={(event) => {
+            setRefreshing(true);
+            onDepartmentChange(event.target.value);
+          }}
+        >
+          <option value="">All departments</option>
+          {departments.map((item) => (
+            <option key={item.id} value={item.id}>
+              {departmentLabel(item, departments)}
+            </option>
+          ))}
+        </Select>
         <div className="ml-auto flex items-center gap-3">
           {countText && <span className="font-mono text-xs text-muted">{countText}</span>}
           <Button
@@ -163,23 +203,28 @@ export function UsersPanel({ departments }: { departments: Department[] }) {
 
       <ErrorMessage error={rowError} />
 
-      {list.kind === "loading" && <LoadingState>Loading employees…</LoadingState>}
+      {list.kind === "loading" && (
+        <SkeletonTable
+          headings={["Employee", "Level", "Department", "Manager", "Status", ""]}
+          label="Loading employees…"
+        />
+      )}
       {list.kind === "error" && <ErrorMessage error={list.error} />}
       {list.kind === "ready" && (
         <>
           {list.items.length === 0 ? (
             <EmptyState icon={UserX} title={filtering ? "No employees match." : "No employees yet."}>
-              {filtering ? "Try a different search or status." : "Add the first employee with “New employee”."}
+              {filtering ? "Try a different search, status or department." : "Add the first employee with “New employee”."}
             </EmptyState>
           ) : (
             <div className={refreshing ? "opacity-60 transition-opacity" : "transition-opacity"}>
               <DataTable dense aria-label="Employees">
                 <thead>
                   <tr>
-                    <th>Code</th>
-                    <th>Name</th>
+                    <th>Employee</th>
                     <th>Level</th>
                     <th>Department</th>
+                    <th>Manager</th>
                     <th>Status</th>
                     <th>
                       <span className="sr-only">Actions</span>
@@ -191,11 +236,13 @@ export function UsersPanel({ departments }: { departments: Department[] }) {
                     <UserRow
                       key={user.id}
                       user={user}
-                      departmentName={departments.find((d) => d.id === user.department_id)?.name ?? ""}
+                      department={departments.find((d) => d.id === user.department_id)}
+                      departments={departments}
                       isSelf={user.id === meId}
                       selected={target?.mode === "edit" && target.user.id === user.id}
                       busy={busyId === user.id}
                       onEdit={() => setTarget({ mode: "edit", user })}
+                      onResetPassword={() => setTarget({ mode: "edit", user, section: "password" })}
                       onSetStatus={(status) => void setStatus(user, status)}
                     />
                   ))}

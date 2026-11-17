@@ -12,6 +12,8 @@ type Props = {
   title: string;
   /** A line under the title, for example the employee code. */
   subtitle?: string;
+  /** Something before the title, for example the avatar of the person the panel is about. */
+  leading?: React.ReactNode;
   onClose: () => void;
   /** 480px instead of 380px, for a panel with a lot in it (a record with comments). */
   wide?: boolean;
@@ -25,7 +27,7 @@ const FIRST_FIELD = "input:not([disabled]):not([type=hidden]), select:not([disab
  * thing without leaving the list. The list behind it stays usable on a wide screen. Escape and the
  * close button close it, the first field gets the focus, and the focus goes back to where it was.
  */
-export function Drawer({ open, title, subtitle, onClose, wide = false, children }: Props) {
+export function Drawer({ open, title, subtitle, leading, onClose, wide = false, children }: Props) {
   const titleId = useId();
   const panel = useRef<HTMLElement>(null);
   const onCloseRef = useRef(onClose);
@@ -73,11 +75,14 @@ export function Drawer({ open, title, subtitle, onClose, wide = false, children 
         )}
       >
         <header className="flex items-start justify-between gap-2 border-b border-line px-4 py-3">
-          <div className="min-w-0">
-            <h2 id={titleId} className="m-0 truncate text-base">
-              {title}
-            </h2>
-            {subtitle && <p className="m-0 truncate font-mono text-xs text-muted">{subtitle}</p>}
+          <div className="flex min-w-0 items-center gap-2.5">
+            {leading}
+            <div className="min-w-0">
+              <h2 id={titleId} className="m-0 truncate text-base">
+                {title}
+              </h2>
+              {subtitle && <p className="m-0 truncate font-mono text-xs text-muted">{subtitle}</p>}
+            </div>
           </div>
           <Button variant="ghost" size="icon" aria-label="Close panel" onClick={onClose}>
             <X className="size-4" aria-hidden />
