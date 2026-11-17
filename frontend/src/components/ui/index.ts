@@ -8,7 +8,9 @@ export { DataTable } from "./DataTable";
 export { Drawer, DrawerBody, DrawerFooter } from "./Drawer";
 export { EmptyState, LoadingState } from "./feedback";
 export { ErrorMessage } from "./ErrorMessage";
+export { FieldGroup } from "./FieldGroup";
 export { FormField } from "./FormField";
+export { FormSection } from "./FormSection";
 export { InlineConfirm } from "./InlineConfirm";
 export { LinkCard } from "./LinkCard";
 export { Menu, type MenuItem } from "./Menu";
@@ -18,6 +20,7 @@ export { Popover, PopoverContent, PopoverTrigger, usePopoverClose } from "./Popo
 export { SearchInput } from "./SearchInput";
 export { SegmentedControl, type SegmentOption } from "./SegmentedControl";
 export { SplitButton } from "./SplitButton";
+export { StatCard, type StatTone } from "./StatCard";
 export { Skeleton, SkeletonTable } from "./Skeleton";
 export { Tabs, type TabItem } from "./Tabs";
 export { ToastProvider, useToast } from "./Toast";

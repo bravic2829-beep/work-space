@@ -6,17 +6,26 @@ import { cn } from "@/lib/cn";
 
 import { Popover, PopoverContent, PopoverTrigger, usePopoverClose } from "./Popover";
 
-export type MenuItem = { label: string; icon?: LucideIcon; onSelect: () => void };
+export type MenuItem = {
+  label: string;
+  icon?: LucideIcon;
+  onSelect: () => void;
+  /** Greyed out and not clickable; `hint` says why (shown on hover). */
+  disabled?: boolean;
+  hint?: string;
+};
 
 function Items({ items }: { items: MenuItem[] }) {
   const close = usePopoverClose();
   return (
     <ul role="menu" className="m-0 list-none p-0">
-      {items.map(({ label, icon: Icon, onSelect }) => (
+      {items.map(({ label, icon: Icon, onSelect, disabled, hint }) => (
         <li key={label} role="none">
           <button
             type="button"
             role="menuitem"
+            disabled={disabled}
+            title={disabled ? hint : undefined}
             className="flex w-full justify-start gap-2 rounded border-0 bg-transparent px-2.5 py-1.5 text-left text-[13px] font-normal hover:bg-surface-muted"
             onClick={() => {
               close();
@@ -50,7 +59,7 @@ export function Menu({
   return (
     <Popover>
       <PopoverTrigger render={trigger} />
-      <PopoverContent align={align} className={cn("w-48", className)}>
+      <PopoverContent align={align} floating className={cn("w-48", className)}>
         <Items items={items} />
       </PopoverContent>
     </Popover>

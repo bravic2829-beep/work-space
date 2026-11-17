@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { plainName } from "@/components/ui";
+
 import { lookupUsers } from "./api";
 
 // People never change their name in the middle of a session in a way that matters, so one cache
@@ -14,6 +16,12 @@ export function resetUserNames(): void {
 
 export function userLabel(user: { full_name: string; employee_code: string }): string {
   return `${user.full_name} (${user.employee_code})`;
+}
+
+/** The name and the employee code inside a label made by `userLabel`. */
+export function labelParts(label: string): { name: string; code: string | null } {
+  const code = /\(([^)]+)\)\s*$/.exec(label)?.[1] ?? null;
+  return { name: plainName(label), code };
 }
 
 /** Remembers the label of a person that was found some other way (for example by searching). */

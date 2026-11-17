@@ -1,6 +1,6 @@
 /** How each field type is shown, edited, filtered and sorted. Mirrors the backend rules. */
 
-import { describeTimer } from "./timer";
+import { describeTimer, isTimerField } from "./timer";
 import type { Condition, FieldItem, FieldType, RecordItem, SelectOption } from "./schema";
 import { formatDateTime } from "@/lib/format";
 
@@ -315,4 +315,21 @@ export function describeCondition(fields: FieldItem[], condition: Condition): st
     }
   }
   return [field.name, op?.label ?? condition.op, value].filter(Boolean).join(" ");
+}
+
+/**
+ * The columns with no value in any of these rows, for "Hide empty columns". The first column
+ * stays (rows are opened from it) and so do timers (the Start and Stop buttons are in them).
+ */
+export function emptyColumnIds(fields: FieldItem[], records: RecordItem[]): string[] {
+  if (records.length === 0) return [];
+  const isEmpty = (value: unknown) =>
+    value === undefined ||
+    value === null ||
+    value === "" ||
+    (Array.isArray(value) && value.length === 0);
+  return fields
+    .filter((field, index) => index > 0 && !isTimerField(field))
+    .filter((field) => records.every((record) => isEmpty(record.data[field.id])))
+    .map((field) => field.id);
 }

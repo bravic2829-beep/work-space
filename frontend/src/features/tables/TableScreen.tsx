@@ -38,7 +38,8 @@ import { RecordGrid } from "./RecordGrid";
 import { RecordSidebar } from "./RecordSidebar";
 import type { RecordTab } from "./recordTabs";
 import { SortMenu } from "./SortMenu";
-import { TableToolbar } from "./TableToolbar";
+import { TableActions, ViewChips } from "./TableControls";
+import { TaskCounts } from "./TaskCounts";
 import type {
   Condition,
   FieldItem,
@@ -51,8 +52,9 @@ import { fieldBySemantic } from "./taskWorkflow";
 import { timerColumns } from "./timer";
 import { useHiddenColumns } from "./useHiddenColumns";
 import { useUserNames } from "./useUserNames";
-import { userIdsIn } from "./values";
+import { emptyColumnIds, userIdsIn } from "./values";
 import { errorMessage } from "@/lib/api/errors";
+import { useStoredFlag } from "@/lib/useStoredFlag";
 
 type TableState =
   | { kind: "loading" }
@@ -196,11 +198,19 @@ export function TableScreen({ tableId, sheet, addTaskSignal = 0 }: Props) {
     return table.fields.map((field) => ({ ...field, access: sheetAccess(sheetRole, field) }));
   }, [table, sheetRole]);
 
-  const items = records.kind === "ready" ? records.items : [];
+  const items = useMemo(() => (records.kind === "ready" ? records.items : []), [records]);
+  const [hideEmpty, setHideEmpty] = useStoredFlag(`table-hide-empty:${tableId}`);
+  const emptyIds = useMemo(() => emptyColumnIds(fields, items), [fields, items]);
   const shownFields = useMemo<FieldItem[]>(() => {
-    const kept = fields.filter((field) => !hidden.includes(field.id));
+    const kept = fields.filter(
+      (field) =>
+        !hidden.includes(field.id) &&
+        !(hideEmpty && emptyIds.includes(field.id)) &&
+        // On a person's sheet every task is theirs, so the Assignee column says nothing.
+        !(sheetId !== undefined && field.semantic === "assignee"),
+    );
     return kept.length > 0 ? kept : fields.slice(0, 1);
-  }, [fields, hidden]);
+  }, [fields, hidden, hideEmpty, emptyIds, sheetId]);
   const names = useUserNames(userIdsIn(shownFields, items));
 
   if (tableState.kind === "loading") return <LoadingState>Loading…</LoadingState>;
@@ -348,57 +358,71 @@ export function TableScreen({ tableId, sheet, addTaskSignal = 0 }: Props) {
       {/* The name and the way back are in the top bar; the heading stays for screen readers. */}
       <h1 className="sr-only">{table.name}</h1>
 
-      {/* On a sheet the buttons live in the sheet tab strip. */}
-      {!sheet && (
-        <TableToolbar
-          views={views}
-          activeView={activeView}
-          onApplyView={applyView}
-          onSaveView={saveView}
-          onRemoveView={() => void removeView()}
-          canEdit={canEdit}
-          canAssign={canAssign}
-          canMakeSheet={canMakeSheet}
-          canAddTimer={canAddTimer}
-          addingTimer={addingTimer}
-          onNewRecord={() => setSelected("new")}
-          onAssign={() => {
-            setSelected(null);
-            setShowAssign(true);
-          }}
-          onAddField={() => {
-            setShowManage(false);
-            setShowAddField(true);
-          }}
-          onManageFields={() => {
-            setShowAddField(false);
-            setShowManage(true);
-          }}
-          onAddTimer={() => void addTimer()}
-          onCreateSheet={() => setShowCreateSheet(true)}
-        />
+      {isTaskTable && records.kind === "ready" && (
+        <TaskCounts fields={fields} records={items} hasMore={records.nextCursor !== null} />
       )}
 
-      <FilterBar
-        fields={fields}
-        filter={filter}
-        onChange={(next) => {
-          setActiveView("");
-          setFilter(next);
-        }}
-        trailing={
+      {/* On a sheet the views and the buttons live in the sheet tab strip. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {!sheet && (
+            <ViewChips
+              views={views}
+              activeView={activeView}
+              onApplyView={applyView}
+              onSaveView={saveView}
+              onRemoveView={() => void removeView()}
+            />
+          )}
+          <FilterBar
+            fields={fields}
+            filter={filter}
+            onChange={(next) => {
+              setActiveView("");
+              setFilter(next);
+            }}
+          >
+            <SortMenu fields={shownFields} sort={sort} onToggle={toggleSort} />
+          </FilterBar>
+        </div>
+        <div className="flex items-center gap-2">
           <ColumnsMenu
             fields={fields}
             hidden={hidden}
+            emptyIds={emptyIds}
+            hideEmpty={hideEmpty}
+            onHideEmptyChange={setHideEmpty}
             onChange={(next) => {
               setActiveView("");
               setHidden(next);
             }}
           />
-        }
-      >
-        <SortMenu fields={shownFields} sort={sort} onToggle={toggleSort} />
-      </FilterBar>
+          {!sheet && (
+            <TableActions
+              canEdit={canEdit}
+              canAssign={canAssign}
+              canMakeSheet={canMakeSheet}
+              canAddTimer={canAddTimer}
+              addingTimer={addingTimer}
+              onNewRecord={() => setSelected("new")}
+              onAssign={() => {
+                setSelected(null);
+                setShowAssign(true);
+              }}
+              onAddField={() => {
+                setShowManage(false);
+                setShowAddField(true);
+              }}
+              onManageFields={() => {
+                setShowAddField(false);
+                setShowManage(true);
+              }}
+              onAddTimer={() => void addTimer()}
+              onCreateSheet={() => setShowCreateSheet(true)}
+            />
+          )}
+        </div>
+      </div>
 
       <Drawer open={showManage && canEdit} title="Manage columns" onClose={() => setShowManage(false)}>
         <DrawerBody>

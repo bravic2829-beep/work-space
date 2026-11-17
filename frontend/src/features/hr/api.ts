@@ -10,7 +10,12 @@ import {
   type UserPage,
 } from "./schema";
 
-export type UserFilters = { q: string; status: UserStatus | "" };
+export type UserFilters = {
+  q: string;
+  status: UserStatus | "";
+  /** A department id, or "" for every department. */
+  departmentId: string;
+};
 
 export function listUsers(
   filters: UserFilters,
@@ -20,6 +25,7 @@ export function listUsers(
   const params = new URLSearchParams({ limit: "50" });
   if (filters.q) params.set("q", filters.q);
   if (filters.status) params.set("status", filters.status);
+  if (filters.departmentId) params.set("department_id", filters.departmentId);
   if (cursor) params.set("cursor", cursor);
   return apiRequest<UserPage>("GET", `/api/v1/users?${params.toString()}`, {
     guard: isUserPage,
@@ -35,6 +41,7 @@ export type NewUser = {
   level: UserLevel;
   org_role: "admin" | "member";
   department_id: string | null;
+  manager_id?: string | null;
 };
 
 export function createUser(payload: NewUser): Promise<User> {
@@ -47,6 +54,7 @@ export type UserChanges = Partial<{
   org_role: "admin" | "member";
   status: UserStatus;
   department_id: string | null;
+  manager_id: string | null;
 }>;
 
 export function updateUser(id: string, changes: UserChanges): Promise<User> {
@@ -71,6 +79,7 @@ export function createDepartment(payload: {
   name: string;
   kind: DepartmentKind;
   parent_id: string | null;
+  head_user_id?: string | null;
 }): Promise<Department> {
   return apiRequest<Department>("POST", "/api/v1/departments", {
     body: payload,
@@ -78,10 +87,17 @@ export function createDepartment(payload: {
   });
 }
 
-/** Sets (or clears, with null) the head of a department. */
-export function setDepartmentHead(id: string, headUserId: string | null): Promise<Department> {
+export type DepartmentChanges = Partial<{
+  name: string;
+  /** The division it sits under, or null for the top level. */
+  parent_id: string | null;
+  /** The head, or null for none. */
+  head_user_id: string | null;
+}>;
+
+export function updateDepartment(id: string, changes: DepartmentChanges): Promise<Department> {
   return apiRequest<Department>("PATCH", `/api/v1/departments/${id}`, {
-    body: { head_user_id: headUserId },
+    body: changes,
     guard: isDepartment,
   });
 }

@@ -11,21 +11,33 @@ type Props = {
   /** The ids of the columns that are hidden. */
   hidden: string[];
   onChange: (hidden: string[]) => void;
+  /** The columns that have no value in any loaded row. */
+  emptyIds: string[];
+  hideEmpty: boolean;
+  onHideEmptyChange: (hide: boolean) => void;
 };
 
 const LABEL = "Show or hide columns";
 
 /** "Columns": click to choose which columns are shown. */
-export function ColumnsMenu({ fields, hidden, onChange }: Props) {
+export function ColumnsMenu({
+  fields,
+  hidden,
+  onChange,
+  emptyIds,
+  hideEmpty,
+  onHideEmptyChange,
+}: Props) {
+  const gone = new Set([...hidden, ...(hideEmpty ? emptyIds : [])]);
   return (
     <Popover>
       <PopoverTrigger
         render={
           <Button size="sm" icon={Columns3} aria-label={LABEL}>
             Columns
-            {hidden.length > 0 && (
+            {gone.size > 0 && (
               <span className="font-normal text-muted">
-                · {fields.length - hidden.length}/{fields.length}
+                · {fields.length - gone.size}/{fields.length}
               </span>
             )}
             <ChevronDown className="size-3.5" aria-hidden />
@@ -46,6 +58,15 @@ export function ColumnsMenu({ fields, hidden, onChange }: Props) {
             </button>
           )}
         </div>
+        <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-[13px] hover:bg-surface-muted has-focus-visible:outline-2 has-focus-visible:outline-primary">
+          <input
+            type="checkbox"
+            checked={hideEmpty}
+            onChange={(event) => onHideEmptyChange(event.target.checked)}
+          />
+          <span className="flex-1">Hide empty columns</span>
+          <span className="font-mono text-[11px] text-muted">{emptyIds.length}</span>
+        </label>
         <ul className="m-0 max-h-72 list-none overflow-y-auto p-0">
           {fields.map((field) => {
             const visible = !hidden.includes(field.id);

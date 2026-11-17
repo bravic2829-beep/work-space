@@ -18,6 +18,8 @@ class DepartmentPublic(BaseModel):
     kind: DepartmentKind
     parent_id: uuid.UUID | None
     head_user_id: uuid.UUID | None
+    # How many employees (active or not) are in this department.
+    member_count: int
 
 
 class DepartmentCreate(BaseModel):

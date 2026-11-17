@@ -8,7 +8,7 @@ import { cn } from "@/lib/cn";
 
 import type { ViewItem } from "./schema";
 
-type Props = {
+type ViewProps = {
   views: ViewItem[];
   /** The id of the saved view in use, or "" for all records. */
   activeView: string;
@@ -16,6 +16,9 @@ type Props = {
   /** Saves the current filter, sort and columns under this name. True when it was saved. */
   onSaveView: (name: string) => Promise<boolean>;
   onRemoveView: () => void;
+};
+
+type ActionProps = {
   /** An editor of the table: may add records and change its columns. */
   canEdit: boolean;
   canAssign: boolean;
@@ -55,13 +58,7 @@ function Chip({
 }
 
 /** The views as chips, and "Save view" to keep what is on screen as a new one. */
-function ViewChips({
-  views,
-  activeView,
-  onApplyView,
-  onSaveView,
-  onRemoveView,
-}: Pick<Props, "views" | "activeView" | "onApplyView" | "onSaveView" | "onRemoveView">) {
+export function ViewChips({ views, activeView, onApplyView, onSaveView, onRemoveView }: ViewProps) {
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
 
@@ -127,10 +124,10 @@ function ViewChips({
 }
 
 /**
- * The top row of a table: the views on the left, and on the right the one main action (assign a
- * task, or add a record) with the table's setup tools behind the "⋯" menu.
+ * The table's main action (assign a task, or add a record) with its setup tools behind the "⋯"
+ * menu. Each shows only to the people who may use it.
  */
-export function TableToolbar(props: Props) {
+export function TableActions(props: ActionProps) {
   const { canEdit, canAssign, canMakeSheet, canAddTimer, addingTimer } = props;
 
   const setup: MenuItem[] = [
@@ -147,34 +144,31 @@ export function TableToolbar(props: Props) {
   ];
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">
-      <ViewChips {...props} />
-      <div className="flex items-center gap-2">
-        {setup.length > 0 && (
-          <Menu
-            trigger={
-              <Button size="icon" variant="ghost" aria-label="Table menu" className="size-7">
-                <MoreHorizontal className="size-4" aria-hidden />
-              </Button>
-            }
-            items={setup}
-          />
-        )}
-        {canEdit &&
-          (canAssign ? (
-            <SplitButton
-              label="Assign task"
-              icon={UserPlus}
-              onClick={props.onAssign}
-              moreLabel="More ways to add"
-              items={[{ label: "New record", icon: Plus, onSelect: props.onNewRecord }]}
-            />
-          ) : (
-            <Button variant="primary" size="sm" icon={Plus} onClick={props.onNewRecord}>
-              New record
+    <>
+      {setup.length > 0 && (
+        <Menu
+          trigger={
+            <Button size="icon" variant="ghost" aria-label="Table menu" className="size-7">
+              <MoreHorizontal className="size-4" aria-hidden />
             </Button>
-          ))}
-      </div>
-    </div>
+          }
+          items={setup}
+        />
+      )}
+      {canEdit &&
+        (canAssign ? (
+          <SplitButton
+            label="Assign task"
+            icon={UserPlus}
+            onClick={props.onAssign}
+            moreLabel="More ways to add"
+            items={[{ label: "New record", icon: Plus, onSelect: props.onNewRecord }]}
+          />
+        ) : (
+          <Button variant="primary" size="sm" icon={Plus} onClick={props.onNewRecord}>
+            New record
+          </Button>
+        ))}
+    </>
   );
 }

@@ -22,8 +22,6 @@ type Props = {
   onChange: (filter: Condition[]) => void;
   /** Buttons beside "Filter" (the sort menu). */
   children?: React.ReactNode;
-  /** Shown at the right end of the row (the columns menu). */
-  trailing?: React.ReactNode;
 };
 
 const FIELD = "h-8 w-full py-0 text-[13px] leading-5";
@@ -152,9 +150,9 @@ function FilterForm({
 
 /**
  * The filter row of a table: a "Filter" button that opens the form, the conditions in force as
- * chips, and room for the sort menu and the columns menu. Values never become SQL.
+ * chips, and room for the sort menu. Values never become SQL.
  */
-export function FilterBar({ fields, filter, onChange, children, trailing }: Props) {
+export function FilterBar({ fields, filter, onChange, children }: Props) {
   return (
     <section aria-label="Filters" className="flex flex-wrap items-center gap-2">
       <Popover>
@@ -190,7 +188,6 @@ export function FilterBar({ fields, filter, onChange, children, trailing }: Prop
           ))}
         </ul>
       )}
-      {trailing && <div className="ml-auto">{trailing}</div>}
     </section>
   );
 }
