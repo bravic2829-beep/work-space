@@ -8,6 +8,7 @@ import { Alert, Avatar, Button, LoadingState, Textarea } from "@/components/ui";
 import { createComment, deleteComment, listComments } from "./api";
 import type { CommentItem } from "./schema";
 import { errorMessage, hasStatus } from "@/lib/api/errors";
+import { formatDateTime } from "@/lib/format";
 
 type State =
   | { kind: "loading" }
@@ -121,7 +122,7 @@ export function CommentsPanel({
                     <div className="flex items-baseline justify-between gap-2">
                       <span className="text-sm">
                         <strong>{comment.author.full_name}</strong>{" "}
-                        <small>{new Date(comment.created_at).toLocaleString()}</small>
+                        <small>{formatDateTime(comment.created_at)}</small>
                       </span>
                       {(comment.author.id === currentUserId || admin) && (
                         <Button

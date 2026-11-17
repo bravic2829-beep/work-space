@@ -17,6 +17,7 @@ import {
 import { deleteForever, listTrash, restoreRecord } from "./api";
 import type { TrashItem } from "./schema";
 import { errorMessage } from "@/lib/api/errors";
+import { formatDate } from "@/lib/format";
 
 type State =
   | { kind: "loading" }
@@ -137,8 +138,8 @@ export function TrashScreen() {
                   <td>
                     <Link href={`/tables/${item.table_id}`}>{item.table_name}</Link>
                   </td>
-                  <td>{new Date(item.deleted_at).toLocaleDateString()}</td>
-                  <td>{new Date(item.purge_at).toLocaleDateString()}</td>
+                  <td>{formatDate(item.deleted_at)}</td>
+                  <td>{formatDate(item.purge_at)}</td>
                   <td className="text-right whitespace-nowrap">
                     <span className="inline-flex items-center justify-end gap-1">
                       <Button

@@ -31,6 +31,7 @@ import { NotificationBell } from "@/features/notifications/NotificationBell";
 
 import { BreadcrumbProvider, useCrumbTitle } from "./Breadcrumb";
 import { NavLink } from "./NavLink";
+import { readStored, writeStored } from "@/lib/storage";
 
 type NavItem = { href: string; label: string; icon: LucideIcon; adminOnly?: boolean };
 
@@ -63,11 +64,7 @@ const COLLAPSED_KEY = "workbase.sidebar.collapsed";
  * check has finished in the browser, so reading localStorage here cannot differ from the server.
  */
 function readCollapsed(): boolean {
-  try {
-    return window.localStorage.getItem(COLLAPSED_KEY) === "1";
-  } catch {
-    return false;
-  }
+  return readStored(COLLAPSED_KEY) === "1";
 }
 
 /**
@@ -101,11 +98,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   function toggleCollapsed() {
     const next = !collapsed;
     setCollapsed(next);
-    try {
-      window.localStorage.setItem(COLLAPSED_KEY, next ? "1" : "0");
-    } catch {
-      // Not remembered, but the sidebar still collapses.
-    }
+    writeStored(COLLAPSED_KEY, next ? "1" : "0");
   }
 
   async function signOut() {
