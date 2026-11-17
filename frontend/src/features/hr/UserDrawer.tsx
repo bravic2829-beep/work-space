@@ -14,7 +14,7 @@ import {
 } from "@/components/ui";
 import { LEVEL_LABELS, type User, type UserLevel } from "@/features/auth/schema";
 
-import { createUser, updateUser, type UserChanges } from "./api";
+import { createUser, resetPassword, updateUser, type UserChanges } from "./api";
 import { departmentLabel } from "./departmentTree";
 import { ErrorMessage } from "./ErrorMessage";
 import type { Department } from "./schema";
@@ -108,7 +108,8 @@ function UserForm({
         onSaved();
       } else {
         const user = await createUser({
-          employee_code: employeeCode.trim(),
+          // Blank means "pick the next code for me".
+          employee_code: employeeCode.trim() || undefined,
           full_name: fullName.trim(),
           password,
           level,
@@ -140,13 +141,16 @@ function UserForm({
     >
       <DrawerBody>
         {!existing && (
-          <FormField label="Employee code" hint="They sign in with this code.">
+          <FormField
+            label="Employee code"
+            hint="They sign in with this code. Leave blank to generate the next one (NV001, NV002, ...)."
+          >
             <Input
               ref={firstField}
               value={employeeCode}
               onChange={(event) => setEmployeeCode(event.target.value)}
+              placeholder="Auto"
               maxLength={50}
-              required
             />
           </FormField>
         )}
@@ -202,6 +206,10 @@ function UserForm({
           </Select>
         </FormField>
 
+        {existing && !isSelf && existing.org_role !== "owner" && (
+          <ResetPasswordSection userId={existing.id} />
+        )}
+
         <ErrorMessage error={error} />
         {created && (
           <Alert tone="success">Employee {created} created. Add another, or close.</Alert>
@@ -216,5 +224,88 @@ function UserForm({
         </Button>
       </DrawerFooter>
     </form>
+  );
+}
+
+/** A random temporary password (no look-alike characters) the admin can read out. */
+function randomPassword(): string {
+  const alphabet = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = crypto.getRandomValues(new Uint8Array(12));
+  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
+}
+
+/**
+ * For an employee who forgot their password: the admin sets a temporary one and tells it to them.
+ * They are signed out everywhere and must choose their own at the next sign-in. It sits inside the
+ * edit form, so it is not a form of its own, and Enter here must not save the form.
+ */
+function ResetPasswordSection({ userId }: { userId: string }) {
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const [doneWith, setDoneWith] = useState<string | null>(null);
+
+  async function reset() {
+    setBusy(true);
+    setError(null);
+    setDoneWith(null);
+    try {
+      await resetPassword(userId, password);
+      setDoneWith(password);
+      setPassword("");
+    } catch (caught) {
+      setError(caught);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section
+      aria-label="Reset password"
+      className="grid gap-2 border-t border-line pt-3"
+    >
+      <FormField
+        label="Reset password"
+        hint="For someone who forgot it. They are signed out and must choose a new one at the next sign-in."
+      >
+        <div className="flex gap-2">
+          <Input
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                if (password.length >= 8 && !busy) void reset();
+              }
+            }}
+            placeholder="Temporary password"
+            autoComplete="off"
+            minLength={8}
+            maxLength={128}
+          />
+          <Button onClick={() => setPassword(randomPassword())} disabled={busy}>
+            Generate
+          </Button>
+        </div>
+      </FormField>
+      <div>
+        <Button
+          variant="danger"
+          loading={busy}
+          disabled={password.length < 8}
+          onClick={() => void reset()}
+        >
+          Reset password
+        </Button>
+      </div>
+      <ErrorMessage error={error} />
+      {doneWith && (
+        <Alert tone="success">
+          Password reset. Tell the employee their temporary password:{" "}
+          <strong>{doneWith}</strong>
+        </Alert>
+      )}
+    </section>
   );
 }

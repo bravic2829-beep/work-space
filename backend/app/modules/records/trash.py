@@ -160,6 +160,34 @@ async def restore_record(
     return record, rendered[0]
 
 
+async def delete_forever(session: AsyncSession, actor: User, record_id: uuid.UUID) -> None:
+    """Remove a record that is in the trash for good. Same people as restore: whoever deleted
+    it, or an organization admin. Links, viewers, comments and notifications go with it."""
+    record = (
+        await session.execute(
+            select(Record)
+            .join(Table, Table.id == Record.table_id)
+            .join(WorkBase, WorkBase.id == Table.base_id)
+            .join(Workspace, Workspace.id == WorkBase.workspace_id)
+            .where(
+                Record.id == record_id,
+                Record.deleted_at.is_not(None),
+                Record.deleted_at >= datetime.now(UTC) - timedelta(days=TRASH_DAYS),
+                *_alive_in(actor.organization_id),
+            )
+            .with_for_update(of=Record)
+        )
+    ).scalar_one_or_none()
+    if record is None:
+        raise ProblemError(404, "The record is not in the trash.")
+    if record.deleted_by != actor.id and not is_org_admin(actor):
+        raise ProblemError(
+            403, "Only the person who deleted a record, or an admin, can remove it for good."
+        )
+    await session.delete(record)
+    await session.flush()
+
+
 async def purge_expired(session: AsyncSession, *, now: datetime | None = None) -> int:
     """Remove for good every record that has been in the trash for more than 30 days."""
     limit = (now or datetime.now(UTC)) - timedelta(days=TRASH_DAYS)

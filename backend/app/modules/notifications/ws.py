@@ -39,7 +39,7 @@ async def notifications_socket(websocket: WebSocket) -> None:
             return await auth.authenticate(session, settings, token)
 
     context = await session_is_valid()
-    if context is None:
+    if context is None or context.user.must_change_password:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 

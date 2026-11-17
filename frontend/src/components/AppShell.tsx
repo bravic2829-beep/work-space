@@ -5,6 +5,7 @@ import {
   FolderKanban,
   Grid2x2,
   Home,
+  KeyRound,
   ListChecks,
   LogOut,
   Menu,
@@ -23,6 +24,8 @@ import { Alert } from "@/components/ui";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { MustChangePassword } from "@/features/auth/MustChangePassword";
+import { ChangePasswordDrawer } from "@/features/auth/ChangePasswordDrawer";
 import { isOrgAdmin } from "@/features/auth/schema";
 import { NotificationBell } from "@/features/notifications/NotificationBell";
 
@@ -87,10 +90,12 @@ function Shell({ children }: { children: React.ReactNode }) {
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(readCollapsed);
 
   if (state.status !== "authenticated") return null;
   const user = state.user;
+  if (user.must_change_password) return <MustChangePassword />;
   const section = sectionOf(pathname);
 
   function toggleCollapsed() {
@@ -190,6 +195,16 @@ function Shell({ children }: { children: React.ReactNode }) {
           <Button
             variant="ghost"
             size="icon"
+            aria-label="Change password"
+            title="Change password"
+            className={collapsed ? "md:hidden" : undefined}
+            onClick={() => setPasswordOpen(true)}
+          >
+            <KeyRound className="size-4" aria-hidden />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             aria-label="Sign out"
             title="Sign out"
             onClick={() => void signOut()}
@@ -257,6 +272,10 @@ function Shell({ children }: { children: React.ReactNode }) {
         )}
         <main className="w-full flex-1 px-3 py-3 md:px-4">{children}</main>
       </div>
+      <ChangePasswordDrawer
+        open={passwordOpen}
+        onClose={() => setPasswordOpen(false)}
+      />
     </div>
   );
 }

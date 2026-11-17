@@ -10,6 +10,7 @@ export function sampleUser(overrides: Partial<User> = {}): User {
     status: "active",
     department_id: null,
     manager_id: null,
+    must_change_password: false,
     ...overrides,
   };
 }

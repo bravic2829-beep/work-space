@@ -4,10 +4,18 @@ import { RotateCcw, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { Alert, Button, DataTable, EmptyState, LoadingState, PageHeader } from "@/components/ui";
+import {
+  Alert,
+  Button,
+  DataTable,
+  EmptyState,
+  InlineConfirm,
+  LoadingState,
+  PageHeader,
+} from "@/components/ui";
 import { ApiError } from "@/lib/api/client";
 
-import { listTrash, restoreRecord } from "./api";
+import { deleteForever, listTrash, restoreRecord } from "./api";
 import type { TrashItem } from "./schema";
 
 type State =
@@ -58,6 +66,29 @@ export function TrashScreen() {
     }
   }
 
+  async function removeForGood(item: TrashItem) {
+    if (state.kind !== "ready") return;
+    setBusyId(item.id);
+    setProblem(null);
+    setNotice(null);
+    try {
+      await deleteForever(item.id);
+      setState({
+        ...state,
+        items: state.items.filter((other) => other.id !== item.id),
+      });
+      setNotice(`Removed "${item.name ?? "a record"}" for good.`);
+    } catch (error) {
+      setProblem(
+        error instanceof ApiError
+          ? error.message
+          : "Could not remove the record.",
+      );
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function loadMore() {
     if (state.kind !== "ready" || state.nextCursor === null) return;
     try {
@@ -76,7 +107,7 @@ export function TrashScreen() {
     <>
       <PageHeader
         title="Trash"
-        description="Records you deleted. You can restore them for 30 days, then they are removed for good."
+        description="Records you deleted. Restore them within 30 days, delete them for good now, or they are removed automatically after 30 days."
       />
       <div className="grid gap-3">
         {state.kind === "loading" && <LoadingState />}
@@ -110,16 +141,26 @@ export function TrashScreen() {
                   </td>
                   <td>{new Date(item.deleted_at).toLocaleDateString()}</td>
                   <td>{new Date(item.purge_at).toLocaleDateString()}</td>
-                  <td className="text-right">
-                    <Button
-                      size="sm"
-                      icon={RotateCcw}
-                      disabled={busyId !== null}
-                      aria-label={`Restore ${item.name ?? "record"}`}
-                      onClick={() => void restore(item)}
-                    >
-                      Restore
-                    </Button>
+                  <td className="text-right whitespace-nowrap">
+                    <span className="inline-flex items-center justify-end gap-1">
+                      <Button
+                        size="sm"
+                        icon={RotateCcw}
+                        disabled={busyId !== null}
+                        aria-label={`Restore ${item.name ?? "record"}`}
+                        onClick={() => void restore(item)}
+                      >
+                        Restore
+                      </Button>
+                      <InlineConfirm
+                        label={`Delete ${item.name ?? "record"} forever`}
+                        prompt="Delete for good? This cannot be undone."
+                        confirmLabel="Yes, delete"
+                        icon={Trash2}
+                        disabled={busyId !== null}
+                        onConfirm={() => void removeForGood(item)}
+                      />
+                    </span>
                   </td>
                 </tr>
               ))}

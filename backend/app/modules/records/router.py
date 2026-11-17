@@ -159,6 +159,17 @@ async def list_trash(
     return await trash.list_trash(session, actor, limit=limit, cursor=cursor)
 
 
+@router.delete("/trash/records/{record_id}", status_code=204)
+async def delete_from_trash(
+    record_id: uuid.UUID,
+    actor: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> None:
+    """Remove a record in the trash for good. There is no undo."""
+    await trash.delete_forever(session, actor, record_id)
+    await session.commit()
+
+
 @router.post("/records/{record_id}/restore", response_model=RecordPublic)
 async def restore_record(
     record_id: uuid.UUID,

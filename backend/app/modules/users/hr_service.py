@@ -77,15 +77,21 @@ async def create_user(session: AsyncSession, actor: User, data: UserCreate) -> U
     await _validate_references(
         session, actor, department_id=data.department_id, manager_id=data.manager_id
     )
-    existing = await users.get_by_employee_code(
-        session, organization_id=actor.organization_id, employee_code=data.employee_code
-    )
-    if existing is not None:
-        raise ProblemError(409, "This employee code is already in use.")
+    employee_code = data.employee_code
+    if employee_code is None:
+        employee_code = await users.next_auto_employee_code(
+            session, organization_id=actor.organization_id
+        )
+    else:
+        existing = await users.get_by_employee_code(
+            session, organization_id=actor.organization_id, employee_code=employee_code
+        )
+        if existing is not None:
+            raise ProblemError(409, "This employee code is already in use.")
 
     user = User(
         organization_id=actor.organization_id,
-        employee_code=data.employee_code,
+        employee_code=employee_code,
         full_name=data.full_name,
         password_hash=await hash_password_async(data.password),
         org_role=data.org_role,
@@ -102,6 +108,25 @@ async def create_user(session: AsyncSession, actor: User, data: UserCreate) -> U
         raise ProblemError(409, "This employee code is already in use.") from None
     await create_personal_workspace(session, user)
     return user
+
+
+async def reset_password(
+    session: AsyncSession, actor: User, user_id: uuid.UUID, new_password: str
+) -> None:
+    """Set a temporary password for an employee who forgot theirs. The caller commits.
+
+    The employee is signed out everywhere and must choose their own password at the next sign-in.
+    """
+    target = await get_user(session, actor, user_id)
+    if target.org_role == OrgRole.OWNER:
+        # The owner is the root of trust: nobody else can take over the account.
+        raise ProblemError(403, "The owner's password cannot be reset by others.")
+    if target.id == actor.id:
+        raise ProblemError(409, "Use Change password to change your own password.")
+    target.password_hash = await hash_password_async(new_password)
+    target.must_change_password = True
+    await auth_repository.revoke_all_for_user(session, user_id=target.id, now=datetime.now(UTC))
+    await session.flush()
 
 
 async def get_user(session: AsyncSession, actor: User, user_id: uuid.UUID) -> User:

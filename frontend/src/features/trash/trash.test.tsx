@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/lib/api/client";
 
-import { listTrash, restoreRecord } from "./api";
+import { deleteForever, listTrash, restoreRecord } from "./api";
 import { isTrashItem, isTrashPage } from "./schema";
 import type { TrashItem } from "./schema";
 import { TrashScreen } from "./TrashScreen";
@@ -14,8 +14,13 @@ vi.mock("next/link", () => ({
     <a href={href}>{children}</a>
   ),
 }));
-vi.mock("./api", () => ({ listTrash: vi.fn(), restoreRecord: vi.fn() }));
+vi.mock("./api", () => ({
+  listTrash: vi.fn(),
+  restoreRecord: vi.fn(),
+  deleteForever: vi.fn(),
+}));
 
+const deleteMock = vi.mocked(deleteForever);
 const listMock = vi.mocked(listTrash);
 const restoreMock = vi.mocked(restoreRecord);
 
@@ -89,6 +94,70 @@ describe("TrashScreen", () => {
     await user.click(await screen.findByRole("button", { name: "Restore Launch" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("not in the trash");
+    expect(screen.getByText("Launch")).toBeInTheDocument();
+  });
+
+  it("asks first, then removes a record for good and takes it off the list", async () => {
+    listMock.mockResolvedValue({
+      items: [item("r-1", "Launch"), item("r-2", "Plan")],
+      next_cursor: null,
+    });
+    deleteMock.mockResolvedValue(undefined);
+    render(<TrashScreen />);
+    const user = userEvent.setup();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Delete Launch forever" }),
+    );
+    expect(deleteMock).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Yes, delete" }));
+
+    expect(deleteMock).toHaveBeenCalledWith("r-1");
+    expect(
+      await screen.findByText('Removed "Launch" for good.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Launch", { selector: "td" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Plan")).toBeInTheDocument();
+  });
+
+  it("does nothing when the question is cancelled", async () => {
+    listMock.mockResolvedValue({
+      items: [item("r-1", "Launch")],
+      next_cursor: null,
+    });
+    render(<TrashScreen />);
+    const user = userEvent.setup();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Delete Launch forever" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(deleteMock).not.toHaveBeenCalled();
+    expect(screen.getByText("Launch")).toBeInTheDocument();
+  });
+
+  it("keeps the record and shows why when removing fails", async () => {
+    listMock.mockResolvedValue({
+      items: [item("r-1", "Launch")],
+      next_cursor: null,
+    });
+    deleteMock.mockRejectedValue(
+      new ApiError("The record is not in the trash.", 404),
+    );
+    render(<TrashScreen />);
+    const user = userEvent.setup();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Delete Launch forever" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Yes, delete" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "not in the trash",
+    );
     expect(screen.getByText("Launch")).toBeInTheDocument();
   });
 

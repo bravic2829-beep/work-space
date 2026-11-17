@@ -5,17 +5,28 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_session
 from app.core.pagination import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, Page
-from app.modules.auth.dependencies import get_current_user, require_admin
+from app.modules.auth.dependencies import (
+    get_current_user,
+    get_user_pending_password,
+    require_admin,
+)
 from app.modules.users import hr_service, repository
 from app.modules.users.models import User, UserStatus
-from app.modules.users.schemas import DirectoryEntry, UserCreate, UserPublic, UserUpdate
+from app.modules.users.schemas import (
+    DirectoryEntry,
+    PasswordReset,
+    UserCreate,
+    UserPublic,
+    UserUpdate,
+)
 
 router = APIRouter(tags=["users"])
 
 
 # Declared before /users/{user_id} so that "me" is not read as an id.
 @router.get("/users/me", response_model=UserPublic)
-async def get_me(user: User = Depends(get_current_user)) -> User:
+async def get_me(user: User = Depends(get_user_pending_password)) -> User:
+    # Open even while a password change is pending: the app reads the flag here.
     return user
 
 
@@ -93,3 +104,15 @@ async def update_user(
     user = await hr_service.update_user(session, actor, user_id, body)
     await session.commit()
     return user
+
+
+@router.put("/users/{user_id}/password", status_code=204)
+async def reset_password(
+    user_id: uuid.UUID,
+    body: PasswordReset,
+    actor: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+) -> None:
+    """Admin: set a temporary password for an employee. They are signed out and must change it."""
+    await hr_service.reset_password(session, actor, user_id, body.new_password)
+    await session.commit()

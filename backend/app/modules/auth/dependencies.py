@@ -25,8 +25,16 @@ async def get_auth_context(
     return context
 
 
-async def get_current_user(context: AuthContext = Depends(get_auth_context)) -> User:
+async def get_user_pending_password(context: AuthContext = Depends(get_auth_context)) -> User:
+    """The signed-in user, even while they still have to change a temporary password."""
     return context.user
+
+
+async def get_current_user(user: User = Depends(get_user_pending_password)) -> User:
+    """The signed-in user. Until a temporary password is replaced, nothing else is open."""
+    if user.must_change_password:
+        raise ProblemError(403, "You must change your temporary password first.")
+    return user
 
 
 async def require_admin(user: User = Depends(get_current_user)) -> User:
