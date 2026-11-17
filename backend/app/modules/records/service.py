@@ -35,7 +35,7 @@ from app.modules.permissions.service import (
     load_table_context,
     require_table_read,
 )
-from app.modules.records import links, listing, repository, sharing, subtasks, visibility
+from app.modules.records import links, listing, live, repository, sharing, subtasks, visibility
 from app.modules.records.models import Record
 from app.modules.records.schemas import RecordPublic
 from app.modules.sheets import access as sheet_access
@@ -542,5 +542,6 @@ async def delete_record(
         # The files go with the record, once the deletion is saved.
         keys = await attachments.keys_of_records(session, [record.id])
         attachment_storage.remove_after_commit(session.sync_session, attachments_dir, keys)
+    live.note_change(session.sync_session, record)  # the bulk delete below is invisible to the ORM
     await session.execute(delete(Record).where(Record.id == record.id))
     await session.flush()

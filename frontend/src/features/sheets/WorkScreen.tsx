@@ -1,6 +1,6 @@
 "use client";
 
-import { FolderKanban, Share2 } from "lucide-react";
+import { FolderKanban, Plus, Share2 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -69,6 +69,8 @@ export function WorkScreen() {
 
   const [state, setState] = useState<State>({ kind: "loading" });
   const [tableId, setTableId] = useState<string | null>(null);
+  // Pressing "Add task" up in the tab strip asks the table below to open its new-task form.
+  const [addTaskSignal, setAddTaskSignal] = useState(0);
   const [chosen, setChosen] = useState<string | null>(null);
   const [showShare, setShowShare] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
@@ -117,7 +119,7 @@ export function WorkScreen() {
   if (sheets.length === 0) {
     return (
       <div className="flex flex-col gap-3">
-        <h1>Work summary</h1>
+        <h1 className="sr-only">Work summary</h1>
         <EmptyState icon={FolderKanban} title="No sheets yet.">
           {admin ? (
             <>
@@ -171,9 +173,9 @@ export function WorkScreen() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="mb-0">Work summary</h1>
-        {tables.length > 1 && (
+      <h1 className="sr-only">Work summary</h1>
+      {tables.length > 1 && (
+        <div className="flex flex-wrap items-center gap-3">
           <label className="flex items-center gap-2 text-[13px] font-medium">
             Table
             <Select
@@ -191,13 +193,8 @@ export function WorkScreen() {
               ))}
             </Select>
           </label>
-        )}
-        {sheet && sheet.my_role === "manager" && (
-          <Button size="sm" variant="primary" icon={Share2} className="ml-auto" onClick={() => setShowShare(true)}>
-            Share
-          </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       <SheetTabs
         sheets={tabSheets}
@@ -207,9 +204,25 @@ export function WorkScreen() {
         onCreate={canMake ? () => setShowCreate(true) : undefined}
         pinned={pinned}
         onTogglePin={togglePin}
+        actions={
+          sheet && (
+            <>
+              {sheet.my_role === "manager" && (
+                <Button size="sm" icon={Share2} onClick={() => setShowShare(true)}>
+                  Share
+                </Button>
+              )}
+              {(sheet.my_role === "editor" || sheet.my_role === "manager") && (
+                <Button size="sm" variant="primary" icon={Plus} onClick={() => setAddTaskSignal((n) => n + 1)}>
+                  Add task
+                </Button>
+              )}
+            </>
+          )
+        }
       />
 
-      <TableScreen key={active} tableId={currentTable} sheet={sheet} />
+      <TableScreen key={active} tableId={currentTable} sheet={sheet} addTaskSignal={addTaskSignal} />
 
       {showShare && sheet && (
         <ShareSheetDrawer

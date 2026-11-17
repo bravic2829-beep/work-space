@@ -47,11 +47,17 @@ class Hub:
     def count(self, user_id: uuid.UUID) -> int:
         return len(self._connections.get(user_id, ()))
 
-    async def publish(self, user_ids: set[uuid.UUID]) -> None:
+    def connected(self) -> set[uuid.UUID]:
+        """The people who have at least one open socket."""
+        return set(self._connections)
+
+    async def publish(
+        self, user_ids: set[uuid.UUID], message: dict[str, str] | None = None
+    ) -> None:
         for user_id in user_ids:
             for websocket in list(self._connections.get(user_id, ())):
                 try:
-                    await websocket.send_json(MESSAGE)
+                    await websocket.send_json(message or MESSAGE)
                 except Exception:  # a closed or broken socket: forget it, never fail the caller
                     self.disconnect(user_id, websocket)
 

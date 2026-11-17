@@ -13,10 +13,9 @@ import {
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { Card, EmptyState, LoadingState, PageHeader } from "@/components/ui";
+import { EmptyState, LoadingState, PageHeader } from "@/components/ui";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { LEVEL_LABELS } from "@/features/auth/schema";
-import { HealthStatus } from "@/features/health/HealthStatus";
 import { listMyTasks } from "@/features/mytasks/api";
 import { dueInfo, localToday, type MyTask } from "@/features/mytasks/schema";
 import { isOverdue, TaskList } from "@/features/mytasks/TaskList";
@@ -181,8 +180,7 @@ export function HomeScreen() {
           )}
         </section>
 
-        <div className="grid items-start gap-5 md:grid-cols-[1fr_16rem]">
-          <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] gap-3 p-0">
+        <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] gap-3 p-0">
             {SHORTCUTS.map(({ href, title, text, icon: Icon }) => (
               <li
                 key={title}
@@ -203,11 +201,6 @@ export function HomeScreen() {
               </li>
             ))}
           </ul>
-          <Card>
-            <h2 className="mt-0 text-sm">System status</h2>
-            <HealthStatus />
-          </Card>
-        </div>
       </div>
     </>
   );

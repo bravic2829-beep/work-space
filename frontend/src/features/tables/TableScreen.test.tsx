@@ -177,6 +177,22 @@ describe("who can change things", () => {
     expect(screen.getByRole("button", { name: "Create record" })).toBeInTheDocument();
   });
 
+  it("opens the new record form when Add task is pressed somewhere else", async () => {
+    getTableMock.mockResolvedValue(makeTable("editor"));
+    listRecordsMock.mockResolvedValue({ items: [], next_cursor: null });
+    const view = (signal: number) => (
+      <AuthProvider>
+        <TableScreen tableId="t-1" addTaskSignal={signal} />
+      </AuthProvider>
+    );
+    const { rerender } = render(view(3)); // already handled when the screen starts
+    await screen.findByRole("heading", { name: "Tasks" });
+    expect(screen.queryByRole("heading", { name: "New record" })).not.toBeInTheDocument();
+
+    rerender(view(4));
+    expect(await screen.findByRole("heading", { name: "New record" })).toBeInTheDocument();
+  });
+
   it("opens a record from the grid", async () => {
     const user = userEvent.setup();
     await renderTable("viewer");

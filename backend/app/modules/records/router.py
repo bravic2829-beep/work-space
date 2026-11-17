@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_session
 from app.core.pagination import DEFAULT_PAGE_SIZE, Page
 from app.modules.auth.dependencies import get_current_user
-from app.modules.records import handover, review, service, sharing, timer, trash
+from app.modules.records import handover, live, review, service, sharing, timer, trash  # noqa: F401 (live registers its listeners)
 from app.modules.records.schemas import (
     RecordCreate,
     RecordPublic,

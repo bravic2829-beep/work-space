@@ -16,7 +16,7 @@ type Props = {
   trailing?: React.ReactNode;
 };
 
-const SMALL = "h-7 w-auto min-w-36 py-0 text-[13px]";
+const SMALL = "h-8 w-auto min-w-40 py-0 text-[13px] leading-5";
 
 /** Narrow the table to the rows that match every condition. Values never become SQL. */
 export function FilterBar({ fields, filter, onChange, trailing }: Props) {

@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getTable, listRecords, lookupUsers, searchDirectory } from "./api";
+import { getRecord, getTable, listRecords, lookupUsers, searchDirectory } from "./api";
 import { NAME, makeField, makeRecord, makeTable } from "./fixtures";
 import { LinkPicker } from "./LinkPicker";
 import { UserPicker } from "./UserPicker";
@@ -13,12 +13,14 @@ vi.mock("./api", () => ({
   lookupUsers: vi.fn(),
   getTable: vi.fn(),
   listRecords: vi.fn(),
+  getRecord: vi.fn(),
 }));
 
 const searchMock = vi.mocked(searchDirectory);
 const lookupMock = vi.mocked(lookupUsers);
 const getTableMock = vi.mocked(getTable);
 const listRecordsMock = vi.mocked(listRecords);
+const getRecordMock = vi.mocked(getRecord);
 
 const ann = { id: "u-1", employee_code: "A1", full_name: "Ann" };
 const binh = { id: "u-2", employee_code: "B2", full_name: "Binh" };
@@ -99,55 +101,86 @@ describe("LinkPicker", () => {
     config: { table_id: "t-2", multiple: true },
   });
   const projects = makeTable("editor", [{ ...NAME, id: "p-name", table_id: "t-2" }]);
+  const website = makeRecord("p-1", { "p-name": "Website" });
+  const blank = makeRecord("p-2", {});
 
   beforeEach(() => {
     getTableMock.mockResolvedValue({ ...projects, id: "t-2" });
-    listRecordsMock.mockResolvedValue({
-      items: [makeRecord("p-1", { "p-name": "Website" }), makeRecord("p-2", {})],
-      next_cursor: null,
-    });
+    listRecordsMock.mockResolvedValue({ items: [website, blank], next_cursor: null });
+    getRecordMock.mockImplementation(async (id: string) => (id === "p-1" ? website : blank));
   });
 
-  it("lists the records of the linked table by their first column", async () => {
+  it("names the records already linked and lists nothing until the person types", async () => {
     render(<LinkPicker field={link} value={["p-1"]} onChange={vi.fn()} />);
-    expect(await screen.findByLabelText("Website")).toBeChecked();
-    expect(screen.getByLabelText("(untitled)")).not.toBeChecked();
-    expect(getTableMock).toHaveBeenCalledWith("t-2", expect.any(AbortSignal));
+    expect(await screen.findByText("Website")).toBeInTheDocument();
+    expect(getRecordMock).toHaveBeenCalledWith("p-1", expect.any(AbortSignal));
+    expect(listRecordsMock).not.toHaveBeenCalled();
+    expect(screen.queryByRole("list", { name: "Project: search results" })).not.toBeInTheDocument();
   });
 
-  it("adds and removes links", async () => {
+  it("searches the name of the linked records, a few at a time", async () => {
+    const user = userEvent.setup();
+    render(<LinkPicker field={link} value={[]} onChange={vi.fn()} />);
+    await user.type(await screen.findByLabelText("Find a record for Project"), "web");
+    expect(await screen.findByRole("button", { name: "Add Website" })).toBeInTheDocument();
+    expect(listRecordsMock).toHaveBeenLastCalledWith(
+      "t-2",
+      { filter: [{ field: "p-name", op: "contains", value: "web" }], sort: [], limit: 20 },
+      expect.any(AbortSignal),
+    );
+  });
+
+  it("adds a record and removes it again", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
-    render(<LinkPicker field={link} value={["p-1"]} onChange={onChange} />);
-    await user.click(await screen.findByLabelText("(untitled)"));
-    expect(onChange).toHaveBeenLastCalledWith(["p-1", "p-2"]);
-    await user.click(screen.getByLabelText("Website"));
+    render(<LinkPicker field={link} value={["p-2"]} onChange={onChange} />);
+    await user.type(await screen.findByLabelText("Find a record for Project"), "w");
+    await user.click(await screen.findByRole("button", { name: "Add Website" }));
+    expect(onChange).toHaveBeenLastCalledWith(["p-2", "p-1"]);
+    await user.click(screen.getByRole("button", { name: "Remove (untitled)" }));
     expect(onChange).toHaveBeenLastCalledWith([]);
+  });
+
+  it("does not offer a record that is already linked", async () => {
+    const user = userEvent.setup();
+    render(<LinkPicker field={link} value={["p-1"]} onChange={vi.fn()} />);
+    await user.type(await screen.findByLabelText("Find a record for Project"), "w");
+    expect(await screen.findByRole("button", { name: "Add (untitled)" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add Website" })).not.toBeInTheDocument();
   });
 
   it("allows one record when the field takes only one", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     const single = { ...link, config: { table_id: "t-2", multiple: false } };
-    render(<LinkPicker field={single} value={[]} onChange={onChange} />);
-    await user.click(await screen.findByLabelText("Website"));
+    render(<LinkPicker field={single} value={["p-2"]} onChange={onChange} />);
+    await user.type(await screen.findByLabelText("Find a record for Project"), "w");
+    await user.click(await screen.findByRole("button", { name: "Add Website" }));
     expect(onChange).toHaveBeenLastCalledWith(["p-1"]);
   });
 
-  it("keeps a link to a record that is not in the first page", async () => {
-    render(<LinkPicker field={link} value={["p-9"]} onChange={vi.fn()} />);
-    expect(await screen.findByLabelText("Linked record")).toBeChecked();
+  it("says when nothing matches", async () => {
+    const user = userEvent.setup();
+    listRecordsMock.mockResolvedValue({ items: [], next_cursor: null });
+    render(<LinkPicker field={link} value={[]} onChange={vi.fn()} />);
+    await user.type(await screen.findByLabelText("Find a record for Project"), "zzz");
+    expect(await screen.findByText("No record found.")).toBeInTheDocument();
   });
 
-  it("says when there is more than it lists", async () => {
-    listRecordsMock.mockResolvedValue({ items: [], next_cursor: "more" });
-    render(<LinkPicker field={link} value={[]} onChange={vi.fn()} />);
-    expect(await screen.findByText("Only the first 100 records are listed.")).toBeInTheDocument();
+  it("keeps a link whose record cannot be read, and lets it be removed", async () => {
+    getRecordMock.mockRejectedValue(new Error("gone"));
+    const onChange = vi.fn();
+    render(<LinkPicker field={link} value={["p-9"]} onChange={onChange} />);
+    const remove = await screen.findByRole("button", { name: "Remove linked record" });
+    await userEvent.setup().click(remove);
+    expect(onChange).toHaveBeenLastCalledWith([]);
   });
 
   it("is read-only when disabled", async () => {
     render(<LinkPicker field={link} value={["p-1"]} onChange={vi.fn()} disabled />);
-    expect(await screen.findByLabelText("Website")).toBeDisabled();
+    expect(await screen.findByText("Website")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Find a record for Project")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Remove/ })).not.toBeInTheDocument();
   });
 
   it("explains a failure to load", async () => {

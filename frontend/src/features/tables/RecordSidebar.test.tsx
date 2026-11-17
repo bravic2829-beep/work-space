@@ -61,6 +61,22 @@ beforeEach(() => {
   });
 });
 
+describe("adding a task on somebody's sheet", () => {
+  it("leaves out the people columns and says who gets the task", () => {
+    renderSidebar({ record: null, givenTo: "Nguyen Van An" });
+    expect(screen.getByLabelText("Name")).toBeInTheDocument();
+    expect(screen.queryByText("Assignee")).not.toBeInTheDocument();
+    expect(screen.getByText("Nguyen Van An")).toBeInTheDocument();
+    expect(screen.getByText(/This task will be given to/)).toBeInTheDocument();
+  });
+
+  it("still shows every column when the task is not for a sheet owner", () => {
+    renderSidebar({ record: null });
+    expect(screen.getByText("Assignee")).toBeInTheDocument();
+    expect(screen.queryByText(/This task will be given to/)).not.toBeInTheDocument();
+  });
+});
+
 describe("showing a record", () => {
   it("lists every column with its value and resolves the names of people", async () => {
     renderSidebar();

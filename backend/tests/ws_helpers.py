@@ -25,7 +25,11 @@ class Socket:
         *,
         cookie: dict[str, str] | None = None,
         origin: str | None = None,
+        include_records: bool = False,
     ) -> None:
+        # "records.changed" is a second signal (a record someone can see changed). Tests about
+        # notifications do not want it in the way, so it is skipped unless asked for.
+        self._include_records = include_records
         headers = [(b"host", b"test")]
         for key, value in (cookie or {}).items():
             headers.append((key.lower().encode(), value.encode()))
@@ -88,18 +92,25 @@ class Socket:
 
     async def receive(self, timeout: float = 2.0) -> dict[str, Any] | None:
         """The next JSON message, or None when the app closed the socket (see `close_code`)."""
-        message = await asyncio.wait_for(self._from_app.get(), timeout=timeout)
-        if message["type"] == "websocket.close":
-            self.close_code = message.get("code", 1000)
-            return None
-        assert message["type"] == "websocket.send", message
-        parsed: dict[str, Any] = json.loads(message["text"])
-        return parsed
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        while True:
+            message = await asyncio.wait_for(
+                self._from_app.get(), timeout=max(0.0, deadline - loop.time())
+            )
+            if message["type"] == "websocket.close":
+                self.close_code = message.get("code", 1000)
+                return None
+            assert message["type"] == "websocket.send", message
+            parsed: dict[str, Any] = json.loads(message["text"])
+            if parsed.get("type") == "records.changed" and not self._include_records:
+                continue
+            return parsed
 
     async def is_quiet(self, seconds: float = 0.3) -> bool:
         """True when nothing arrives for a short while."""
         try:
-            await asyncio.wait_for(self._from_app.get(), timeout=seconds)
+            await self.receive(timeout=seconds)
         except TimeoutError:
             return True
         return False
