@@ -36,6 +36,7 @@ import { FilterBar } from "./FilterBar";
 import { ManageFieldsPanel } from "./ManageFieldsPanel";
 import { RecordGrid } from "./RecordGrid";
 import { RecordSidebar } from "./RecordSidebar";
+import type { RecordTab } from "./recordTabs";
 import { SortMenu } from "./SortMenu";
 import { TableToolbar } from "./TableToolbar";
 import type {
@@ -114,6 +115,11 @@ export function TableScreen({ tableId, sheet, addTaskSignal = 0 }: Props) {
   const [notice, setNotice] = useState<string | null>(null);
   const [showAssign, setShowAssign] = useState(false);
   const toast = useToast();
+  // The open section of the task panel, with the record it was chosen for.
+  const [panelTab, setPanelTab] = useState<{ recordId: string; tab: RecordTab }>({
+    recordId: "",
+    tab: "details",
+  });
   const [addingTimer, setAddingTimer] = useState(false);
   const [showCreateSheet, setShowCreateSheet] = useState(false);
 
@@ -536,6 +542,8 @@ export function TableScreen({ tableId, sheet, addTaskSignal = 0 }: Props) {
             onReload={reloadRecords}
             onClose={() => setSelected(null)}
             onSubtaskCreated={reloadRecords}
+            tab={panelTab.recordId === selectedRecord.id ? panelTab.tab : "details"}
+            onTabChange={(tab) => setPanelTab({ recordId: selectedRecord.id, tab })}
           />
         )}
       </div>

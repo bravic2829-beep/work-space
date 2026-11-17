@@ -202,7 +202,7 @@ describe("who can change things", () => {
     const user = userEvent.setup();
     await renderTable("viewer");
     await user.click(screen.getByRole("button", { name: "Open record Alpha" }));
-    const panel = screen.getByRole("dialog", { name: "Record" });
+    const panel = screen.getByRole("dialog", { name: "Alpha" });
     expect(within(panel).getByLabelText("Name")).toHaveValue("Alpha");
     expect(within(panel).getByLabelText("Name")).toBeDisabled(); // a viewer cannot edit
   });
@@ -213,7 +213,7 @@ describe("editing and deleting from the row", () => {
     const user = userEvent.setup();
     await renderTable("editor");
     await user.click(within(rowOf("Beta")).getAllByRole("cell")[1]);
-    expect(screen.getByRole("dialog", { name: "Record" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Beta" })).toBeInTheDocument();
   });
 
   it("shows only Delete as a row button to a viewer who created the records", async () => {
@@ -227,7 +227,7 @@ describe("editing and deleting from the row", () => {
     const user = userEvent.setup();
     await renderTable("editor");
     await user.click(within(rowOf("Alpha")).getAllByRole("cell")[1]);
-    const panel = screen.getByRole("dialog", { name: "Record" });
+    const panel = screen.getByRole("dialog", { name: "Alpha" });
     expect(within(panel).getByLabelText("Name")).toBeEnabled();
   });
 
@@ -254,7 +254,7 @@ describe("editing and deleting from the row", () => {
     deleteRecordMock.mockResolvedValue(undefined);
     await renderTable("editor");
     await user.click(within(rowOf("Alpha")).getAllByRole("cell")[1]);
-    expect(screen.getByRole("dialog", { name: "Record" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Alpha" })).toBeInTheDocument();
 
     await user.click(within(rowOf("Alpha")).getByRole("button", { name: "Delete" }));
     await user.click(within(rowOf("Alpha")).getByRole("button", { name: "Yes, delete" }));

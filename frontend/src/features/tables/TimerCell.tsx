@@ -1,7 +1,6 @@
 "use client";
 
 import { Play, Square } from "lucide-react";
-import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/cn";
@@ -11,6 +10,7 @@ import type { FieldItem, RecordItem } from "./schema";
 import { elapsedMs, formatDuration, timerRights, timerState } from "./timer";
 import { errorMessage, hasStatus } from "@/lib/api/errors";
 import { useAsyncAction } from "@/lib/useAsyncAction";
+import { useNow } from "@/lib/useNow";
 
 type Props = {
   /** All the columns of the table (who is assigned is read from them). */
@@ -24,17 +24,6 @@ type Props = {
   idle?: React.ReactNode;
   onChanged: (record: RecordItem) => void;
 };
-
-/** The current time, refreshed every second while `active`. */
-function useNow(active: boolean): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!active) return;
-    const id = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(id);
-  }, [active]);
-  return now;
-}
 
 /**
  * The task timer of one record: a Start button for the person who gave the task, the time running
