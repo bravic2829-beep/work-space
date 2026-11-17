@@ -147,32 +147,37 @@ describe("loading", () => {
   it("still shows the table when the views cannot be loaded", async () => {
     listViewsMock.mockRejectedValue(new ApiError("Boom", 500));
     await renderTable();
-    expect(screen.getByRole("combobox", { name: "View" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "All records" })).toBeInTheDocument();
   });
 });
 
 describe("who can change things", () => {
   it("lets editors add records and columns", async () => {
     await renderTable("editor");
-    expect(screen.getByRole("button", { name: "New record" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add a column" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "More ways to add" }));
+    expect(screen.getByRole("menuitem", { name: "New record" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Table menu" }));
+    expect(screen.getByRole("menuitem", { name: "Add a column" })).toBeInTheDocument();
   });
 
   it("hides both from viewers", async () => {
     await renderTable("viewer");
+    expect(screen.queryByRole("button", { name: "More ways to add" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "New record" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add a column" })).not.toBeInTheDocument();
   });
 
   it("hides both from somebody who only sees their own tasks", async () => {
     await renderTable(null);
+    expect(screen.queryByRole("button", { name: "More ways to add" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "New record" })).not.toBeInTheDocument();
   });
 
   it("opens an empty record panel for a new record", async () => {
     const user = userEvent.setup();
     await renderTable("editor");
-    await user.click(screen.getByRole("button", { name: "New record" }));
+    await user.click(screen.getByRole("button", { name: "More ways to add" }));
+    await user.click(screen.getByRole("menuitem", { name: "New record" }));
     expect(screen.getByRole("heading", { name: "New record" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Create record" })).toBeInTheDocument();
   });
@@ -306,10 +311,24 @@ describe("sorting", () => {
   });
 });
 
+describe("sorting from the Sort menu", () => {
+  it("sorts like the column heading does, and shows the column in use", async () => {
+    const user = userEvent.setup();
+    await renderTable();
+    await user.click(screen.getByRole("button", { name: "Sort" }));
+    await user.click(screen.getByRole("button", { name: "Points" }));
+    await waitFor(() =>
+      expect(lastQuery()?.sort).toEqual([{ field: "f-points", direction: "asc" }]),
+    );
+    expect(screen.getByRole("button", { name: /Sort\s*·\s*Points/ })).toBeInTheDocument();
+  });
+});
+
 describe("filtering", () => {
   it("adds and removes a condition", async () => {
     const user = userEvent.setup();
     await renderTable();
+    await user.click(screen.getByRole("button", { name: "Filter" }));
     await user.selectOptions(screen.getByRole("combobox", { name: "Filter column" }), "Points");
     await user.selectOptions(screen.getByRole("combobox", { name: "Operator" }), "gt");
     await user.type(screen.getByLabelText("Value"), "7");
@@ -327,6 +346,7 @@ describe("filtering", () => {
   it("filters a choice column by the option's id", async () => {
     const user = userEvent.setup();
     await renderTable();
+    await user.click(screen.getByRole("button", { name: "Filter" }));
     await user.selectOptions(screen.getByRole("combobox", { name: "Filter column" }), "Priority");
     await user.selectOptions(screen.getByLabelText("Value"), "High");
     await user.click(screen.getByRole("button", { name: "Add filter" }));
@@ -338,6 +358,7 @@ describe("filtering", () => {
   it("cannot add a filter that still needs a value", async () => {
     const user = userEvent.setup();
     await renderTable();
+    await user.click(screen.getByRole("button", { name: "Filter" }));
     await user.selectOptions(screen.getByRole("combobox", { name: "Filter column" }), "Points");
     expect(screen.getByRole("button", { name: "Add filter" })).toBeDisabled();
   });
@@ -345,6 +366,7 @@ describe("filtering", () => {
   it("offers 'is empty' without asking for a value", async () => {
     const user = userEvent.setup();
     await renderTable();
+    await user.click(screen.getByRole("button", { name: "Filter" }));
     await user.selectOptions(screen.getByRole("combobox", { name: "Filter column" }), "Name");
     await user.selectOptions(screen.getByRole("combobox", { name: "Operator" }), "is_empty");
     expect(screen.queryByLabelText("Value")).not.toBeInTheDocument();
@@ -410,7 +432,7 @@ describe("views", () => {
     await user.click(screen.getByRole("button", { name: "Sort by Points" }));
     await user.click(screen.getByRole("button", { name: "Show or hide columns" }));
     await user.click(screen.getByRole("checkbox", { name: "Tags" }));
-    await user.click(screen.getByRole("button", { name: "Save as a view" }));
+    await user.click(screen.getByRole("button", { name: "Save view" }));
     await user.type(screen.getByLabelText("View name"), "Big ones");
     await user.click(screen.getByRole("button", { name: "Save view" }));
 
@@ -420,8 +442,10 @@ describe("views", () => {
       sort: [{ field: "f-points", direction: "desc" }],
       hidden_fields: ["f-tags"],
     });
-    expect(await screen.findByRole("option", { name: "Big ones" })).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "View" })).toHaveValue("v-1");
+    expect(await screen.findByRole("button", { name: "Big ones" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
   });
 
   it("applies a saved view", async () => {
@@ -434,7 +458,7 @@ describe("views", () => {
       }),
     ]);
     await renderTable();
-    await user.selectOptions(await screen.findByRole("combobox", { name: "View" }), "By points");
+    await user.click(await screen.findByRole("button", { name: "By points" }));
     await waitFor(() =>
       expect(lastQuery()).toEqual({
         filter: [{ field: "f-points", op: "gt", value: 1 }],
@@ -454,7 +478,7 @@ describe("views", () => {
       }),
     ]);
     await renderTable();
-    await user.selectOptions(await screen.findByRole("combobox", { name: "View" }), "Old");
+    await user.click(await screen.findByRole("button", { name: "Old" }));
     await waitFor(() => expect(lastQuery()).toEqual({ filter: [], sort: [] }));
   });
 
@@ -463,17 +487,17 @@ describe("views", () => {
     listViewsMock.mockResolvedValue([makeView("v-1", "Mine")]);
     deleteViewMock.mockResolvedValue(undefined);
     await renderTable();
-    await user.selectOptions(await screen.findByRole("combobox", { name: "View" }), "Mine");
+    await user.click(await screen.findByRole("button", { name: "Mine" }));
     await user.click(screen.getByRole("button", { name: "Delete this view" }));
     await waitFor(() => expect(deleteViewMock).toHaveBeenCalledWith("v-1"));
-    expect(screen.queryByRole("option", { name: "Mine" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Mine" })).not.toBeInTheDocument();
   });
 
   it("shows why a view could not be saved", async () => {
     const user = userEvent.setup();
     createViewMock.mockRejectedValue(new ApiError("You already have a view with this name.", 409));
     await renderTable();
-    await user.click(screen.getByRole("button", { name: "Save as a view" }));
+    await user.click(screen.getByRole("button", { name: "Save view" }));
     await user.type(screen.getByLabelText("View name"), "Mine");
     await user.click(screen.getByRole("button", { name: "Save view" }));
     expect(await screen.findByText("You already have a view with this name.")).toBeInTheDocument();
@@ -483,9 +507,9 @@ describe("views", () => {
     const user = userEvent.setup();
     listViewsMock.mockResolvedValue([makeView("v-1", "Mine")]);
     await renderTable();
-    await user.selectOptions(await screen.findByRole("combobox", { name: "View" }), "Mine");
+    await user.click(await screen.findByRole("button", { name: "Mine" }));
     await user.click(screen.getByRole("button", { name: "Sort by Points" }));
-    expect(screen.getByRole("combobox", { name: "View" })).toHaveValue("");
+    expect(screen.getByRole("button", { name: "All records" })).toHaveAttribute("aria-pressed", "true");
   });
 });
 

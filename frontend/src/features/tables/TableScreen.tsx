@@ -1,6 +1,5 @@
 "use client";
 
-import { Plus, Save, Settings2, Timer, Trash2, UserPlus, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { usePageCrumb } from "@/components/Breadcrumb";
@@ -9,9 +8,7 @@ import {
   Button,
   Drawer,
   DrawerBody,
-  Input,
   LoadingState,
-  Select,
   SkeletonTable,
   useToast,
 } from "@/components/ui";
@@ -39,6 +36,8 @@ import { FilterBar } from "./FilterBar";
 import { ManageFieldsPanel } from "./ManageFieldsPanel";
 import { RecordGrid } from "./RecordGrid";
 import { RecordSidebar } from "./RecordSidebar";
+import { SortMenu } from "./SortMenu";
+import { TableToolbar } from "./TableToolbar";
 import type {
   Condition,
   FieldItem,
@@ -112,8 +111,6 @@ export function TableScreen({ tableId, sheet, addTaskSignal = 0 }: Props) {
   const [selected, setSelected] = useState<string | "new" | null>(null);
   const [showAddField, setShowAddField] = useState(false);
   const [showManage, setShowManage] = useState(false);
-  const [savingView, setSavingView] = useState(false);
-  const [viewName, setViewName] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [showAssign, setShowAssign] = useState(false);
   const toast = useToast();
@@ -311,21 +308,21 @@ export function TableScreen({ tableId, sheet, addTaskSignal = 0 }: Props) {
     setHidden(view ? view.config.hidden_fields.filter((f) => known.has(f)) : []);
   }
 
-  async function saveView(event: React.FormEvent) {
-    event.preventDefault();
+  /** Saves the current filter, sort and columns as a view. True when it was saved. */
+  async function saveView(name: string): Promise<boolean> {
     setNotice(null);
     try {
-      const view = await createView(tableId, viewName.trim(), {
+      const view = await createView(tableId, name, {
         filter,
         sort,
         hidden_fields: hidden,
       });
       setViews((current) => [...current, view]);
       setActiveView(view.id);
-      setSavingView(false);
-      setViewName("");
+      return true;
     } catch (error) {
       setNotice(errorMessage(error, "Could not save the view."));
+      return false;
     }
   }
 
@@ -345,121 +342,36 @@ export function TableScreen({ tableId, sheet, addTaskSignal = 0 }: Props) {
       {/* The name and the way back are in the top bar; the heading stays for screen readers. */}
       <h1 className="sr-only">{table.name}</h1>
 
-      {/* On a sheet this row would be empty (its buttons live in the sheet tab strip). */}
-      <div
-        className={
-          sheet
-            ? "hidden"
-            : "flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3"
-        }
-      >
-        <section aria-label="View" className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-2 text-[13px] font-medium">
-            View
-            <Select
-              className="h-7 w-auto py-0 text-[13px]"
-              value={activeView}
-              onChange={(event) => applyView(event.target.value)}
-            >
-              <option value="">All records</option>
-              {views.map((view) => (
-                <option key={view.id} value={view.id}>
-                  {view.name}
-                </option>
-              ))}
-            </Select>
-          </label>
-          {activeView && (
-            <Button size="sm" variant="ghost" icon={Trash2} onClick={() => void removeView()}>
-              Delete this view
-            </Button>
-          )}
-          {!savingView ? (
-            <Button size="sm" icon={Save} onClick={() => setSavingView(true)}>
-              Save as a view
-            </Button>
-          ) : (
-            <form onSubmit={(event) => void saveView(event)} className="flex items-center gap-1.5">
-              <Input
-                aria-label="View name"
-                className="h-7 w-40 py-0 text-[13px]"
-                value={viewName}
-                onChange={(event) => setViewName(event.target.value)}
-                maxLength={100}
-                required
-              />
-              <Button type="submit" size="sm" variant="primary" disabled={viewName.trim() === ""}>
-                Save view
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setSavingView(false)}>
-                Cancel
-              </Button>
-            </form>
-          )}
-        </section>
-
-        {((canEdit && !sheet) || canMakeSheet) && (
-          <div className="flex flex-wrap items-center gap-2">
-            {canMakeSheet && (
-              <Button size="sm" icon={Users} onClick={() => setShowCreateSheet(true)}>
-                Create sheet
-              </Button>
-            )}
-            {canEdit && !sheet && (
-              <>
-                <Button
-                  size="sm"
-                  icon={Plus}
-                  onClick={() => {
-                    setShowManage(false);
-                    setShowAddField(true);
-                  }}
-                >
-                  Add a column
-                </Button>
-                <Button
-                  size="sm"
-                  icon={Settings2}
-                  onClick={() => {
-                    setShowAddField(false);
-                    setShowManage(true);
-                  }}
-                >
-                  Manage columns
-                </Button>
-              </>
-            )}
-            {canAddTimer && (
-              <Button size="sm" icon={Timer} loading={addingTimer} onClick={() => void addTimer()}>
-                Add timer
-              </Button>
-            )}
-            {canEdit && !sheet && (
-              <Button
-                variant={canAssign ? "secondary" : "primary"}
-                size="sm"
-                icon={Plus}
-                onClick={() => setSelected("new")}
-              >
-                New record
-              </Button>
-            )}
-            {canAssign && (
-              <Button
-                variant="primary"
-                size="sm"
-                icon={UserPlus}
-                onClick={() => {
-                  setSelected(null);
-                  setShowAssign(true);
-                }}
-              >
-                Assign task
-              </Button>
-            )}
-          </div>
-        )}
-      </div>
+      {/* On a sheet the buttons live in the sheet tab strip. */}
+      {!sheet && (
+        <TableToolbar
+          views={views}
+          activeView={activeView}
+          onApplyView={applyView}
+          onSaveView={saveView}
+          onRemoveView={() => void removeView()}
+          canEdit={canEdit}
+          canAssign={canAssign}
+          canMakeSheet={canMakeSheet}
+          canAddTimer={canAddTimer}
+          addingTimer={addingTimer}
+          onNewRecord={() => setSelected("new")}
+          onAssign={() => {
+            setSelected(null);
+            setShowAssign(true);
+          }}
+          onAddField={() => {
+            setShowManage(false);
+            setShowAddField(true);
+          }}
+          onManageFields={() => {
+            setShowAddField(false);
+            setShowManage(true);
+          }}
+          onAddTimer={() => void addTimer()}
+          onCreateSheet={() => setShowCreateSheet(true)}
+        />
+      )}
 
       <FilterBar
         fields={fields}
@@ -478,7 +390,9 @@ export function TableScreen({ tableId, sheet, addTaskSignal = 0 }: Props) {
             }}
           />
         }
-      />
+      >
+        <SortMenu fields={shownFields} sort={sort} onToggle={toggleSort} />
+      </FilterBar>
 
       <Drawer open={showManage && canEdit} title="Manage columns" onClose={() => setShowManage(false)}>
         <DrawerBody>

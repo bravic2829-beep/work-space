@@ -28,6 +28,12 @@ function usePopover(): PopoverState {
   return state;
 }
 
+/** Closes the popover this is used in (for example after a menu item was chosen). */
+export function usePopoverClose(): () => void {
+  const { setOpen } = usePopover();
+  return () => setOpen(false);
+}
+
 /**
  * A small panel that opens under its trigger. It closes on Escape (focus goes back to the
  * trigger) and on a click anywhere outside.
