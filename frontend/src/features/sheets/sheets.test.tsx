@@ -42,9 +42,18 @@ vi.mock("./api", () => ({
 }));
 // The table inside a tab is tested with the table screen; here only what it is asked to show.
 vi.mock("@/features/tables/TableScreen", () => ({
-  TableScreen: ({ tableId, sheet }: { tableId: string; sheet?: SheetItem }) => (
+  TableScreen: ({
+    tableId,
+    sheet,
+    addTaskSignal,
+  }: {
+    tableId: string;
+    sheet?: SheetItem;
+    addTaskSignal?: number;
+  }) => (
     <div data-testid="table">
       {tableId}:{sheet ? sheet.id : "whole table"}
+      <span data-testid="signal">{addTaskSignal}</span>
     </div>
   ),
 }));
@@ -194,6 +203,41 @@ describe("WorkScreen", () => {
     expect(screen.queryByRole("button", { name: "Share" })).not.toBeInTheDocument();
     await userEvent.setup().click(screen.getByRole("tab", { name: /Binh/ }));
     expect(screen.getByRole("button", { name: "Share" })).toBeInTheDocument();
+  });
+
+  it("keeps Share and Add task in the tab strip, and Add task asks the table to open its form", async () => {
+    fetchMeMock.mockResolvedValue(sampleUser({ id: "u-x" }));
+    listSheetsMock.mockResolvedValue([
+      sheet("s-1", "Ann", { my_role: "viewer", is_admin: false, can_see_all: false }),
+      sheet("s-2", "Binh", { my_role: "manager", is_admin: false, can_see_all: false }),
+    ]);
+    const user = userEvent.setup();
+    renderWork();
+    await screen.findByTestId("table");
+    // A viewer can add nothing.
+    expect(screen.queryByRole("button", { name: "Add task" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: /Binh/ }));
+    const strip = screen.getByRole("tablist", { name: "Sheets" }).parentElement as HTMLElement;
+    expect(strip).toContainElement(screen.getByRole("button", { name: "Share" }));
+    expect(strip).toContainElement(screen.getByRole("button", { name: "Add task" }));
+
+    expect(screen.getByTestId("signal")).toHaveTextContent("0");
+    await user.click(screen.getByRole("button", { name: "Add task" }));
+    expect(screen.getByTestId("signal")).toHaveTextContent("1");
+    await user.click(screen.getByRole("button", { name: "Add task" }));
+    expect(screen.getByTestId("signal")).toHaveTextContent("2");
+  });
+
+  it("lets an editor add a task but not share the sheet", async () => {
+    fetchMeMock.mockResolvedValue(sampleUser({ id: "u-Binh" }));
+    listSheetsMock.mockResolvedValue([
+      sheet("s-2", "Binh", { my_role: "editor", is_admin: false, can_see_all: false }),
+    ]);
+    renderWork();
+    await screen.findByTestId("table");
+    expect(screen.getByRole("button", { name: "Add task" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Share" })).not.toBeInTheDocument();
   });
 
   it("explains an empty list to an admin and to an employee", async () => {

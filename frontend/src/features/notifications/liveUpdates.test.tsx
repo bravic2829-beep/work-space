@@ -2,6 +2,7 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getUnreadCount } from "./api";
+import { subscribeLive } from "./liveRefresh";
 import { NotificationBell } from "./NotificationBell";
 
 vi.mock("next/link", () => ({
@@ -105,6 +106,27 @@ describe("NotificationBell live updates", () => {
     await waitFor(() => expect(countMock).toHaveBeenCalledTimes(3));
 
     expect(screen.queryByText("You have a new notification.")).not.toBeInTheDocument();
+  });
+
+  it("lets the open lists know when a record changed, once for a burst, and leaves the bell alone", async () => {
+    countMock.mockResolvedValue(0);
+    const onLive = vi.fn();
+    const off = subscribeLive(onLive);
+    render(<NotificationBell />);
+    await screen.findByRole("button", { name: "Notifications, 0 unread" });
+    last().open();
+    await waitFor(() => expect(countMock).toHaveBeenCalledTimes(2));
+    vi.useFakeTimers();
+
+    last().say({ type: "records.changed" });
+    last().say({ type: "records.changed" });
+    last().say({ type: "records.changed" });
+    expect(onLive).not.toHaveBeenCalled();
+    act(() => void vi.advanceTimersByTime(400));
+
+    expect(onLive).toHaveBeenCalledTimes(1);
+    expect(countMock).toHaveBeenCalledTimes(2); // the bell did not read again
+    off();
   });
 
   it("ignores messages it does not know", async () => {

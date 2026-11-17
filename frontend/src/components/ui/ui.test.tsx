@@ -235,6 +235,12 @@ describe("Avatar", () => {
     expect(initials("   ")).toBe("?");
   });
 
+  it("leaves a trailing employee code out of the initials", () => {
+    expect(initials("Nguyễn Văn An (NV101)")).toBe("NA");
+    expect(initials("Lê Minh Châu (NV103)")).toBe("LC");
+    expect(initials("(NV101)")).toBe("?");
+  });
+
   it("is decorative: hidden from screen readers", () => {
     render(<Avatar name="Ann Lee" />);
     expect(screen.getByText("AL")).toHaveAttribute("aria-hidden", "true");

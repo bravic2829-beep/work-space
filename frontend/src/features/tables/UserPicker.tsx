@@ -70,8 +70,9 @@ export function UserPicker({ label, value, onChange, multiple, disabled }: Props
         <>
           <input
             type="search"
+            className="w-full"
             aria-label={`Find an employee for ${label}`}
-            placeholder="Search by name or code"
+            placeholder="Name or code"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />

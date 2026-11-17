@@ -7,6 +7,7 @@ import { usePageCrumb } from "@/components/Breadcrumb";
 import { Alert, Button, Drawer, DrawerBody, Input, LoadingState, Select } from "@/components/ui";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { isOrgAdmin } from "@/features/auth/schema";
+import { useLiveRefresh } from "@/features/notifications/liveRefresh";
 import { createSheetRecord, listSheetRecords } from "@/features/sheets/api";
 import { CreateSheetDrawer } from "@/features/sheets/CreateSheetDrawer";
 import { sheetAccess, type SheetItem } from "@/features/sheets/schema";
@@ -73,10 +74,15 @@ type Props = {
    * controls its role allows. A person who is not a member of the workspace uses a table this way.
    */
   sheet?: SheetItem;
+  /**
+   * A number that goes up each time somebody presses "Add task" outside this screen (the sheet
+   * tab strip keeps that button next to Share); the new-task form opens on every change.
+   */
+  addTaskSignal?: number;
 };
 
 /** The table view: columns, rows, filter, sort, saved views, and the record panel. */
-export function TableScreen({ tableId, sheet }: Props) {
+export function TableScreen({ tableId, sheet, addTaskSignal = 0 }: Props) {
   const { state: auth } = useAuth();
   const sheetId = sheet?.id;
   const sheetRole = sheet?.my_role;
@@ -137,6 +143,17 @@ export function TableScreen({ tableId, sheet }: Props) {
     void load();
     return () => controller.abort();
   }, [tableId, tableKey, sheetId]);
+
+  // "Add task" pressed outside this screen: open the new-task form once per press. The signal the
+  // screen starts with is already handled, so a sheet opened later does not open the form.
+  const [seenSignal, setSeenSignal] = useState(addTaskSignal);
+  if (addTaskSignal !== seenSignal) {
+    setSeenSignal(addTaskSignal);
+    setSelected("new");
+  }
+
+  // A task given to me appears at once. Reads again without the loading flash or closing the panel.
+  useLiveRefresh(() => setRecordsKey((n) => n + 1));
 
   useEffect(() => {
     const controller = new AbortController();
@@ -322,11 +339,15 @@ export function TableScreen({ tableId, sheet }: Props) {
       {/* The name and the way back are in the top bar; the heading stays for screen readers. */}
       <h1 className="sr-only">{table.name}</h1>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">
-        <section
-          aria-label="View"
-          className={sheet ? "hidden" : "flex flex-wrap items-center gap-2"}
-        >
+      {/* On a sheet this row would be empty (its buttons live in the sheet tab strip). */}
+      <div
+        className={
+          sheet
+            ? "hidden"
+            : "flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3"
+        }
+      >
+        <section aria-label="View" className="flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-2 text-[13px] font-medium">
             View
             <Select
@@ -371,7 +392,7 @@ export function TableScreen({ tableId, sheet }: Props) {
           )}
         </section>
 
-        {(canEdit || canMakeSheet) && (
+        {((canEdit && !sheet) || canMakeSheet) && (
           <div className="flex flex-wrap items-center gap-2">
             {canMakeSheet && (
               <Button size="sm" icon={Users} onClick={() => setShowCreateSheet(true)}>
@@ -407,14 +428,14 @@ export function TableScreen({ tableId, sheet }: Props) {
                 Add timer
               </Button>
             )}
-            {canEdit && (
+            {canEdit && !sheet && (
               <Button
                 variant={canAssign ? "secondary" : "primary"}
                 size="sm"
                 icon={Plus}
                 onClick={() => setSelected("new")}
               >
-                {sheet ? "Add task" : "New record"}
+                New record
               </Button>
             )}
             {canAssign && (
@@ -575,6 +596,7 @@ export function TableScreen({ tableId, sheet }: Props) {
             currentUserId={me}
             canCreate={canEdit}
             onCreate={sheet ? (data) => createSheetRecord(sheet.id, data) : undefined}
+            givenTo={sheet?.owner.full_name}
             onSaved={(record) => {
               setSelected(record.id);
               reloadRecords();

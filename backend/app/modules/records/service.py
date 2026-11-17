@@ -33,7 +33,7 @@ from app.modules.permissions.service import (
     load_table_context,
     require_table_read,
 )
-from app.modules.records import links, listing, repository, sharing, subtasks, visibility
+from app.modules.records import links, listing, live, repository, sharing, subtasks, visibility
 from app.modules.records.models import Record
 from app.modules.records.schemas import RecordPublic
 from app.modules.sheets import access as sheet_access
@@ -527,5 +527,6 @@ async def delete_record(session: AsyncSession, actor: User, record_id: uuid.UUID
     record, _ = await _load(session, actor, record_id, for_update=True)
     if record.created_by != actor.id and not is_org_admin(actor):
         raise ProblemError(403, "Only the person who created a record, or an admin, can delete it.")
+    live.note_change(session.sync_session, record)  # the bulk delete below is invisible to the ORM
     await session.execute(delete(Record).where(Record.id == record.id))
     await session.flush()

@@ -1,5 +1,6 @@
 "use client";
 
+import { X } from "lucide-react";
 import { useId } from "react";
 
 import { cn } from "@/lib/cn";
@@ -21,6 +22,7 @@ type Props = {
 /**
  * The choices of a select field as pills, all in view: one tap to pick, no dropdown to open.
  * Built on real radio buttons / checkboxes, so the keyboard and screen readers work as usual.
+ * A small round X at the end empties the choice (a radio button cannot be un-picked otherwise).
  */
 export function ChoiceChips({ label, options, value, onChange, multiple, disabled }: Props) {
   const name = useId();
@@ -66,13 +68,15 @@ export function ChoiceChips({ label, options, value, onChange, multiple, disable
           </label>
         );
       })}
-      {!multiple && value.length > 0 && !disabled && (
+      {value.length > 0 && !disabled && (
         <button
           type="button"
+          aria-label={multiple ? "Clear all choices" : "Clear choice"}
+          title={multiple ? "Clear all" : "Clear"}
           onClick={() => onChange([])}
-          className="cursor-pointer border-0 bg-transparent px-1 text-xs text-muted underline hover:text-fg"
+          className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-full border border-line-strong bg-surface p-0 text-muted hover:border-danger hover:text-danger focus-visible:outline-2 focus-visible:outline-primary"
         >
-          Clear
+          <X aria-hidden="true" className="size-3.5" />
         </button>
       )}
     </div>

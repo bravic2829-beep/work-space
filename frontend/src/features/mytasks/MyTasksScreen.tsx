@@ -11,6 +11,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import { Alert, Button, EmptyState, LoadingState, PageHeader, Tabs } from "@/components/ui";
+import { useLiveRefresh } from "@/features/notifications/liveRefresh";
 import { ApiError } from "@/lib/api/client";
 
 import { listMyTasks, type Scope } from "./api";
@@ -49,6 +50,7 @@ const EMPTY: Record<Tab, string> = {
 export function MyTasksScreen() {
   const [tab, setTab] = useState<Tab>("assigned");
   const [state, setState] = useState<State>({ kind: "loading" });
+  const [refreshKey, setRefreshKey] = useState(0);
   const scope = scopeOf(tab);
   const today = localToday();
 
@@ -70,7 +72,10 @@ export function MyTasksScreen() {
 
     void load();
     return () => controller.abort();
-  }, [scope]);
+  }, [scope, refreshKey]);
+
+  // A task given to me appears at once: the list is read again when the socket says so.
+  useLiveRefresh(() => setRefreshKey((n) => n + 1));
 
   function choose(next: Tab) {
     if (next === tab) return;

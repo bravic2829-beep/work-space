@@ -183,6 +183,11 @@ export function listRecords(
   });
 }
 
+/** One record by id (to name a record that is already linked). */
+export function getRecord(id: string, signal?: AbortSignal): Promise<RecordItem> {
+  return apiRequest("GET", `${API}/records/${id}`, { guard: isRecordItem, signal });
+}
+
 export function createRecord(
   tableId: string,
   data: Record<string, unknown>,

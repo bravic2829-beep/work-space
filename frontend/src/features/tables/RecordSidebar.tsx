@@ -63,6 +63,11 @@ type Props = {
   tableEditor?: boolean;
   /** An organization admin: every right on every task (delete, review, comments). */
   admin?: boolean;
+  /**
+   * A new task is given to this person whatever the form says (the owner of the sheet it is added
+   * on), so the form leaves out the people columns and says who gets it.
+   */
+  givenTo?: string;
 };
 
 const FORM_ID = "record-form";
@@ -92,6 +97,7 @@ export function RecordSidebar({
   reviewer = false,
   tableEditor = canCreate,
   admin = false,
+  givenTo,
 }: Props) {
   // The parent gives this component a new key per record and version, so the drafts start fresh.
   const [drafts, setDrafts] = useState(() => initialDrafts(fields, record));
@@ -102,7 +108,11 @@ export function RecordSidebar({
   const names = useUserNames(userIdsIn(fields, record ? [record] : []));
 
   const isNew = record === null;
-  const shown = fields.filter((field) => !(isNew && isComputed(field)));
+  const shown = fields.filter(
+    (field) =>
+      !(isNew && isComputed(field)) &&
+      !(isNew && givenTo !== undefined && (field.semantic === "assignee" || field.semantic === "follower")),
+  );
   const editable = shown.some(canEditField);
   const isCreator = record?.created_by === currentUserId;
   // The server decides; this only hides a button that is certain to be refused.
@@ -187,6 +197,11 @@ export function RecordSidebar({
       <DrawerBody>
         {record && <StatusStepper fields={fields} record={record} />}
         <form id={FORM_ID} onSubmit={(event) => void save(event)} className="flex flex-col gap-3">
+          {isNew && givenTo !== undefined && (
+            <p className="m-0 text-sm text-muted">
+              This task will be given to <strong className="text-fg">{givenTo}</strong>.
+            </p>
+          )}
           {shown.map((field) => (
             <FieldEditor
               key={field.id}

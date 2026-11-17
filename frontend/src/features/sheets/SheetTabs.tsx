@@ -22,6 +22,8 @@ type Props = {
   /** The sheets the person pinned: shown first, with a pin. */
   pinned?: ReadonlySet<string>;
   onTogglePin?: (id: string) => void;
+  /** More buttons for the open sheet (Share, Add task), kept next to "Create sheet". */
+  actions?: React.ReactNode;
 };
 
 const TAB =
@@ -39,6 +41,7 @@ export function SheetTabs({
   onCreate,
   pinned = new Set<string>(),
   onTogglePin,
+  actions,
 }: Props) {
   return (
     <div className="flex items-end border-b border-line">
@@ -87,6 +90,7 @@ export function SheetTabs({
             Create sheet
           </Button>
         )}
+        {actions}
       </div>
     </div>
   );
