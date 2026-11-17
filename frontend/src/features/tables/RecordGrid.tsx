@@ -215,7 +215,11 @@ export function RecordGrid({
                   if (isTimerField(field)) {
                     // The time spent; when it started and finished is in the tooltip.
                     return (
-                      <td key={field.id} className="whitespace-nowrap" title={describeTimer(value) || undefined}>
+                      <td
+                        key={field.id}
+                        className="min-w-44 whitespace-nowrap"
+                        title={describeTimer(value) || undefined}
+                      >
                         <TimerCell
                           fields={fields}
                           field={field}
