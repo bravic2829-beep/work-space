@@ -1,12 +1,12 @@
 import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/features/auth/RequireAuth";
-import { ReportsScreen } from "@/features/reports/ReportsScreen";
+import { ReportsHub } from "@/features/reports/ReportsHub";
 
 export default function ReportsPage() {
   return (
     <RequireAuth>
       <AppShell>
-        <ReportsScreen />
+        <ReportsHub />
       </AppShell>
     </RequireAuth>
   );
