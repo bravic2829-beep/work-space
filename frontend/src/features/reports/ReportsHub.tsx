@@ -5,14 +5,17 @@ import { useState } from "react";
 import { Tabs, type TabItem } from "@/components/ui";
 import { OkrScreen } from "@/features/okr/OkrScreen";
 
+import { PerformanceScreen } from "@/features/performance/PerformanceScreen";
+
 import { OverviewScreen } from "./OverviewScreen";
 import { ReportsScreen } from "./ReportsScreen";
 
-type Section = "overview" | "okr" | "tasks";
+type Section = "overview" | "okr" | "performance" | "tasks";
 
 const SECTIONS: TabItem<Section>[] = [
   { id: "overview", label: "Overview" },
   { id: "okr", label: "OKR" },
+  { id: "performance", label: "Performance" },
   { id: "tasks", label: "Task overview" },
 ];
 
@@ -29,6 +32,7 @@ export function ReportsHub() {
       <div role="tabpanel" id={`reports-panel-${section}`} aria-labelledby={`reports-tab-${section}`}>
         {section === "overview" && <OverviewScreen />}
         {section === "okr" && <OkrScreen />}
+        {section === "performance" && <PerformanceScreen />}
         {section === "tasks" && <ReportsScreen />}
       </div>
     </div>

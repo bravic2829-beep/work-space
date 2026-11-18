@@ -98,6 +98,29 @@ mỗi cột chọn *As their role allows*, *Read only* hoặc *Hidden*, lưu m�
 
 ## 5. Nhật ký thay đổi
 
+### 18/11/2026: Reports, Phase 3 (đợt 1): tiêu chí đánh giá và điểm hiệu suất theo tháng
+Tab mới **Performance** trong Reports. Trả lời câu hỏi "thêm tiêu chí đánh giá khác thế nào".
+- **Module riêng** `backend/app/modules/performance` (migration `0019`, bảng `perf_*`, route
+  `/api/v1/performance/*`), chỉ thêm hai dòng đăng ký. Migration `0019` nối sau `0018`/`0017`: vẫn
+  chưa đẩy được lên GitHub cho tới khi `0017` của người kia được commit.
+- **Sáu tiêu chí mặc định** (tự tạo lần đầu mở, mỗi tổ chức): Task completion 25, On-time delivery 20,
+  Work quality 20 (ba cái này đo từ task); Initiative and responsibility 15, Collaboration and handover
+  10, Improvement and growth 10 (quản lý chấm tay). **Admin** thêm tiêu chí, đổi tên/mô tả/trọng số/nguồn
+  điểm, tắt/bật ("Criteria and weights"). Mỗi lần đổi được lưu: ai, khi nào, đổi gì, lý do.
+- **Nguồn điểm của một tiêu chí:** do người chấm (0–100 kèm lý do bắt buộc), hoặc một trong sáu phép đo:
+  completion_rate, on_time_rate, overdue_rate, rework_rate, blocked_tasks, update_compliance (cái cuối
+  chưa đo được vì chưa có kỳ cập nhật: luôn không có điểm). Công thức nằm trong `performance/metrics.py`.
+- **Điểm tổng** = tổng(điểm × trọng số) ÷ tổng trọng số của các tiêu chí **đã có điểm**. Tiêu chí chưa có gì
+  để chấm hiện "—" và bị bỏ ra, không bao giờ tính là 0; cột "Judged" cho biết đã chấm bao nhiêu % trọng số.
+  Trọng số không cần cộng đủ 100.
+- **Ai xem ai / ai chấm:** admin xem tất cả; quản lý xem mình và người mình quản lý (`manager_id`); người khác
+  chỉ xem mình. Chấm tay: admin, hoặc quản lý của người đó; không tự chấm mình (trừ admin). Số đo từ task
+  chỉ đếm task người xem được mở.
+- Chưa làm trong đợt này: độ phức tạp/trọng số task (nên Completion rate đang đếm số task, chưa theo độ quan
+  trọng), update compliance, công bố điểm và khiếu nại, snapshot khi chốt kỳ, trọng số riêng theo phòng ban,
+  điều chỉnh của quản lý kèm lý do trên điểm tự động.
+- Test: backend 12 (`test_performance.py`), frontend 8 (`performance.test.tsx`). Tổng: backend 884, frontend 697.
+
 ### 18/11/2026: Reports, Phase 2: trang Overview (mười con số, xu hướng, bộ lọc)
 Nâng cấp Reports thành hệ thống quản trị hiệu suất theo từng phase (kế hoạch trong ghi chú
 `workbase-reports-performance-plan`). Phase 2 = trang **Overview** thật, là tab đầu của Reports.
@@ -172,7 +195,7 @@ tổng, và ba tab xem cùng một bảng.
   việc Blocked và Paused, nhóm theo người được giao), **Review** (nhóm theo việc cha, trung bình
   điểm Review). Mỗi tab là chính bảng thật nên mở việc, đổi nhóm, lọc, lưu view như bình thường.
 - **Lưu ý cho đồng nghiệp:** migration `0016` là của phần này; migration `0017` (thùng rác file
-  đính kèm) là của người khác, chưa commit. Migration mới hãy lấy số `0019` trở đi (`0018` là OKR).
+  đính kèm) là của người khác, chưa commit. Migration mới hãy lấy số `0020` trở đi (`0018` là OKR, `0019` là Performance).
 - Chưa làm: xuất Excel kèm dòng nhóm và dòng tổng; nhóm trên sheet cá nhân (`/sheets/{id}/groups`);
   mục "By status" trong Reports vẫn chưa bấm được.
 
@@ -315,6 +338,7 @@ khởi động lại frontend. Dockerfile đổi thì `up -d --build backend`.
 | 0016 | Ba vai trò cột Review (`review_score`, `review_merits`, `review_improve`) và thêm ba cột vào mọi bảng task đang có |
 | 0017 | (của người khác, chưa commit) thùng rác cho file đính kèm |
 | 0018 | Module OKR: `okr_cycles`, `okr_objectives`, `okr_key_results`, `okr_check_ins` |
+| 0019 | Module Performance: `perf_criteria`, `perf_criterion_changes`, `perf_manual_scores` |
 
 ## 8. Kiểm thử
 

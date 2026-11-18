@@ -139,7 +139,7 @@ def _parse(value: str | None, name: str) -> date | None:
         raise ProblemError(422, f"{name} must look like 2026-11-13.") from None
 
 
-async def _completed_days(
+async def completed_days(
     session: AsyncSession, table_id: uuid.UUID, status: Field, done_ids: list[str]
 ) -> dict[uuid.UUID, str]:
     """The day each task last moved to a done status, from its history."""
@@ -257,7 +257,7 @@ async def dashboard(
         options = status.config.get("options", []) if status else []
         kind_of = {o["id"]: o["kind"] for o in options}
         done_ids = [o["id"] for o in options if o["kind"] == "done"]
-        completed_on = await _completed_days(session, entry.id, status, done_ids) if status else {}
+        completed_on = await completed_days(session, entry.id, status, done_ids) if status else {}
 
         query = visible_records(
             actor, context, select(Record.id, Record.data, Record.created_at)
