@@ -13,9 +13,9 @@ có quyền riêng, cập nhật tiến độ, duyệt, bàn giao, đính kèm f
 | --- | --- |
 | Công nghệ | Next.js 16 + React 19 + TypeScript (giao diện), FastAPI + SQLAlchemy + Alembic (backend), PostgreSQL 16, Docker Compose |
 | Ngôn ngữ giao diện | Tiếng Anh. Dữ liệu mẫu bằng tiếng Việt |
-| Nhánh | `ui-redesign`. `main` trên GitHub đang ở `ce66ba6` (đã đẩy ngày 18/11); máy local có thêm 4 commit ngày 18/11 (nhóm và tổng hợp, cột Review, giao diện nhóm, ba tab Reports), **chưa đẩy lên** |
+| Nhánh | `ui-redesign`. `main` trên GitHub đang ở `f86209c`; máy local có thêm các commit ngày 18/11 (nhóm và tổng hợp, cột Review, ba tab trên bảng task, module OKR, các lần gộp), **chưa đẩy lên** |
 | Việc cần làm ngay | `git push origin HEAD:main` (cần đăng nhập GitHub, chỉ chủ dự án làm được) |
-| Test | Frontend 636 qua. Backend 809 qua (ruff, mypy sạch) |
+| Test | Frontend 680 qua. Backend 863 qua (ruff, mypy sạch) |
 
 ## 2. Những gì web đang làm được
 
@@ -98,6 +98,33 @@ mỗi cột chọn *As their role allows*, *Read only* hoặc *Hidden*, lưu m�
 
 ## 5. Nhật ký thay đổi
 
+### 18/11/2026: Report là OKR (module riêng, theo mẫu Base của Feishu)
+Trang **Reports** giờ có hai phần: **OKR** (mới, mở đầu) và **Task overview** (trang số liệu task
+cũ, giữ nguyên, kèm ba tab Summary / At risk / Review trên bảng task ở mục dưới).
+- **Module riêng** `backend/app/modules/okr` (bảng `okr_*`, route `/api/v1/okr/...`, migration
+  `0018`), không sửa module nào khác ngoài hai dòng đăng ký. **Migration `0018` nối sau `0017`
+  (thùng rác file đính kèm của người khác): phải commit `0017` trước khi đẩy lên GitHub.**
+- **Tự tính, không gọi hệ thống ngoài:** tiến độ KR = `(hiện tại − đầu) ÷ (mục tiêu − đầu)` trong
+  khoảng 0–1 (mục tiêu nhỏ hơn giá trị đầu vẫn đúng); tiến độ Objective = trung bình các KR. Trạng
+  thái KR (On track / At risk / Off track) do chủ KR chọn khi check-in; điểm Review (0–1), Merits,
+  To improve do người đánh giá nhập.
+- **Chu kỳ** (quý, năm): admin mở, đổi tên, đóng, mở lại; chu kỳ đã đóng chỉ ghi được Review.
+- **Objective** cấp công ty (admin), phòng ban (admin hoặc trưởng phòng), cá nhân (chính mình, hoặc
+  admin tạo giúp); có thể "supports" Objective cấp trên cùng chu kỳ (alignment, không vòng lặp);
+  tùy chọn riêng tư.
+- **Key Result:** giá trị đầu, mục tiêu, đơn vị, chủ KR. **Check-in** hằng tuần (giá trị mới, trạng
+  thái, ghi chú), giữ lịch sử.
+- **Review:** chấm điểm 0–1, Merits, To improve cho Objective và KR; do admin, quản lý trực tiếp của
+  chủ, hoặc chủ Objective cấp trên; chủ không tự chấm.
+- **Quyền xem:** mọi nhân viên xem OKR không riêng tư; OKR riêng tư chỉ người liên quan (người
+  không có quyền nhận 404, không biết là có).
+- **Giao diện:** 4 tab OKR Summary / Risky KRs / Review / Alignment, chọn chu kỳ, "Only mine", lọc
+  cấp, ô tổng; các khung nhập Objective, Key Result, Check-in (kèm lịch sử), Review, Chu kỳ.
+- Dữ liệu mẫu tiếng Việt đã nạp vào database local (chu kỳ Q4 2026, 4 Objective, 7 KR).
+- Test: backend 51 (OKR), frontend 41 (OKR và ReportsHub).
+- Chưa làm: liên kết KR với task ("OKR task subdivision"), xuất Excel OKR, thông báo khi KR rủi ro,
+  tự đổi trạng thái theo ngưỡng.
+
 ### 18/11/2026: báo cáo kiểu OKR (nhóm, tổng hợp, ba tab)
 Làm theo ba ảnh mẫu Feishu (OKR Summary / Risky KRs / Review): bảng có dòng nhóm gập được kèm số
 tổng, và ba tab xem cùng một bảng.
@@ -123,7 +150,7 @@ tổng, và ba tab xem cùng một bảng.
   việc Blocked và Paused, nhóm theo người được giao), **Review** (nhóm theo việc cha, trung bình
   điểm Review). Mỗi tab là chính bảng thật nên mở việc, đổi nhóm, lọc, lưu view như bình thường.
 - **Lưu ý cho đồng nghiệp:** migration `0016` là của phần này; migration `0017` (thùng rác file
-  đính kèm) là của người khác, chưa commit. Migration mới hãy lấy số `0018` trở đi.
+  đính kèm) là của người khác, chưa commit. Migration mới hãy lấy số `0019` trở đi (`0018` là OKR).
 - Chưa làm: xuất Excel kèm dòng nhóm và dòng tổng; nhóm trên sheet cá nhân (`/sheets/{id}/groups`);
   mục "By status" trong Reports vẫn chưa bấm được.
 
@@ -264,6 +291,8 @@ khởi động lại frontend. Dockerfile đổi thì `up -d --build backend`.
 | 0014 | Bảng `attachments`; kiểu cột `attachment`; hai hành động lịch sử về file (trước đây đánh số 0012) |
 | 0015 | Trạng thái `paused`/`blocked` (thêm hai lựa chọn vào mọi cột Status), thông báo `task_blocked`, ba hành động lịch sử |
 | 0016 | Ba vai trò cột Review (`review_score`, `review_merits`, `review_improve`) và thêm ba cột vào mọi bảng task đang có |
+| 0017 | (của người khác, chưa commit) thùng rác cho file đính kèm |
+| 0018 | Module OKR: `okr_cycles`, `okr_objectives`, `okr_key_results`, `okr_check_ins` |
 
 ## 8. Kiểm thử
 
