@@ -36,7 +36,7 @@ import { ColumnsMenu } from "./ColumnsMenu";
 import { groupKey } from "./groups";
 import { GroupMenu } from "./GroupMenu";
 import { FilterBar } from "./FilterBar";
-import { presetFilter, type Preset } from "./presets";
+import { presetFilter, reportViewConfig, type Preset, type ReportView } from "./presets";
 import { ManageFieldsPanel } from "./ManageFieldsPanel";
 import { RecordGrid, type GridSection } from "./RecordGrid";
 import { RecordSidebar } from "./RecordSidebar";
@@ -102,10 +102,15 @@ type Props = {
    * the table has loaded; the person can change or clear the filter like any other.
    */
   preset?: { show: Preset; person?: string | null; today: string };
+  /**
+   * Open as one of the tabs of the Reports page: its filter, grouping and totals are set once the
+   * columns are known, and the person can change them like any other.
+   */
+  reportView?: ReportView;
 };
 
 /** The table view: columns, rows, filter, sort, saved views, and the record panel. */
-export function TableScreen({ tableId, sheet, onShare, preset }: Props) {
+export function TableScreen({ tableId, sheet, onShare, preset, reportView }: Props) {
   const { state: auth } = useAuth();
   const sheetId = sheet?.id;
   const sheetRole = sheet?.my_role;
@@ -188,12 +193,22 @@ export function TableScreen({ tableId, sheet, onShare, preset }: Props) {
     if (result) setFilter(result.filter);
     else setNotice("This table has no column for that report, so it is shown without a filter.");
   }
+  // A tab of the Reports page: its filter, grouping and totals, applied once the columns are known.
+  const [reportApplied, setReportApplied] = useState(false);
+  if (reportView && !reportApplied && tableState.kind === "ready") {
+    setReportApplied(true);
+    const config = reportViewConfig(reportView, tableState.table.fields);
+    setFilter(config.filter);
+    setGroupBy(config.groupBy);
+    setTotals(config.totals);
+  }
   // A task given to me appears at once. Reads again without the loading flash or closing the panel.
   useLiveRefresh(() => setRecordsKey((n) => n + 1));
 
-  // The records wait for a ready-made filter (it needs the columns), so the full list never
-  // flashes on the screen before it is narrowed.
-  const waitingForPreset = preset !== undefined && !presetApplied;
+  // The records wait for a ready-made filter or report tab (it needs the columns), so the full
+  // list never flashes on the screen before it is narrowed or grouped.
+  const waitingForPreset =
+    (preset !== undefined && !presetApplied) || (reportView !== undefined && !reportApplied);
   // Grouped, the rows come group by group (useGroupedRecords) instead of as one flat list.
   const groupedData = useGroupedRecords({
     enabled: grouped && !waitingForPreset,

@@ -15,10 +15,26 @@ import {
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { Alert, Avatar, StatCard, EmptyState, LoadingState, PageHeader, Select } from "@/components/ui";
+import {
+  Alert,
+  Avatar,
+  StatCard,
+  EmptyState,
+  LoadingState,
+  PageHeader,
+  Select,
+  Tabs,
+  type TabItem,
+} from "@/components/ui";
 import { cn } from "@/lib/cn";
 
-import type { Preset } from "@/features/tables/presets";
+import {
+  REPORT_VIEW_LABELS,
+  REPORT_VIEWS,
+  type Preset,
+  type ReportView,
+} from "@/features/tables/presets";
+import { TableScreen } from "@/features/tables/TableScreen";
 
 import { exportUrl, getOverview, listReportTables, type Overview } from "./api";
 import { errorMessage } from "@/lib/api/errors";
@@ -44,6 +60,39 @@ function tableLink(tableId: string, show: Preset, person?: string): string {
   const params = new URLSearchParams({ show });
   if (person) params.set("person", person);
   return `/tables/${tableId}?${params.toString()}`;
+}
+
+const REPORT_TABS: TabItem<ReportView>[] = REPORT_VIEWS.map((id) => ({
+  id,
+  label: REPORT_VIEW_LABELS[id],
+}));
+
+/**
+ * The table itself, three ways: a summary under the parent task, the tasks at risk under their
+ * assignee, and the review of the work. Each tab is the normal table with its filter, grouping and
+ * totals already set, so a task opens, and the grouping and filter change, as anywhere else.
+ */
+function ReportTabs({ tableId }: { tableId: string }) {
+  const [tab, setTab] = useState<ReportView>("summary");
+  return (
+    <section aria-label="Report views" className="grid gap-3">
+      <Tabs
+        label="Report views"
+        idPrefix="report-views"
+        tabs={REPORT_TABS}
+        value={tab}
+        onChange={setTab}
+      />
+      <div
+        role="tabpanel"
+        id={`report-views-panel-${tab}`}
+        aria-labelledby={`report-views-tab-${tab}`}
+      >
+        {/* Another tab or table starts from the tab's own settings, not from the last one. */}
+        <TableScreen key={`${tableId}-${tab}`} tableId={tableId} reportView={tab} />
+      </div>
+    </section>
+  );
 }
 
 /**
@@ -122,6 +171,7 @@ export function ReportsScreen() {
           )}
           {report.kind === "error" && <Alert>{report.message}</Alert>}
           {report.kind === "ready" && <OverviewView data={report.data} />}
+          <ReportTabs tableId={current} />
         </div>
       )}
     </>

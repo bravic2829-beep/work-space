@@ -16,7 +16,7 @@ import {
   listViews,
   lookupUsers,
 } from "./api";
-import { FIELDS, makeRecord, makeTable, makeView } from "./fixtures";
+import { ASSIGNEE, FIELDS, NAME, makeField, makeRecord, makeTable, makeView } from "./fixtures";
 import { formatTotal, groupableFields, groupKey, numberFields, totalTexts } from "./groups";
 import { GroupMenu } from "./GroupMenu";
 import { RecordGrid, type GridSection } from "./RecordGrid";
@@ -579,5 +579,82 @@ describe("views that keep a grouping", () => {
     await user.click(await screen.findByRole("button", { name: "Old" }));
     expect(getGroupsMock).not.toHaveBeenCalled();
     expect(await screen.findByText("Alpha")).toBeInTheDocument();
+  });
+});
+
+describe("a tab of the reports page", () => {
+  const STATUS = makeField("f-status", "Status", "status", {
+    semantic: "status",
+    config: {
+      options: [
+        { id: "o-todo", name: "To do", kind: "todo" },
+        { id: "o-blocked", name: "Blocked", kind: "blocked" },
+        { id: "o-paused", name: "Paused", kind: "paused" },
+      ],
+    },
+  });
+  const SCORE = makeField("f-score", "Review score", "number", {
+    semantic: "review_score",
+    config: { precision: 1 },
+  });
+  const COLUMNS = [NAME, ASSIGNEE, STATUS, SCORE].map((f, position) => ({ ...f, position }));
+
+  async function open(reportView: "summary" | "risk" | "review") {
+    getTableMock.mockResolvedValue(makeTable("editor", COLUMNS));
+    getGroupsMock.mockResolvedValue({
+      group_by: "x",
+      bucket: null,
+      total: 0,
+      truncated: false,
+      groups: [],
+    });
+    render(
+      <AuthProvider>
+        <TableScreen tableId="t-1" reportView={reportView} />
+      </AuthProvider>,
+    );
+    await screen.findByRole("heading", { name: "Tasks" });
+  }
+
+  it("groups the at-risk tasks under their assignee, filtered to blocked and paused", async () => {
+    await open("risk");
+    await waitFor(() =>
+      expect(getGroupsMock).toHaveBeenCalledWith(
+        "t-1",
+        {
+          groupBy: "f-assignee",
+          bucket: null,
+          totals: [],
+          filter: [{ field: "f-status", op: "in", value: ["o-blocked", "o-paused"] }],
+        },
+        expect.anything(),
+      ),
+    );
+    // The records are only read group by group: never the whole table first.
+    expect(listRecordsMock).not.toHaveBeenCalled();
+  });
+
+  it("averages the review score on each group", async () => {
+    await open("review");
+    await waitFor(() =>
+      expect(getGroupsMock).toHaveBeenCalledWith(
+        "t-1",
+        expect.objectContaining({
+          groupBy: "f-status", // this table has no parent column
+          totals: [{ field: "f-score", fn: "avg" }],
+        }),
+        expect.anything(),
+      ),
+    );
+  });
+
+  it("can be ungrouped like any other grouping", async () => {
+    const user = userEvent.setup();
+    await open("summary");
+    await waitFor(() => expect(getGroupsMock).toHaveBeenCalled());
+    listRecordsMock.mockResolvedValue({ items: [plain], next_cursor: null });
+    await user.click(screen.getByRole("button", { name: /Group/ }));
+    await user.selectOptions(screen.getByLabelText("Group by"), "");
+    expect(await screen.findByText("Gamma")).toBeInTheDocument();
   });
 });

@@ -12,6 +12,12 @@ vi.mock("next/link", () => ({
     <a href={href}>{children}</a>
   ),
 }));
+// The table under the tabs is tested on its own; here it only says which table and tab it got.
+vi.mock("@/features/tables/TableScreen", () => ({
+  TableScreen: ({ tableId, reportView }: { tableId: string; reportView?: string }) => (
+    <div data-testid="table" data-table={tableId} data-view={reportView} />
+  ),
+}));
 vi.mock("./api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api")>()),
   listReportTables: vi.fn(),
@@ -149,6 +155,45 @@ describe("ReportsScreen", () => {
     expect(screen.getByRole("link", { name: /Export to Excel/ }).getAttribute("href")).toContain(
       "table_id=t-2",
     );
+  });
+
+  it("shows the table under three tabs, starting with the summary", async () => {
+    render(<ReportsScreen />);
+    const tabs = await screen.findByRole("tablist", { name: "Report views" });
+    expect(within(tabs).getAllByRole("tab").map((t) => t.textContent)).toEqual([
+      "Summary",
+      "At risk",
+      "Review",
+    ]);
+    expect(within(tabs).getByRole("tab", { name: "Summary" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    const table = screen.getByTestId("table");
+    expect(table).toHaveAttribute("data-table", "t-1");
+    expect(table).toHaveAttribute("data-view", "summary");
+  });
+
+  it("opens the other tabs with their own settings", async () => {
+    const user = userEvent.setup();
+    render(<ReportsScreen />);
+    await screen.findByRole("tablist", { name: "Report views" });
+    await user.click(screen.getByRole("tab", { name: "At risk" }));
+    expect(screen.getByTestId("table")).toHaveAttribute("data-view", "risk");
+    await user.click(screen.getByRole("tab", { name: "Review" }));
+    expect(screen.getByTestId("table")).toHaveAttribute("data-view", "review");
+    expect(screen.getByRole("tabpanel")).toHaveAttribute("id", "report-views-panel-review");
+  });
+
+  it("follows the table that is chosen, back on the first tab's own settings", async () => {
+    const user = userEvent.setup();
+    render(<ReportsScreen />);
+    await screen.findByRole("tablist", { name: "Report views" });
+    await user.click(screen.getByRole("tab", { name: "Review" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Table" }), "t-2");
+    const table = await screen.findByTestId("table");
+    expect(table).toHaveAttribute("data-table", "t-2");
+    expect(table).toHaveAttribute("data-view", "review"); // the tab stays, on the new table
   });
 
   it("checks the shape of what the server sends", () => {
