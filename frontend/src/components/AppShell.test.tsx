@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/api/client";
 import { fetchMe, logout } from "@/features/auth/api";
 import { AuthProvider } from "@/features/auth/AuthProvider";
+import { listSheets } from "@/features/sheets/api";
+import { listWorkspaces } from "@/features/tables/api";
 import { getUnreadCount } from "@/features/notifications/api";
 import { adminUser, sampleUser } from "@/test/fixtures";
 
@@ -25,12 +27,21 @@ vi.mock("@/features/notifications/api", () => ({
   setNotificationRead: vi.fn(),
 }));
 
+vi.mock("@/features/tables/api", () => ({
+  listWorkspaces: vi.fn(),
+  listBases: vi.fn(),
+  listTables: vi.fn(),
+}));
+vi.mock("@/features/sheets/api", () => ({ listSheets: vi.fn() }));
+
 const fetchMeMock = vi.mocked(fetchMe);
 const logoutMock = vi.mocked(logout);
 
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(getUnreadCount).mockResolvedValue(0);
+  vi.mocked(listWorkspaces).mockResolvedValue([]);
+  vi.mocked(listSheets).mockResolvedValue([]);
   // The bell opens a WebSocket; in these tests nobody is listening on the other end.
   vi.stubGlobal(
     "WebSocket",
