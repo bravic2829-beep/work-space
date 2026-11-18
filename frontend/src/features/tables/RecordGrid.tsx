@@ -29,7 +29,7 @@ import { attachmentUrl, formatSize } from "./attachments";
 import { filesOf, type AttachmentItem, type FieldItem, type RecordItem, type SortColumn } from "./schema";
 import { StatusBadge } from "./StatusBadge";
 import { statusKind } from "./taskWorkflow";
-import { describeTimer, isTimerField, timerHeadings } from "./timer";
+import { describeTimer, isTimerField, timerHeadings, timerMoments } from "./timer";
 import { TimerCell } from "./TimerCell";
 import { displayValue, isSortable, optionsOf } from "./values";
 
@@ -198,10 +198,21 @@ export function RecordGrid({
           <tr>
             {fields.map((field, index) => {
               if (isTimerField(field)) {
+                // One timer is always three columns together: when it started, when it
+                // finished, and the time spent (with the Start / Stop buttons).
+                const headings = timerHeadings(field, fields);
                 return (
-                  <th key={field.id} scope="col" className="whitespace-nowrap">
-                    {timerHeadings(field, fields).time}
-                  </th>
+                  <Fragment key={field.id}>
+                    <th scope="col" className="whitespace-nowrap">
+                      {headings.started}
+                    </th>
+                    <th scope="col" className="whitespace-nowrap">
+                      {headings.finished}
+                    </th>
+                    <th scope="col" className="whitespace-nowrap">
+                      {headings.time}
+                    </th>
+                  </Fragment>
                 );
               }
               const direction = sort.find((s) => s.field === field.id)?.direction;
@@ -259,23 +270,26 @@ export function RecordGrid({
                   const value = record.data[field.id];
                   const text = displayValue(field, value, names);
                   if (isTimerField(field)) {
-                    // The time spent; when it started and finished is in the tooltip.
+                    const when = timerMoments(value);
                     return (
-                      <td
-                        key={field.id}
-                        className="min-w-44 whitespace-nowrap"
-                        title={describeTimer(value) || undefined}
-                      >
-                        <TimerCell
-                          fields={fields}
-                          field={field}
-                          record={record}
-                          currentUserId={currentUserId}
-                          isAdmin={isAdmin}
-                          idle={EMPTY}
-                          onChanged={(updated) => onRecordChanged?.(updated)}
-                        />
-                      </td>
+                      <Fragment key={field.id}>
+                        <td className="whitespace-nowrap">{when.started || EMPTY}</td>
+                        <td className="whitespace-nowrap">{when.finished || EMPTY}</td>
+                        <td
+                          className="min-w-44 whitespace-nowrap"
+                          title={describeTimer(value) || undefined}
+                        >
+                          <TimerCell
+                            fields={fields}
+                            field={field}
+                            record={record}
+                            currentUserId={currentUserId}
+                            isAdmin={isAdmin}
+                            idle={EMPTY}
+                            onChanged={(updated) => onRecordChanged?.(updated)}
+                          />
+                        </td>
+                      </Fragment>
                     );
                   }
                   return (

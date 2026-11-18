@@ -1,6 +1,16 @@
 "use client";
 
-import { Lock, MoreHorizontal, Plus, Settings2, Timer, Trash2, UserPlus, Users } from "lucide-react";
+import {
+  Lock,
+  MoreHorizontal,
+  Plus,
+  Settings2,
+  Share2,
+  Timer,
+  Trash2,
+  UserPlus,
+  Users,
+} from "lucide-react";
 import { useState } from "react";
 
 import { Button, Input, Menu, SplitButton, type MenuItem } from "@/components/ui";
@@ -19,9 +29,15 @@ type ViewProps = {
 };
 
 type ActionProps = {
-  /** An editor of the table: may add records and change its columns. */
+  /** May add records (an editor of the table, or of the sheet being shown). */
   canEdit: boolean;
+  /** May change the columns: an editor of the whole table, never somebody on a sheet. */
+  canEditColumns: boolean;
   canAssign: boolean;
+  /** Name of the plain "add one" button; a sheet calls it "Add task". */
+  addLabel?: string;
+  /** Present when the person may share the open sheet: puts "Share" in the ⋯ menu. */
+  onShare?: () => void;
   canMakeSheet: boolean;
   canAddTimer: boolean;
   /** An admin of the workspace (or of the organization): may choose who sees which column. */
@@ -131,10 +147,11 @@ export function ViewChips({ views, activeView, onApplyView, onSaveView, onRemove
  * menu. Each shows only to the people who may use it.
  */
 export function TableActions(props: ActionProps) {
-  const { canEdit, canAssign, canMakeSheet, canAddTimer, addingTimer } = props;
+  const { canEdit, canEditColumns, canAssign, canMakeSheet, canAddTimer, addingTimer } = props;
 
   const setup: MenuItem[] = [
-    ...(canEdit
+    ...(props.onShare ? [{ label: "Share", icon: Share2, onSelect: props.onShare }] : []),
+    ...(canEditColumns
       ? [
           { label: "Add a column", icon: Plus, onSelect: props.onAddField },
           { label: "Manage columns", icon: Settings2, onSelect: props.onManageFields },
@@ -172,7 +189,7 @@ export function TableActions(props: ActionProps) {
           />
         ) : (
           <Button variant="primary" size="sm" icon={Plus} onClick={props.onNewRecord}>
-            New record
+            {props.addLabel ?? "New record"}
           </Button>
         ))}
     </>

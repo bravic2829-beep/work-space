@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -198,19 +198,27 @@ describe("the timer columns of the table", () => {
     );
   }
 
-  it("draws one timer field as one Time column, with the buttons of each row", () => {
+  it("draws one timer field as three columns together, with the buttons of each row", () => {
     grid();
     const headers = screen.getAllByRole("columnheader").map((h) => h.textContent);
-    expect(headers.slice(-1)).toEqual(["Time"]);
-    expect(headers).not.toContain("Started at");
+    expect(headers.slice(-3)).toEqual(["Started at", "Finished at", "Time"]);
     expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
   });
 
-  it("shows the time spent, with when it started and finished in the tooltip", () => {
+  it("shows when it started and finished next to the time spent", () => {
     grid(FIELDS, [task({ started_at: BEGAN, finished_at: ENDED })]);
-    const cell = screen.getByText("1:30:05").closest("td");
-    expect(cell).toHaveAttribute("title", expect.stringContaining("1:30:05"));
-    expect(cell).toHaveAttribute("title", expect.stringContaining("→"));
+    const cells = within(screen.getByText("1:30:05").closest("tr") as HTMLElement).getAllByRole("cell");
+    const [started, finished, time] = cells.slice(-3);
+    expect(started.textContent).toMatch(/\d/);
+    expect(finished.textContent).toMatch(/\d/);
+    expect(started.textContent).not.toBe(finished.textContent);
+    expect(time).toHaveAttribute("title", expect.stringContaining("1:30:05"));
+  });
+
+  it("leaves when it started and finished empty before the timer runs", () => {
+    grid();
+    const cells = screen.getAllByRole("cell");
+    expect(cells.slice(-3, -1).map((c) => c.textContent)).toEqual(["—", "—"]);
   });
 
   it("shows a dash for a timer that has not started and cannot be started by the person", () => {
@@ -223,8 +231,11 @@ describe("the timer columns of the table", () => {
     const second = { ...makeField("f-second", "Review time", "timer"), position: 3 };
     grid([...FIELDS, second]);
     const headers = screen.getAllByRole("columnheader").map((h) => h.textContent);
-    expect(headers).toContain("Timer · Time");
-    expect(headers).toContain("Review time · Time");
+    for (const name of ["Timer", "Review time"]) {
+      expect(headers).toContain(`${name} · Started at`);
+      expect(headers).toContain(`${name} · Finished at`);
+      expect(headers).toContain(`${name} · Time`);
+    }
   });
 
   it("is absent from a table without a timer", () => {
