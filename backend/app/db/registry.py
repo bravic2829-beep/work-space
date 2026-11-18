@@ -12,7 +12,9 @@ from app.modules.bases import models as bases_models
 from app.modules.comments import models as comments_models
 from app.modules.fields import models as fields_models
 from app.modules.notifications import models as notifications_models
+from app.modules.okr import models as okr_models
 from app.modules.organizations import models as organizations_models
+from app.modules.performance import models as performance_models
 from app.modules.records import models as records_models
 from app.modules.sheets import models as sheets_models
 from app.modules.users import models as users_models
@@ -28,7 +30,9 @@ __all__ = [
     "comments_models",
     "fields_models",
     "notifications_models",
+    "okr_models",
     "organizations_models",
+    "performance_models",
     "records_models",
     "sheets_models",
     "users_models",

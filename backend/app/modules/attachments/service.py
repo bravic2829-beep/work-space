@@ -9,7 +9,7 @@ A column hidden from the person does not exist for them: 404, never "forbidden".
 
 import uuid
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import func, select
@@ -20,7 +20,7 @@ from app.core.errors import ProblemError
 from app.modules.activity.log import record_activity
 from app.modules.activity.models import ActivityAction
 from app.modules.attachments import storage
-from app.modules.attachments.models import Attachment
+from app.modules.attachments.models import Attachment, TrashedAttachment
 from app.modules.fields.models import Field, FieldAccessLevel, FieldType
 from app.modules.permissions.service import load_table_context
 from app.modules.records import service as records
@@ -29,18 +29,20 @@ from app.modules.records.schemas import RecordPublic
 from app.modules.users.models import User
 
 FORBIDDEN = "You do not have permission to do this."
+TRASH_DAYS = 7
 
 
-async def _column(
+async def load_column(
     session: AsyncSession,
     actor: User,
     record_id: uuid.UUID,
     field_id: uuid.UUID,
     *,
     edit: bool,
+    for_update: bool = False,
 ) -> tuple[Record, Field]:
     """The task and the files column, once the person may see (or edit) it."""
-    record, context = await records.load_record(session, actor, record_id)
+    record, context = await records.load_record(session, actor, record_id, for_update=for_update)
     fields = await records.fields_with_access(
         session, actor, context, is_creator=record.created_by == actor.id, record=record
     )
@@ -80,27 +82,19 @@ async def upload(
     limit = settings.attachment_max_bytes
     if declared_size is not None and declared_size > limit:
         raise ProblemError(413, f"The file is too big. The limit is {limit // 1_000_000} MB.")
-    record, column = await _column(session, actor, record_id, field_id, edit=True)
-    count = (
-        await session.execute(
-            select(func.count())
-            .select_from(Attachment)
-            .where(Attachment.record_id == record.id, Attachment.field_id == column.id)
-        )
-    ).scalar_one()
-    most = min(
-        int(column.config.get("max_files", storage.MAX_FILES_PER_CELL)), storage.MAX_FILES_PER_CELL
-    )
-    if count >= most:
-        raise ProblemError(409, f"At most {most} files fit in one column.")
-    accept = column.config.get("accept")
-    if accept and not storage.is_accepted(name, accept):
-        raise ProblemError(415, f"This column only takes: {', '.join(accept)}.")
-
     root = settings.attachments_dir
     key = storage.new_key()
+    # Check permissions before reading the body, then lock only for the database write.
+    record, column = await load_column(session, actor, record_id, field_id, edit=True)
+    await check_capacity(session, record.id, column.id)
+    session.expire(record)
+    session.expire(column)
     size = await storage.save(root, key, chunks, limit)
     try:
+        record, column = await load_column(
+            session, actor, record_id, field_id, edit=True, for_update=True
+        )
+        await check_capacity(session, record.id, column.id)
         session.add(
             Attachment(
                 record_id=record.id,
@@ -124,12 +118,27 @@ async def upload(
         await session.refresh(record)
         return record, await _render(session, actor, record)
     except BaseException:
-        storage.remove(root, key)  # the row did not make it: do not leave the file behind
+        storage.remove(root, key)
         raise
 
 
-async def _owned(session: AsyncSession, attachment_id: uuid.UUID) -> Attachment:
-    attachment = await session.get(Attachment, attachment_id)
+async def check_capacity(session: AsyncSession, record_id: uuid.UUID, field_id: uuid.UUID) -> None:
+    """Call with the task locked so uploads and restores share the same limit."""
+    count = (
+        await session.execute(
+            select(func.count())
+            .select_from(Attachment)
+            .where(Attachment.record_id == record_id, Attachment.field_id == field_id)
+        )
+    ).scalar_one()
+    if count >= storage.MAX_FILES_PER_CELL:
+        raise ProblemError(409, f"At most {storage.MAX_FILES_PER_CELL} files fit in one column.")
+
+
+async def _owned(
+    session: AsyncSession, attachment_id: uuid.UUID, *, refresh: bool = False
+) -> Attachment:
+    attachment = await session.get(Attachment, attachment_id, populate_existing=refresh)
     if attachment is None:
         raise ProblemError(404, "The file does not exist.")
     return attachment
@@ -140,7 +149,7 @@ async def for_download(
 ) -> tuple[Attachment, Path]:
     """The file and where it is, for a person who may see the column it is in."""
     attachment = await _owned(session, attachment_id)
-    await _column(session, actor, attachment.record_id, attachment.field_id, edit=False)
+    await load_column(session, actor, attachment.record_id, attachment.field_id, edit=False)
     path = storage.path_for(settings.attachments_dir, attachment.storage_key)
     if not path.is_file():
         raise ProblemError(404, "The file is no longer available.")
@@ -148,16 +157,35 @@ async def for_download(
 
 
 async def remove(
-    session: AsyncSession, actor: User, attachment_id: uuid.UUID, settings: Settings
+    session: AsyncSession, actor: User, attachment_id: uuid.UUID
 ) -> tuple[Record, RecordPublic]:
-    """Take a file out of the task. The bytes are deleted after the change is saved."""
+    """Move the file's metadata to Trash. Its contents stay at the same storage key."""
     attachment = await _owned(session, attachment_id)
-    record, column = await _column(
-        session, actor, attachment.record_id, attachment.field_id, edit=True
+    record, column = await load_column(
+        session, actor, attachment.record_id, attachment.field_id, edit=True, for_update=True
     )
-    name, key = attachment.name, attachment.storage_key
+    attachment = await _owned(session, attachment_id, refresh=True)
+    now = datetime.now(UTC)
+    session.add(
+        TrashedAttachment(
+            id=attachment.id,
+            organization_id=actor.organization_id,
+            record_id=record.id,
+            field_id=column.id,
+            name=attachment.name,
+            content_type=attachment.content_type,
+            size_bytes=attachment.size_bytes,
+            storage_key=attachment.storage_key,
+            uploaded_by=attachment.uploaded_by,
+            created_at=attachment.created_at,
+            deleted_by=actor.id,
+            deleted_at=now,
+            purge_at=now + timedelta(days=TRASH_DAYS),
+        )
+    )
+    name = attachment.name
     await session.delete(attachment)
-    record.updated_at = datetime.now(UTC)
+    record.updated_at = now
     await session.flush()
     await record_activity(
         session,
@@ -166,6 +194,5 @@ async def remove(
         action=ActivityAction.ATTACHMENT_REMOVED,
         changes={str(column.id): {"from": name, "to": None}},
     )
-    storage.remove_after_commit(session.sync_session, settings.attachments_dir, [key])
     await session.refresh(record)
     return record, await _render(session, actor, record)

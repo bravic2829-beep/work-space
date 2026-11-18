@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import { ASSIGNEE, DUE, NAME, makeField } from "./fixtures";
-import { isPreset, presetFilter } from "./presets";
+import {
+  isPreset,
+  presetFilter,
+  reportViewConfig,
+  REPORT_VIEW_LABELS,
+  REPORT_VIEWS,
+} from "./presets";
 import type { FieldItem } from "./schema";
 
 const STATUS = makeField("f-status", "Status", "status", {
@@ -93,5 +99,52 @@ describe("the ready-made filters of the reports", () => {
 
   it("names the filter", () => {
     expect(presetFilter("blocked", FIELDS, TODAY)?.label).toBe("Blocked tasks");
+  });
+});
+
+describe("the tabs of the reports page", () => {
+  const REVIEW = makeField("f-score", "Review score", "number", { semantic: "review_score" });
+  const PARENT = makeField("f-parent", "Parent task", "link_record", { semantic: "parent" });
+  const ALL: FieldItem[] = [NAME, ASSIGNEE, STATUS, DUE_DATE, PARENT, REVIEW].map((f, position) => ({
+    ...f,
+    position,
+  }));
+
+  it("lists the three tabs", () => {
+    expect(REPORT_VIEWS).toEqual(["summary", "risk", "review"]);
+    expect(REPORT_VIEWS.map((v) => REPORT_VIEW_LABELS[v])).toEqual(["Summary", "At risk", "Review"]);
+  });
+
+  it("summary groups by the parent task and has no filter", () => {
+    expect(reportViewConfig("summary", ALL)).toEqual({ filter: [], groupBy: "f-parent", totals: [] });
+  });
+
+  it("review groups by the parent task and averages the score", () => {
+    expect(reportViewConfig("review", ALL)).toEqual({
+      filter: [],
+      groupBy: "f-parent",
+      totals: [{ field: "f-score", fn: "avg" }],
+    });
+  });
+
+  it("at risk keeps the blocked and paused tasks, under their assignee", () => {
+    expect(reportViewConfig("risk", ALL)).toEqual({
+      filter: [{ field: "f-status", op: "in", value: ["o-blocked", "o-paused"] }],
+      groupBy: "f-assignee",
+      totals: [],
+    });
+  });
+
+  it("falls back to the status when the table has no parent column", () => {
+    const plain = ALL.filter((f) => f.id !== "f-parent");
+    expect(reportViewConfig("summary", plain).groupBy).toBe("f-status");
+  });
+
+  it("leaves out what the table lacks", () => {
+    const bare = [NAME, ASSIGNEE, STATUS];
+    expect(reportViewConfig("review", bare).totals).toEqual([]);
+    const old = { ...STATUS, config: { options: [{ id: "a", name: "To do", kind: "todo" }] } };
+    expect(reportViewConfig("risk", [NAME, ASSIGNEE, old]).filter).toEqual([]);
+    expect(reportViewConfig("summary", [NAME])).toEqual({ filter: [], groupBy: null, totals: [] });
   });
 });

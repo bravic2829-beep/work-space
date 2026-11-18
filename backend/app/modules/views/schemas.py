@@ -22,12 +22,27 @@ class SortColumn(BaseModel):
     direction: Literal["asc", "desc"] = "asc"
 
 
+class ViewTotal(BaseModel):
+    """A total shown on the header of every group: the sum, average, smallest or largest value of
+    a number column."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    field: uuid.UUID
+    fn: Literal["sum", "avg", "min", "max"]
+
+
 class ViewConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     filter: list[Condition] = Field(default_factory=list, max_length=20)
     sort: list[SortColumn] = Field(default_factory=list, max_length=3)
     hidden_fields: list[uuid.UUID] = Field(default_factory=list, max_length=200)
+    # The rows are folded into groups of this column's values, with `totals` on each group.
+    group_by: uuid.UUID | None = None
+    # For a date column: group by day, week or month (month when left out).
+    group_bucket: Literal["day", "week", "month"] | None = None
+    totals: list[ViewTotal] = Field(default_factory=list, max_length=10)
 
 
 class ViewPublic(BaseModel):

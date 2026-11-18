@@ -7,6 +7,7 @@ import {
   isCommentPage,
   isDirectoryList,
   isFieldItem,
+  isGroupsResult,
   isPersonAccess,
   isPersonAccessList,
   isMemberItem,
@@ -28,6 +29,8 @@ import {
   type FieldAccess,
   type FieldItem,
   type FieldType,
+  type GroupBucket,
+  type GroupsResult,
   type MemberItem,
   type PersonAccess,
   type RecordItem,
@@ -38,6 +41,7 @@ import {
   type TableDetail,
   type TableSummary,
   type ViewConfig,
+  type ViewTotal,
   type ViewItem,
   type WorkspaceItem,
 } from "./schema";
@@ -214,6 +218,29 @@ export function listRecords(
 ): Promise<RecordPage> {
   return apiRequest("GET", `${API}/tables/${tableId}/records?${recordQueryString(query)}`, {
     guard: isRecordPage,
+    signal,
+  });
+}
+
+export type GroupsQuery = {
+  groupBy: string;
+  bucket?: GroupBucket | null;
+  totals: ViewTotal[];
+  filter: Condition[];
+};
+
+/** The records folded into groups of one column, with their counts and totals. */
+export function getGroups(
+  tableId: string,
+  query: GroupsQuery,
+  signal?: AbortSignal,
+): Promise<GroupsResult> {
+  const params = new URLSearchParams({ group_by: query.groupBy });
+  if (query.bucket) params.set("bucket", query.bucket);
+  for (const total of query.totals) params.append("aggregate", `${total.field}:${total.fn}`);
+  if (query.filter.length > 0) params.set("filter", JSON.stringify(query.filter));
+  return apiRequest("GET", `${API}/tables/${tableId}/groups?${params.toString()}`, {
+    guard: isGroupsResult,
     signal,
   });
 }

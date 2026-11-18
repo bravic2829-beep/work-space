@@ -1,6 +1,6 @@
 # WorkBase: tình trạng dự án và nhật ký thay đổi
 
-Cập nhật: 17/11/2026. Ghi lại những gì đã làm, đang ở đâu, cách chạy, và việc tiếp theo.
+Cập nhật: 18/11/2026. Ghi lại những gì đã làm, đang ở đâu, cách chạy, và việc tiếp theo.
 Thiết kế chi tiết (kiến trúc, ma trận quyền, API) nằm ở `docs/DESIGN.md` (thư mục `docs/` đang nằm
 trong `.gitignore` nên chỉ có trên máy, không lên GitHub).
 
@@ -13,9 +13,9 @@ có quyền riêng, cập nhật tiến độ, duyệt, bàn giao, đính kèm f
 | --- | --- |
 | Công nghệ | Next.js 16 + React 19 + TypeScript (giao diện), FastAPI + SQLAlchemy + Alembic (backend), PostgreSQL 16, Docker Compose |
 | Ngôn ngữ giao diện | Tiếng Anh. Dữ liệu mẫu bằng tiếng Việt |
-| Nhánh | `ui-redesign`. `main` trên GitHub đang ở `c303584`; máy local có thêm các commit của 16 đến 17/11 (file đính kèm, Column access, Paused/Blocked, xuất Excel, 4 lần gộp), **chưa đẩy lên** |
+| Nhánh | `ui-redesign`. `main` trên GitHub đang ở `f86209c`; máy local có thêm các commit ngày 18/11 (nhóm và tổng hợp, cột Review, ba tab trên bảng task, module OKR, các lần gộp), **chưa đẩy lên** |
 | Việc cần làm ngay | `git push origin HEAD:main` (cần đăng nhập GitHub, chỉ chủ dự án làm được) |
-| Test | Frontend 596 qua. Backend 787 qua (ruff, mypy sạch) |
+| Test | Frontend 680 qua. Backend 863 qua (ruff, mypy sạch) |
 
 ## 2. Những gì web đang làm được
 
@@ -97,6 +97,116 @@ mỗi cột chọn *As their role allows*, *Read only* hoặc *Hidden*, lưu m�
 - Thêm file không đổi số phiên bản của task, nên không gây xung đột sửa.
 
 ## 5. Nhật ký thay đổi
+
+### 18/11/2026: Xuất Excel cho OKR
+- **Export OKR to Excel** xuất chu kỳ và các bộ lọc đang chọn, bao gồm Risky KRs, cấp Objective và Only mine.
+- File có ba sheet **Summary**, **Objectives** và **Key results**, gồm tiến độ, điểm, nhận xét và tên task liên kết mà người tải có quyền xem.
+
+### 18/11/2026: Ba tab OKR và liên kết task
+- Reports → OKR có ba tab **OKR Summary**, **Risky KRs** và **Review**. Mở cây mục tiêu qua nút **Alignment**.
+- Dòng Objective hiển thị tổng tiến độ ở Summary và trung bình tiến độ ở Review. Nhận xét dài xuống dòng trong bảng.
+- **Linked tasks** nối Key Result với công việc có sẵn (migration `0020`). Chủ KR hoặc người có quyền sửa Objective có thể gắn hoặc bỏ liên kết khi chu kỳ đang mở. Bảng chỉ hiện task và tên mà người xem có quyền thấy.
+
+### 18/11/2026: Reports, Phase 3 (đợt 1): tiêu chí đánh giá và điểm hiệu suất theo tháng
+Tab mới **Performance** trong Reports. Trả lời câu hỏi "thêm tiêu chí đánh giá khác thế nào".
+- **Module riêng** `backend/app/modules/performance` (migration `0019`, bảng `perf_*`, route
+  `/api/v1/performance/*`), chỉ thêm hai dòng đăng ký. Migration `0019` nối sau `0018`/`0017`: vẫn
+  chưa đẩy được lên GitHub cho tới khi `0017` của người kia được commit.
+- **Sáu tiêu chí mặc định** (tự tạo lần đầu mở, mỗi tổ chức): Task completion 25, On-time delivery 20,
+  Work quality 20 (ba cái này đo từ task); Initiative and responsibility 15, Collaboration and handover
+  10, Improvement and growth 10 (quản lý chấm tay). **Admin** thêm tiêu chí, đổi tên/mô tả/trọng số/nguồn
+  điểm, tắt/bật ("Criteria and weights"). Mỗi lần đổi được lưu: ai, khi nào, đổi gì, lý do.
+- **Nguồn điểm của một tiêu chí:** do người chấm (0–100 kèm lý do bắt buộc), hoặc một trong sáu phép đo:
+  completion_rate, on_time_rate, overdue_rate, rework_rate, blocked_tasks, update_compliance (cái cuối
+  chưa đo được vì chưa có kỳ cập nhật: luôn không có điểm). Công thức nằm trong `performance/metrics.py`.
+- **Điểm tổng** = tổng(điểm × trọng số) ÷ tổng trọng số của các tiêu chí **đã có điểm**. Tiêu chí chưa có gì
+  để chấm hiện "—" và bị bỏ ra, không bao giờ tính là 0; cột "Judged" cho biết đã chấm bao nhiêu % trọng số.
+  Trọng số không cần cộng đủ 100.
+- **Ai xem ai / ai chấm:** admin xem tất cả; quản lý xem mình và người mình quản lý (`manager_id`); người khác
+  chỉ xem mình. Chấm tay: admin, hoặc quản lý của người đó; không tự chấm mình (trừ admin). Số đo từ task
+  chỉ đếm task người xem được mở.
+- Chưa làm trong đợt này: độ phức tạp/trọng số task (nên Completion rate đang đếm số task, chưa theo độ quan
+  trọng), update compliance, công bố điểm và khiếu nại, snapshot khi chốt kỳ, trọng số riêng theo phòng ban,
+  điều chỉnh của quản lý kèm lý do trên điểm tự động.
+- Test: backend 12 (`test_performance.py`), frontend 8 (`performance.test.tsx`). Tổng: backend 884, frontend 697.
+
+### 18/11/2026: Reports, Phase 2: trang Overview (mười con số, xu hướng, bộ lọc)
+Nâng cấp Reports thành hệ thống quản trị hiệu suất theo từng phase (kế hoạch trong ghi chú
+`workbase-reports-performance-plan`). Phase 2 = trang **Overview** thật, là tab đầu của Reports.
+- **API** `GET /api/v1/reports/dashboard` (file mới `reports/dashboard.py`, không đụng module nào
+  khác, không migration, không bảng mới). Số liệu đếm lúc gọi từ task người xem được mở, đúng quy
+  tắc của bảng; cột bị ẩn thì số tương ứng là `null` (hiện "—"). Lọc theo người/phòng ban mà cột
+  người phụ trách bị ẩn thì không khớp gì (không dò được ai làm gì).
+- **Mười thẻ:** Objectives, Key results, OKR progress (chu kỳ đang mở), Tasks completed, in
+  progress, Overdue, At risk, Blocked, On-time rate, Quality score (chưa đo được: "—", chờ phase 3).
+- **Quy tắc (tất cả nằm trong code):** hoàn thành = trạng thái loại `done`; quá hạn = chưa xong và hạn
+  trước hôm nay; At risk = chưa xong, chưa trễ, và đang Blocked hoặc hạn trong 2 ngày tới; On-time
+  rate = trong các task đã xong có hạn và có ngày hoàn thành, tỷ lệ xong đúng hoặc trước hạn (ngày
+  hoàn thành lấy từ lịch sử: lần cuối task chuyển sang trạng thái done; task không có lịch sử bị bỏ ra,
+  không bị tính là trễ). Task thuộc kỳ nếu có hạn trong kỳ, hoặc xong trong kỳ, hoặc (không có hạn)
+  tạo trong kỳ. Mặc định: 8 tuần qua và 2 tuần tới.
+- **Biểu đồ** tạo/hoàn thành theo tuần (SVG, hai cột, có chú thích, bảng số liệu thay thế, tooltip).
+  **Bảng** theo dự án và theo nhân viên; số trong bảng dự án bấm mở bảng task đã lọc. Thẻ bấm được khi
+  chỉ có một bảng trong phạm vi.
+- **Bộ lọc:** từ ngày, đến ngày, dự án, phòng ban, nhân viên, trạng thái. (Chưa có: mức ưu tiên, vì
+  bảng task chưa có cột ưu tiên; quản lý trực tiếp; xuất Excel của trang Overview.)
+- Test: backend 9 (`test_dashboard.py`), frontend 9 (`overview.test.tsx`). Tổng: backend 872, frontend 689.
+
+### 18/11/2026: Report là OKR (module riêng, theo mẫu Base của Feishu)
+Trang **Reports** giờ có hai phần: **OKR** (mới, mở đầu) và **Task overview** (trang số liệu task
+cũ, giữ nguyên, kèm ba tab Summary / At risk / Review trên bảng task ở mục dưới).
+- **Module riêng** `backend/app/modules/okr` (bảng `okr_*`, route `/api/v1/okr/...`, migration
+  `0018`), không sửa module nào khác ngoài hai dòng đăng ký. **Migration `0018` nối sau `0017`
+  (thùng rác file đính kèm của người khác): phải commit `0017` trước khi đẩy lên GitHub.**
+- **Tự tính, không gọi hệ thống ngoài:** tiến độ KR = `(hiện tại − đầu) ÷ (mục tiêu − đầu)` trong
+  khoảng 0–1 (mục tiêu nhỏ hơn giá trị đầu vẫn đúng); tiến độ Objective = trung bình các KR. Trạng
+  thái KR (On track / At risk / Off track) do chủ KR chọn khi check-in; điểm Review (0–1), Merits,
+  To improve do người đánh giá nhập.
+- **Chu kỳ** (quý, năm): admin mở, đổi tên, đóng, mở lại; chu kỳ đã đóng chỉ ghi được Review.
+- **Objective** cấp công ty (admin), phòng ban (admin hoặc trưởng phòng), cá nhân (chính mình, hoặc
+  admin tạo giúp); có thể "supports" Objective cấp trên cùng chu kỳ (alignment, không vòng lặp);
+  tùy chọn riêng tư.
+- **Key Result:** giá trị đầu, mục tiêu, đơn vị, chủ KR. **Check-in** hằng tuần (giá trị mới, trạng
+  thái, ghi chú), giữ lịch sử.
+- **Review:** chấm điểm 0–1, Merits, To improve cho Objective và KR; do admin, quản lý trực tiếp của
+  chủ, hoặc chủ Objective cấp trên; chủ không tự chấm.
+- **Quyền xem:** mọi nhân viên xem OKR không riêng tư; OKR riêng tư chỉ người liên quan (người
+  không có quyền nhận 404, không biết là có).
+- **Giao diện:** 4 tab OKR Summary / Risky KRs / Review / Alignment, chọn chu kỳ, "Only mine", lọc
+  cấp, ô tổng; các khung nhập Objective, Key Result, Check-in (kèm lịch sử), Review, Chu kỳ.
+- Dữ liệu mẫu tiếng Việt đã nạp vào database local (chu kỳ Q4 2026, 4 Objective, 7 KR).
+- Test: backend 51 (OKR), frontend 41 (OKR và ReportsHub).
+- Chưa làm: liên kết KR với task ("OKR task subdivision"), xuất Excel OKR, thông báo khi KR rủi ro,
+  tự đổi trạng thái theo ngưỡng.
+
+### 18/11/2026: báo cáo kiểu OKR (nhóm, tổng hợp, ba tab)
+Làm theo ba ảnh mẫu Feishu (OKR Summary / Risky KRs / Review): bảng có dòng nhóm gập được kèm số
+tổng, và ba tab xem cùng một bảng.
+- **Nhóm và tổng hợp (backend):** `GET /tables/{id}/groups?group_by=<cột>[&bucket=day|week|month]
+  [&aggregate=<cột>:sum|avg|min|max]...[&filter=...]`. Mỗi nhóm có `key`, `label`, `count`, `totals`
+  và `filter` (điều kiện chọn đúng các việc của nhóm, để trang mở nhóm bằng danh sách việc thường).
+  Nhóm được theo: trạng thái, lựa chọn, thẻ, người, người tạo, liên kết (việc cha), ngày (ngày /
+  tuần / tháng), chữ, số, ô tích. Tổng hợp trên cột số. Một câu SQL `GROUP BY`, nên số đếm cả nhóm,
+  không phụ thuộc trang đã tải. Cùng quy tắc quyền như danh sách việc: chỉ việc mở được, chỉ cột
+  không bị ẩn (cột ẩn coi như "không biết"), liên kết chỉ nêu tên việc mở được; việc có nhiều giá
+  trị (hai người) được đếm ở mỗi nhóm. Tối đa 200 nhóm (có cờ `truncated`).
+- **Chế độ xem lưu được nhóm:** cấu hình view thêm `group_by`, `group_bucket`, `totals` (kiểm tra
+  cùng quy tắc); view không nhóm lưu y như trước.
+- **Cột Review (migration `0016`):** ba vai trò cột mới `review_score` (số, một chữ số thập phân),
+  `review_merits`, `review_improve`; bảng task mới có "Review score (0-1)", "Review: merits",
+  "Review: to improve". Người làm (editor của sheet) chỉ đọc; Admin, người tạo, manager của sheet
+  ghi được. Migration thêm ba cột vào mọi bảng task đang có.
+- **Giao diện nhóm:** menu **Group** trên thanh công cụ (chọn cột nhóm, kiểu ngày, tổng cho từng cột
+  số); lưới vẽ tiêu đề nhóm trong cùng một bảng (mũi tên, tên, số việc, tổng nằm dưới đúng cột);
+  5 nhóm đầu tự mở, các nhóm khác mở khi bấm; mỗi nhóm tải việc theo trang ("Load more in this
+  group"). Không có trên sheet cá nhân.
+- **Trang Reports có 3 tab** dưới phần số liệu: **Summary** (nhóm theo việc cha), **At risk** (chỉ
+  việc Blocked và Paused, nhóm theo người được giao), **Review** (nhóm theo việc cha, trung bình
+  điểm Review). Mỗi tab là chính bảng thật nên mở việc, đổi nhóm, lọc, lưu view như bình thường.
+- **Lưu ý cho đồng nghiệp:** migration `0016` là của phần này; migration `0017` (thùng rác file
+  đính kèm) là của người khác, chưa commit. Migration mới hãy lấy số `0020` trở đi (`0018` là OKR, `0019` là Performance).
+- Chưa làm: xuất Excel kèm dòng nhóm và dòng tổng; nhóm trên sheet cá nhân (`/sheets/{id}/groups`);
+  mục "By status" trong Reports vẫn chưa bấm được.
 
 ### 17/11/2026, lần gộp thứ tư: giao diện mới của đồng nghiệp
 - Kéo 11 commit (thanh công cụ bảng có chip chế độ xem và menu "⋯", lưới bấm cả dòng, khung chi
@@ -234,6 +344,10 @@ khởi động lại frontend. Dockerfile đổi thì `up -d --build backend`.
 | 0013 | Kiểu cột `timer`: gộp hai cột bấm giờ cũ thành một cột |
 | 0014 | Bảng `attachments`; kiểu cột `attachment`; hai hành động lịch sử về file (trước đây đánh số 0012) |
 | 0015 | Trạng thái `paused`/`blocked` (thêm hai lựa chọn vào mọi cột Status), thông báo `task_blocked`, ba hành động lịch sử |
+| 0016 | Ba vai trò cột Review (`review_score`, `review_merits`, `review_improve`) và thêm ba cột vào mọi bảng task đang có |
+| 0017 | (của người khác, chưa commit) thùng rác cho file đính kèm |
+| 0018 | Module OKR: `okr_cycles`, `okr_objectives`, `okr_key_results`, `okr_check_ins` |
+| 0019 | Module Performance: `perf_criteria`, `perf_criterion_changes`, `perf_manual_scores` |
 
 ## 8. Kiểm thử
 

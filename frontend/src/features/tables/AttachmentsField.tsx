@@ -117,7 +117,7 @@ export function AttachmentsField({ field, record, canEdit, onChanged }: Props) {
                     <InlineConfirm
                       label={`Remove ${file.name}`}
                       icon={X}
-                      prompt="Remove this file?"
+                      prompt="Move this file to Trash? You can restore it within 7 days."
                       confirmLabel="Yes, remove"
                       onConfirm={() => void remove(file.id)}
                     />

@@ -125,7 +125,7 @@ def _put(sheet: Worksheet, row: int, column: int, value: Any) -> None:
         cell.alignment = Alignment(vertical="top")
 
 
-def _table(sheet: Worksheet, headings: list[str], rows: list[list[Any]]) -> None:
+def write_table(sheet: Worksheet, headings: list[str], rows: list[list[Any]]) -> None:
     for index, heading in enumerate(headings, start=1):
         _put(sheet, 1, index, heading)
         cell = sheet.cell(row=1, column=index)
@@ -168,19 +168,19 @@ def _workbook(
     ]
     if truncated:
         lines.append(["Note", f"Only the first {MAX_TASKS} tasks are listed on the Tasks sheet."])
-    _table(sheet, ["Item", "Value"], lines)
+    write_table(sheet, ["Item", "Value"], lines)
     sheet.freeze_panes = None
     sheet.column_dimensions["A"].width = 22
     sheet.column_dimensions["B"].width = 36
 
     if summary.by_status is not None:
-        _table(
+        write_table(
             book.create_sheet("By status"),
             ["Status", "Kind", "Tasks"],
             [[s.name, s.kind, s.count] for s in summary.by_status],
         )
     if summary.people is not None:
-        _table(
+        write_table(
             book.create_sheet("Work per person"),
             ["Employee", "Code", "Open", "Overdue", "Waiting for review", "Blocked", "Done"],
             [
@@ -188,7 +188,7 @@ def _workbook(
                 for p in summary.people
             ],
         )
-    _table(book.create_sheet("Tasks"), headings, task_rows)
+    write_table(book.create_sheet("Tasks"), headings, task_rows)
 
     out = BytesIO()
     book.save(out)

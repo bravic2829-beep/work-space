@@ -1,4 +1,4 @@
-import type { Condition, FieldItem } from "./schema";
+import type { Condition, FieldItem, ViewTotal } from "./schema";
 import { fieldBySemantic } from "./taskWorkflow";
 
 /**
@@ -115,4 +115,53 @@ export function presetFilter(
     filter.push({ field: assignee.id, op: "contains", value: person });
   }
   return { filter, label: LABELS[preset] };
+}
+
+/**
+ * The three tabs of the Reports page, each a ready-made way to look at a task table: a summary
+ * folded under the parent task, the tasks at risk (blocked or paused) under their assignee, and the
+ * review of the work (score and notes) with the average score of each parent task.
+ */
+export const REPORT_VIEWS = ["summary", "risk", "review"] as const;
+export type ReportView = (typeof REPORT_VIEWS)[number];
+
+export const REPORT_VIEW_LABELS: Record<ReportView, string> = {
+  summary: "Summary",
+  risk: "At risk",
+  review: "Review",
+};
+
+export type ReportViewConfig = {
+  filter: Condition[];
+  groupBy: string | null;
+  totals: ViewTotal[];
+};
+
+/**
+ * What a report tab sets on the table: its filter, the column it groups by and its totals. The
+ * columns are found by their role, so it works on any task table; whatever the table lacks is
+ * left out (no parent column: grouped by status instead; no review score: no total).
+ */
+export function reportViewConfig(kind: ReportView, fields: FieldItem[]): ReportViewConfig {
+  const status = fieldBySemantic(fields, "status");
+  const parent = fieldBySemantic(fields, "parent");
+  const assignee = fieldBySemantic(fields, "assignee");
+  const score = fieldBySemantic(fields, "review_score");
+  const totals: ViewTotal[] = score ? [{ field: score.id, fn: "avg" }] : [];
+
+  if (kind === "risk") {
+    const held = status
+      ? [...optionsOfKind(status, "blocked"), ...optionsOfKind(status, "paused")]
+      : [];
+    return {
+      filter: status && held.length > 0 ? [{ field: status.id, op: "in", value: held }] : [],
+      groupBy: (assignee ?? status)?.id ?? null,
+      totals: [],
+    };
+  }
+  return {
+    filter: [],
+    groupBy: (parent ?? status)?.id ?? null,
+    totals: kind === "review" ? totals : [],
+  };
 }

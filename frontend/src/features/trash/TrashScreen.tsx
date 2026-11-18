@@ -12,6 +12,7 @@ import {
   InlineConfirm,
   LoadingState,
   PageHeader,
+  Tabs,
   useToast,
 } from "@/components/ui";
 
@@ -19,14 +20,40 @@ import { deleteForever, listTrash, restoreRecord } from "./api";
 import type { TrashItem } from "./schema";
 import { errorMessage } from "@/lib/api/errors";
 import { formatDate } from "@/lib/format";
+import { FileTrashPanel } from "./FileTrashPanel";
+
+type TrashTab = "records" | "files";
+
+export function TrashScreen() {
+  const [tab, setTab] = useState<TrashTab>("records");
+  return (
+    <>
+      <PageHeader title="Trash" />
+      <Tabs<TrashTab>
+        label="Trash contents"
+        tabs={[{ id: "records", label: "Records" }, { id: "files", label: "Files" }]}
+        value={tab}
+        onChange={setTab}
+        idPrefix="trash"
+      />
+      <div
+        className="mt-3"
+        role="tabpanel"
+        id={`trash-panel-${tab}`}
+        aria-labelledby={`trash-tab-${tab}`}
+      >
+        {tab === "records" ? <RecordTrashPanel /> : <FileTrashPanel />}
+      </div>
+    </>
+  );
+}
 
 type State =
   | { kind: "loading" }
   | { kind: "error"; message: string }
   | { kind: "ready"; items: TrashItem[]; nextCursor: string | null };
 
-/** The records I deleted. They can be restored for 30 days, then they are removed for good. */
-export function TrashScreen() {
+function RecordTrashPanel() {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [busyId, setBusyId] = useState<string | null>(null);
   const toast = useToast();
@@ -102,18 +129,16 @@ export function TrashScreen() {
   }
 
   return (
-    <>
-      <PageHeader
-        title="Trash"
-        description="Records you deleted. Restore them within 30 days, delete them for good now, or they are removed automatically after 30 days."
-      />
       <div className="grid gap-3">
+        <p className="m-0 text-sm text-muted">
+          Previously trashed records can be restored within 30 days of deletion.
+        </p>
         {state.kind === "loading" && <LoadingState />}
         {state.kind === "error" && <Alert>{state.message}</Alert>}
         {problem && <Alert>{problem}</Alert>}
         {state.kind === "ready" && state.items.length === 0 && (
           <EmptyState icon={Trash2} title="The trash is empty.">
-            Records you delete will wait here for 30 days.
+            There are no records to restore.
           </EmptyState>
         )}
         {state.kind === "ready" && state.items.length > 0 && (
@@ -170,6 +195,5 @@ export function TrashScreen() {
           </div>
         )}
       </div>
-    </>
   );
 }

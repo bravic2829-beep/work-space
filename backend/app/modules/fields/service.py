@@ -364,18 +364,22 @@ async def create_template_fields(session: AsyncSession, table: Table, template: 
         is_required=False,
     )
     await add_timer_field(session, table)
-    for name, kind, semantic in (
-        ("Progress update", FieldType.LONG_TEXT, None),
-        ("Result", FieldType.LONG_TEXT, None),
-        ("Files", FieldType.ATTACHMENT, None),
-        ("Manager feedback", FieldType.LONG_TEXT, FieldSemantic.FEEDBACK),
+    for name, kind, semantic, config in (
+        ("Progress update", FieldType.LONG_TEXT, None, {}),
+        ("Result", FieldType.LONG_TEXT, None, {}),
+        ("Files", FieldType.ATTACHMENT, None, {}),
+        ("Manager feedback", FieldType.LONG_TEXT, FieldSemantic.FEEDBACK, {}),
+        # The review of the work: a score and two notes, written by the reviewer.
+        ("Review score (0-1)", FieldType.NUMBER, FieldSemantic.REVIEW_SCORE, {"precision": 1}),
+        ("Review: merits", FieldType.LONG_TEXT, FieldSemantic.REVIEW_MERITS, {}),
+        ("Review: to improve", FieldType.LONG_TEXT, FieldSemantic.REVIEW_IMPROVE, {}),
     ):
         await _insert(
             session,
             table,
             name=name,
             field_type=kind,
-            config={},
+            config=normalize_config(kind, config),
             semantic=semantic,
             grants_view=False,
             is_required=False,

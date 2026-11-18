@@ -133,7 +133,20 @@ export type CommentPage = { items: CommentItem[]; next_cursor: string | null };
 
 export type Condition = { field: string; op: string; value?: unknown };
 export type SortColumn = { field: string; direction: "asc" | "desc" };
-export type ViewConfig = { filter: Condition[]; sort: SortColumn[]; hidden_fields: string[] };
+export type TotalFn = "sum" | "avg" | "min" | "max";
+export type GroupBucket = "day" | "week" | "month";
+export type ViewTotal = { field: string; fn: TotalFn };
+export type ViewConfig = {
+  filter: Condition[];
+  sort: SortColumn[];
+  hidden_fields: string[];
+  /** Fold the rows into groups of this column (absent: no grouping). */
+  group_by?: string;
+  /** For a date column: group by day, week or month (month when absent). */
+  group_bucket?: GroupBucket;
+  /** Totals shown on each group. */
+  totals?: ViewTotal[];
+};
 export type ViewItem = { id: string; table_id: string; name: string; config: ViewConfig };
 
 export type DirectoryUser = { id: string; employee_code: string; full_name: string };
@@ -242,6 +255,13 @@ function isSortColumn(value: unknown): value is SortColumn {
   );
 }
 
+const TOTAL_FNS: readonly unknown[] = ["sum", "avg", "min", "max"];
+const BUCKETS: readonly unknown[] = ["day", "week", "month"];
+
+function isViewTotal(value: unknown): value is ViewTotal {
+  return isRecord(value) && typeof value.field === "string" && TOTAL_FNS.includes(value.fn);
+}
+
 export function isViewItem(value: unknown): value is ViewItem {
   if (!isRecord(value) || !isRecord(value.config)) return false;
   const config = value.config;
@@ -251,10 +271,63 @@ export function isViewItem(value: unknown): value is ViewItem {
     typeof value.name === "string" &&
     isArrayOf(isCondition)(config.filter) &&
     isArrayOf(isSortColumn)(config.sort) &&
-    isArrayOf((v): v is string => typeof v === "string")(config.hidden_fields)
+    isArrayOf((v): v is string => typeof v === "string")(config.hidden_fields) &&
+    // The grouping keys are absent from a view that does not group.
+    (config.group_by === undefined || typeof config.group_by === "string") &&
+    (config.group_bucket === undefined || BUCKETS.includes(config.group_bucket)) &&
+    (config.totals === undefined || isArrayOf(isViewTotal)(config.totals))
   );
 }
 export const isViewList = isArrayOf(isViewItem);
+
+/** One group of records: how many, the totals, and the filter that selects its records. */
+export type Group = {
+  /** An option id, a person's id, a record id, a date bucket, a text; null: no value. */
+  key: string | null;
+  label: string;
+  count: number;
+  totals: { field_id: string; fn: TotalFn; value: number | null }[];
+  /** Null: the group cannot be opened (its value no longer exists). */
+  filter: Condition[] | null;
+};
+
+export type GroupsResult = {
+  group_by: string;
+  bucket: GroupBucket | null;
+  /** How many records match the filter, before they are folded into groups. */
+  total: number;
+  /** More groups than the server sends: the rest are left out. */
+  truncated: boolean;
+  groups: Group[];
+};
+
+function isGroup(value: unknown): value is Group {
+  return (
+    isRecord(value) &&
+    (value.key === null || typeof value.key === "string") &&
+    typeof value.label === "string" &&
+    typeof value.count === "number" &&
+    isArrayOf(
+      (t): t is Group["totals"][number] =>
+        isRecord(t) &&
+        typeof t.field_id === "string" &&
+        TOTAL_FNS.includes(t.fn) &&
+        (t.value === null || typeof t.value === "number"),
+    )(value.totals) &&
+    (value.filter === null || isArrayOf(isCondition)(value.filter))
+  );
+}
+
+export function isGroupsResult(value: unknown): value is GroupsResult {
+  return (
+    isRecord(value) &&
+    typeof value.group_by === "string" &&
+    (value.bucket === null || BUCKETS.includes(value.bucket)) &&
+    typeof value.total === "number" &&
+    typeof value.truncated === "boolean" &&
+    isArrayOf(isGroup)(value.groups)
+  );
+}
 
 export function isDirectoryUser(value: unknown): value is DirectoryUser {
   return (
