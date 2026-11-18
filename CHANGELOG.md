@@ -13,9 +13,9 @@ có quyền riêng, cập nhật tiến độ, duyệt, bàn giao, đính kèm f
 | --- | --- |
 | Công nghệ | Next.js 16 + React 19 + TypeScript (giao diện), FastAPI + SQLAlchemy + Alembic (backend), PostgreSQL 16, Docker Compose |
 | Ngôn ngữ giao diện | Tiếng Anh. Dữ liệu mẫu bằng tiếng Việt |
-| Nhánh | `ui-redesign`. `main` trên GitHub đang ở `c303584`; máy local có thêm các commit của 16 đến 17/11 (file đính kèm, Column access, Paused/Blocked, xuất Excel, 4 lần gộp), **chưa đẩy lên** |
+| Nhánh | `ui-redesign`. `main` trên GitHub đang ở `ce66ba6` (đã đẩy ngày 18/11); máy local có thêm 4 commit ngày 18/11 (nhóm và tổng hợp, cột Review, giao diện nhóm, ba tab Reports), **chưa đẩy lên** |
 | Việc cần làm ngay | `git push origin HEAD:main` (cần đăng nhập GitHub, chỉ chủ dự án làm được) |
-| Test | Frontend 596 qua. Backend 787 qua (ruff, mypy sạch) |
+| Test | Frontend 636 qua. Backend 809 qua (ruff, mypy sạch) |
 
 ## 2. Những gì web đang làm được
 
@@ -97,6 +97,35 @@ mỗi cột chọn *As their role allows*, *Read only* hoặc *Hidden*, lưu m�
 - Thêm file không đổi số phiên bản của task, nên không gây xung đột sửa.
 
 ## 5. Nhật ký thay đổi
+
+### 18/11/2026: báo cáo kiểu OKR (nhóm, tổng hợp, ba tab)
+Làm theo ba ảnh mẫu Feishu (OKR Summary / Risky KRs / Review): bảng có dòng nhóm gập được kèm số
+tổng, và ba tab xem cùng một bảng.
+- **Nhóm và tổng hợp (backend):** `GET /tables/{id}/groups?group_by=<cột>[&bucket=day|week|month]
+  [&aggregate=<cột>:sum|avg|min|max]...[&filter=...]`. Mỗi nhóm có `key`, `label`, `count`, `totals`
+  và `filter` (điều kiện chọn đúng các việc của nhóm, để trang mở nhóm bằng danh sách việc thường).
+  Nhóm được theo: trạng thái, lựa chọn, thẻ, người, người tạo, liên kết (việc cha), ngày (ngày /
+  tuần / tháng), chữ, số, ô tích. Tổng hợp trên cột số. Một câu SQL `GROUP BY`, nên số đếm cả nhóm,
+  không phụ thuộc trang đã tải. Cùng quy tắc quyền như danh sách việc: chỉ việc mở được, chỉ cột
+  không bị ẩn (cột ẩn coi như "không biết"), liên kết chỉ nêu tên việc mở được; việc có nhiều giá
+  trị (hai người) được đếm ở mỗi nhóm. Tối đa 200 nhóm (có cờ `truncated`).
+- **Chế độ xem lưu được nhóm:** cấu hình view thêm `group_by`, `group_bucket`, `totals` (kiểm tra
+  cùng quy tắc); view không nhóm lưu y như trước.
+- **Cột Review (migration `0016`):** ba vai trò cột mới `review_score` (số, một chữ số thập phân),
+  `review_merits`, `review_improve`; bảng task mới có "Review score (0-1)", "Review: merits",
+  "Review: to improve". Người làm (editor của sheet) chỉ đọc; Admin, người tạo, manager của sheet
+  ghi được. Migration thêm ba cột vào mọi bảng task đang có.
+- **Giao diện nhóm:** menu **Group** trên thanh công cụ (chọn cột nhóm, kiểu ngày, tổng cho từng cột
+  số); lưới vẽ tiêu đề nhóm trong cùng một bảng (mũi tên, tên, số việc, tổng nằm dưới đúng cột);
+  5 nhóm đầu tự mở, các nhóm khác mở khi bấm; mỗi nhóm tải việc theo trang ("Load more in this
+  group"). Không có trên sheet cá nhân.
+- **Trang Reports có 3 tab** dưới phần số liệu: **Summary** (nhóm theo việc cha), **At risk** (chỉ
+  việc Blocked và Paused, nhóm theo người được giao), **Review** (nhóm theo việc cha, trung bình
+  điểm Review). Mỗi tab là chính bảng thật nên mở việc, đổi nhóm, lọc, lưu view như bình thường.
+- **Lưu ý cho đồng nghiệp:** migration `0016` là của phần này; migration `0017` (thùng rác file
+  đính kèm) là của người khác, chưa commit. Migration mới hãy lấy số `0018` trở đi.
+- Chưa làm: xuất Excel kèm dòng nhóm và dòng tổng; nhóm trên sheet cá nhân (`/sheets/{id}/groups`);
+  mục "By status" trong Reports vẫn chưa bấm được.
 
 ### 17/11/2026, lần gộp thứ tư: giao diện mới của đồng nghiệp
 - Kéo 11 commit (thanh công cụ bảng có chip chế độ xem và menu "⋯", lưới bấm cả dòng, khung chi
@@ -234,6 +263,7 @@ khởi động lại frontend. Dockerfile đổi thì `up -d --build backend`.
 | 0013 | Kiểu cột `timer`: gộp hai cột bấm giờ cũ thành một cột |
 | 0014 | Bảng `attachments`; kiểu cột `attachment`; hai hành động lịch sử về file (trước đây đánh số 0012) |
 | 0015 | Trạng thái `paused`/`blocked` (thêm hai lựa chọn vào mọi cột Status), thông báo `task_blocked`, ba hành động lịch sử |
+| 0016 | Ba vai trò cột Review (`review_score`, `review_merits`, `review_improve`) và thêm ba cột vào mọi bảng task đang có |
 
 ## 8. Kiểm thử
 
