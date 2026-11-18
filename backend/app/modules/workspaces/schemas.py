@@ -35,6 +35,8 @@ class MemberPublic(BaseModel):
     employee_code: str
     full_name: str
     role: WorkspaceRole
+    # Organization owners and admins manage every workspace whatever role is stored here.
+    is_org_admin: bool = False
 
 
 class MemberCreate(BaseModel):

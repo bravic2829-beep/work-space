@@ -107,10 +107,19 @@ type Props = {
    * columns are known, and the person can change them like any other.
    */
   reportView?: ReportView;
+  /** Called when a sheet was made from this table, so the tabs above it can list the new one. */
+  onSheetsChanged?: () => void;
 };
 
 /** The table view: columns, rows, filter, sort, saved views, and the record panel. */
-export function TableScreen({ tableId, sheet, onShare, preset, reportView }: Props) {
+export function TableScreen({
+  tableId,
+  sheet,
+  onShare,
+  preset,
+  reportView,
+  onSheetsChanged,
+}: Props) {
   const { state: auth } = useAuth();
   const sheetId = sheet?.id;
   const sheetRole = sheet?.my_role;
@@ -614,7 +623,8 @@ export function TableScreen({ tableId, sheet, onShare, preset, reportView }: Pro
           tableId={table.id}
           onClose={() => setShowCreateSheet(false)}
           onCreated={(created) => {
-            toast(`Sheet “${created.name}” created. Open Work summary in the sidebar to see it.`);
+            toast(`Sheet “${created.name}” created.`);
+            onSheetsChanged?.();
           }}
         />
       )}

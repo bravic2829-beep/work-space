@@ -11,7 +11,6 @@ import {
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
-  Table2,
   Trash2,
   Users,
   type LucideIcon,
@@ -28,6 +27,7 @@ import { MustChangePassword } from "@/features/auth/MustChangePassword";
 import { ChangePasswordDrawer } from "@/features/auth/ChangePasswordDrawer";
 import { isOrgAdmin } from "@/features/auth/schema";
 import { NotificationBell } from "@/features/notifications/NotificationBell";
+import { SidebarTree } from "@/features/tables/SidebarTree";
 
 import { BreadcrumbProvider, useCrumbTitle } from "./Breadcrumb";
 import { NavLink } from "./NavLink";
@@ -38,7 +38,6 @@ type NavItem = { href: string; label: string; icon: LucideIcon; adminOnly?: bool
 const NAV: NavItem[] = [
   { href: "/", label: "Home", icon: Home },
   { href: "/my-tasks", label: "My tasks", icon: ListChecks },
-  { href: "/work", label: "Work summary", icon: Table2 },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/workspaces", label: "Workspaces", icon: FolderKanban },
   { href: "/trash", label: "Trash", icon: Trash2 },
@@ -133,7 +132,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         }}
         className={`fixed inset-y-0 left-0 z-50 w-60 flex-col justify-between border-r border-line bg-surface p-2 transition-[width] md:z-30 md:flex ${collapsed ? "md:w-16" : "md:w-60"} ${menuOpen ? "flex" : "hidden"}`}
       >
-        <div className="flex flex-col gap-3">
+        <div className="flex min-h-0 flex-col gap-3 overflow-y-auto">
           <div
             className={`flex items-center gap-2 px-1 py-1 ${collapsed ? "md:flex-col md:px-0" : ""}`}
           >
@@ -175,6 +174,9 @@ function Shell({ children }: { children: React.ReactNode }) {
               </NavLink>
             ))}
           </nav>
+
+          {/* The tables themselves: a short way past the workspace pages. Folded away with the sidebar. */}
+          {!collapsed && <SidebarTree />}
         </div>
 
         <div

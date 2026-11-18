@@ -37,7 +37,11 @@ def _public(workspace: Workspace, role: WorkspaceRole) -> WorkspacePublic:
 
 def _member_public(user: User, role: WorkspaceRole) -> MemberPublic:
     return MemberPublic(
-        user_id=user.id, employee_code=user.employee_code, full_name=user.full_name, role=role
+        user_id=user.id,
+        employee_code=user.employee_code,
+        full_name=user.full_name,
+        role=role,
+        is_org_admin=is_org_admin(user),
     )
 
 
@@ -164,6 +168,16 @@ async def _get_member_or_404(
     return member
 
 
+async def _refuse_last_admin(
+    session: AsyncSession, workspace_id: uuid.UUID, member: WorkspaceMember
+) -> None:
+    """A workspace keeps at least one admin among its members."""
+    if member.role != WorkspaceRole.ADMIN:
+        return
+    if await repository.count_admins(session, workspace_id=workspace_id) <= 1:
+        raise ProblemError(409, "A workspace needs an admin.")
+
+
 async def update_member(
     session: AsyncSession,
     actor: User,
@@ -178,6 +192,8 @@ async def update_member(
         session, organization_id=actor.organization_id, user_id=user_id
     )
     assert user is not None  # a member always belongs to the organization of the workspace
+    if data.role != WorkspaceRole.ADMIN:
+        await _refuse_last_admin(session, workspace.id, member)
     member.role = data.role
     await session.flush()
     return _member_public(user, data.role)
@@ -189,5 +205,6 @@ async def remove_member(
     workspace, _ = await require_workspace_role(session, actor, workspace_id, WorkspaceRole.ADMIN)
     _refuse_personal(workspace)
     member = await _get_member_or_404(session, workspace.id, user_id)
+    await _refuse_last_admin(session, workspace.id, member)
     await repository.delete_member(session, member)
     await session.flush()

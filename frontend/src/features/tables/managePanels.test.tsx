@@ -140,8 +140,30 @@ describe("ManageFieldsPanel", () => {
 });
 
 describe("MembersPanel", () => {
-  const ann = { user_id: "u-1", employee_code: "E1", full_name: "Ann", role: "admin" as const };
-  const bob = { user_id: "u-2", employee_code: "E2", full_name: "Bob", role: "viewer" as const };
+  const ann = {
+    user_id: "u-1",
+    employee_code: "E1",
+    full_name: "Ann",
+    role: "admin" as const,
+    is_org_admin: false,
+  };
+  const bob = {
+    user_id: "u-2",
+    employee_code: "E2",
+    full_name: "Bob",
+    role: "viewer" as const,
+    is_org_admin: false,
+  };
+
+  it("shows an organization admin as having full access, with no role to change or leave", async () => {
+    const boss = { ...bob, user_id: "u-7", full_name: "Boss", is_org_admin: true };
+    listMembersMock.mockResolvedValue([boss, bob]);
+    render(<MembersPanel workspaceId="w-1" canManage currentUserId="u-7" />);
+    expect(await screen.findByText("Org admin · full access")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Role of Boss")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Remove Boss" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Role of Bob")).toBeInTheDocument();
+  });
 
   it("lists the members read-only for someone who cannot manage", async () => {
     listMembersMock.mockResolvedValue([ann, bob]);
@@ -190,6 +212,7 @@ describe("MembersPanel", () => {
       employee_code: "E3",
       full_name: "Cara",
       role: "commenter",
+      is_org_admin: false,
     });
     render(<MembersPanel workspaceId="w-1" canManage currentUserId="u-1" />);
     await screen.findByText(/Ann/);

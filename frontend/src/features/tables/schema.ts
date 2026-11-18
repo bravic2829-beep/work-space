@@ -99,6 +99,8 @@ export type MemberItem = {
   employee_code: string;
   full_name: string;
   role: Role;
+  /** Organization owners and admins manage every workspace, whatever role is stored here. */
+  is_org_admin: boolean;
 };
 
 export type BaseItem = { id: string; workspace_id: string; name: string };
@@ -183,7 +185,8 @@ export function isMemberItem(value: unknown): value is MemberItem {
     typeof value.user_id === "string" &&
     typeof value.employee_code === "string" &&
     typeof value.full_name === "string" &&
-    isRole(value.role)
+    isRole(value.role) &&
+    typeof value.is_org_admin === "boolean"
   );
 }
 export const isMemberList = isArrayOf(isMemberItem);
