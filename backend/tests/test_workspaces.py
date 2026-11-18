@@ -352,6 +352,9 @@ async def test_every_member_can_list_members(client: AsyncClient, world: World) 
         "WSADMIN": "admin",
     }
     assert "password" not in response.text.lower()
+    # Only the organization admin is flagged; a workspace admin is not.
+    flagged = {m["employee_code"] for m in response.json() if m["is_org_admin"]}
+    assert flagged == {"ADMIN"}
 
 
 @pytest.mark.parametrize("who", ["viewer", "commenter", "editor", "outsider"])

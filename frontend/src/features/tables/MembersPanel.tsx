@@ -92,7 +92,9 @@ export function MembersPanel({ workspaceId, canManage, currentUserId }: Props) {
               <span className="min-w-48 flex-1 text-sm">
                 {member.full_name} <span className="text-muted">({member.employee_code})</span>
               </span>
-              {canManage ? (
+              {member.is_org_admin ? (
+                <span className="text-sm text-muted">Org admin · full access</span>
+              ) : canManage ? (
                 <>
                   <Select
                     aria-label={`Role of ${member.full_name}`}

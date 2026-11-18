@@ -37,7 +37,11 @@ def _public(workspace: Workspace, role: WorkspaceRole) -> WorkspacePublic:
 
 def _member_public(user: User, role: WorkspaceRole) -> MemberPublic:
     return MemberPublic(
-        user_id=user.id, employee_code=user.employee_code, full_name=user.full_name, role=role
+        user_id=user.id,
+        employee_code=user.employee_code,
+        full_name=user.full_name,
+        role=role,
+        is_org_admin=is_org_admin(user),
     )
 
 
