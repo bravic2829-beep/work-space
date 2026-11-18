@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, Database, Plus, Table2 } from "lucide-react";
+import { Database, Plus, ShieldCheck, Table2, User, Users } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -14,12 +14,13 @@ import {
   LoadingState,
   Select,
 } from "@/components/ui";
+import { usePageCrumb } from "@/components/Breadcrumb";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { ApiError } from "@/lib/api/client";
 
 import { MembersPanel } from "./MembersPanel";
 import { createBase, createTable, getWorkspace, listBases, listTables } from "./api";
-import type { BaseItem, TableSummary, WorkspaceItem } from "./schema";
+import type { BaseItem, Role, TableSummary, WorkspaceItem } from "./schema";
 
 type Loaded = {
   workspace: WorkspaceItem;
@@ -30,6 +31,18 @@ type State =
   | { kind: "loading" }
   | { kind: "error"; message: string }
   | { kind: "ready"; data: Loaded };
+
+const KIND_HINT = {
+  shared: "A shared workspace. Every invited member can see the tables inside.",
+  personal: "Your personal workspace. Only you can see it.",
+};
+
+const ROLE_HINT: Record<Role, string> = {
+  viewer: "You can view this workspace but not change it.",
+  commenter: "You can view and comment, but not edit.",
+  editor: "You can add and edit bases and tables.",
+  admin: "You can rename, invite members, change roles and delete this workspace.",
+};
 
 function message(error: unknown, fallback: string): string {
   if (error instanceof ApiError) {
@@ -75,6 +88,8 @@ export function WorkspaceScreen({ workspaceId }: { workspaceId: string }) {
     void load();
     return () => controller.abort();
   }, [workspaceId, reload]);
+
+  usePageCrumb(state.kind === "ready" ? state.data.workspace.name : null);
 
   if (state.kind === "loading") return <LoadingState>Loading…</LoadingState>;
   if (state.kind === "error") {
@@ -126,22 +141,18 @@ export function WorkspaceScreen({ workspaceId }: { workspaceId: string }) {
 
   return (
     <section aria-labelledby="workspace-title" className="flex flex-col gap-4">
-      <div>
-        <Link
-          href="/workspaces"
-          className="inline-flex items-center gap-0.5 text-xs text-muted no-underline hover:text-primary"
-        >
-          <ChevronLeft className="size-3.5" aria-hidden />
-          Workspaces
-        </Link>
-        <div className="flex items-center gap-2">
-          <h1 id="workspace-title" className="m-0">
-            {workspace.name}
-          </h1>
-          <Badge tone={shared ? "info" : "neutral"}>
-            {shared ? "shared" : "personal"} · {workspace.my_role}
-          </Badge>
-        </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <h1 id="workspace-title" className="m-0">
+          {workspace.name}
+        </h1>
+        <Badge tone="neutral" className="gap-1" title={shared ? KIND_HINT.shared : KIND_HINT.personal}>
+          {shared ? <Users className="size-3" aria-hidden /> : <User className="size-3" aria-hidden />}
+          {shared ? "shared" : "personal"}
+        </Badge>
+        <Badge tone="info" className="gap-1" title={ROLE_HINT[workspace.my_role]}>
+          <ShieldCheck className="size-3" aria-hidden />
+          {workspace.my_role}
+        </Badge>
       </div>
 
       {error && <Alert>{error}</Alert>}
