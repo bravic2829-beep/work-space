@@ -144,10 +144,14 @@ async def test_tasks_template_has_the_fields_a_task_needs(work: Work) -> None:
         "Result",
         "Files",
         "Manager feedback",
+        "Review score (0-1)",
+        "Review: merits",
+        "Review: to improve",
         "Parent task",
         "Subtasks",
     ]
     assert by_name["Manager feedback"]["semantic"] == "feedback"
+    assert by_name["Review score (0-1)"]["semantic"] == "review_score"
     assert [o["name"] for o in by_name["Priority"]["config"]["options"]] == [
         "High",
         "Medium",

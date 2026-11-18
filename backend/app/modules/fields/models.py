@@ -55,6 +55,11 @@ class FieldSemantic(enum.StrEnum):
     SUBTASKS = "subtasks"
     # What the manager says about the work. A sheet editor (the assignee) can read it, not write.
     FEEDBACK = "feedback"
+    # The review of the finished work: a score and what went well and what to improve. Like the
+    # feedback, a sheet editor (the assignee) can read these, not write them.
+    REVIEW_SCORE = "review_score"
+    REVIEW_MERITS = "review_merits"
+    REVIEW_IMPROVE = "review_improve"
 
 
 class Field(Base):

@@ -187,7 +187,7 @@ async def test_list_and_get_fields(work: Work) -> None:
     table = await table_with_tasks(work)
     listed = await work.api("GET", field_url(table), "viewer")
     assert listed.status_code == 200
-    assert len(listed.json()) == 13
+    assert len(listed.json()) == 16
     assert {f["access"] for f in listed.json()} == {"read"}
     positions = [f["position"] for f in listed.json()]
     assert positions == sorted(positions)

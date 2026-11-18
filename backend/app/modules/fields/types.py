@@ -70,6 +70,9 @@ SEMANTIC_TYPES: dict[FieldSemantic, FieldType] = {
     FieldSemantic.PARENT: FieldType.LINK_RECORD,
     FieldSemantic.SUBTASKS: FieldType.LINK_RECORD,
     FieldSemantic.FEEDBACK: FieldType.LONG_TEXT,
+    FieldSemantic.REVIEW_SCORE: FieldType.NUMBER,
+    FieldSemantic.REVIEW_MERITS: FieldType.LONG_TEXT,
+    FieldSemantic.REVIEW_IMPROVE: FieldType.LONG_TEXT,
 }
 
 _COLOR = re.compile(r"^#[0-9a-fA-F]{6}$|^[a-z]{3,20}$")
