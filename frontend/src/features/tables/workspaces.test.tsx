@@ -160,6 +160,7 @@ describe("one workspace", () => {
     const user = userEvent.setup();
     createBaseMock.mockResolvedValue({ id: "b-2", workspace_id: "w-1", name: "HR" });
     renderWorkspace();
+    await user.click(await screen.findByRole("button", { name: "New base" }));
     await user.type(await screen.findByLabelText("Base name"), "HR");
     await user.click(screen.getByRole("button", { name: "Add base" }));
     await waitFor(() => expect(createBaseMock).toHaveBeenCalledWith("w-1", "HR"));
@@ -170,6 +171,7 @@ describe("one workspace", () => {
     const user = userEvent.setup();
     createTableMock.mockResolvedValue(makeTable());
     renderWorkspace();
+    await user.click(await screen.findByRole("button", { name: "New table" }));
     await user.type(await screen.findByLabelText("Table name in Sales base"), "Sprint");
     await user.selectOptions(screen.getByLabelText("Template for the table in Sales base"), "tasks");
     await user.click(screen.getByRole("button", { name: "Add table" }));
@@ -180,6 +182,7 @@ describe("one workspace", () => {
     const user = userEvent.setup();
     createTableMock.mockResolvedValue(makeTable());
     renderWorkspace();
+    await user.click(await screen.findByRole("button", { name: "New table" }));
     await user.type(await screen.findByLabelText("Table name in Sales base"), "Notes");
     await user.click(screen.getByRole("button", { name: "Add table" }));
     await waitFor(() => expect(createTableMock).toHaveBeenCalledWith("b-1", "Notes", "blank"));
@@ -189,6 +192,7 @@ describe("one workspace", () => {
     const user = userEvent.setup();
     createBaseMock.mockRejectedValue(new ApiError("A base with this name already exists.", 409));
     renderWorkspace();
+    await user.click(await screen.findByRole("button", { name: "New base" }));
     await user.type(await screen.findByLabelText("Base name"), "Sales base");
     await user.click(screen.getByRole("button", { name: "Add base" }));
     expect(await screen.findByText("A base with this name already exists.")).toBeInTheDocument();
@@ -200,6 +204,7 @@ describe("one workspace", () => {
     await screen.findByRole("heading", { name: "Sales base" });
     expect(screen.queryByLabelText("Base name")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add table" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "New table" })).not.toBeInTheDocument();
   });
 
   it("explains a refusal and a missing workspace", async () => {

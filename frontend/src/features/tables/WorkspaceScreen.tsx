@@ -50,6 +50,9 @@ export function WorkspaceScreen({ workspaceId }: { workspaceId: string }) {
   const [tableNames, setTableNames] = useState<Record<string, string>>({});
   const [templates, setTemplates] = useState<Record<string, "blank" | "tasks">>({});
   const [error, setError] = useState<string | null>(null);
+  // The forms to add a table or a base stay folded away until asked for.
+  const [addingTableTo, setAddingTableTo] = useState<string | null>(null);
+  const [addingBase, setAddingBase] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -101,6 +104,7 @@ export function WorkspaceScreen({ workspaceId }: { workspaceId: string }) {
     try {
       await createBase(workspaceId, baseName.trim());
       setBaseName("");
+      setAddingBase(false);
       setReload((n) => n + 1);
     } catch (caught) {
       setError(message(caught, "Could not create the base."));
@@ -113,6 +117,7 @@ export function WorkspaceScreen({ workspaceId }: { workspaceId: string }) {
     try {
       await createTable(baseId, (tableNames[baseId] ?? "").trim(), templates[baseId] ?? "blank");
       setTableNames((current) => ({ ...current, [baseId]: "" }));
+      setAddingTableTo(null);
       setReload((n) => n + 1);
     } catch (caught) {
       setError(message(caught, "Could not create the table."));
@@ -173,7 +178,18 @@ export function WorkspaceScreen({ workspaceId }: { workspaceId: string }) {
                     ))}
                   </ul>
                 )}
-                {canEdit && (
+                {canEdit && addingTableTo !== base.id && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    icon={Plus}
+                    className="self-start text-primary"
+                    onClick={() => setAddingTableTo(base.id)}
+                  >
+                    New table
+                  </Button>
+                )}
+                {canEdit && addingTableTo === base.id && (
                   <form
                     onSubmit={(event) => void addTable(event, base.id)}
                     className="flex flex-wrap items-center gap-1.5"
@@ -189,6 +205,7 @@ export function WorkspaceScreen({ workspaceId }: { workspaceId: string }) {
                       }
                       maxLength={200}
                       required
+                      autoFocus
                     />
                     <Select
                       aria-label={`Template for the table in ${base.name}`}
@@ -212,12 +229,26 @@ export function WorkspaceScreen({ workspaceId }: { workspaceId: string }) {
                     >
                       Add table
                     </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setAddingTableTo(null)}>
+                      Cancel
+                    </Button>
                   </form>
                 )}
               </div>
             </Card>
           ))}
-          {canEdit && (
+          {canEdit && !addingBase && (
+            <Button
+              size="sm"
+              variant="ghost"
+              icon={Plus}
+              className="self-start text-primary"
+              onClick={() => setAddingBase(true)}
+            >
+              New base
+            </Button>
+          )}
+          {canEdit && addingBase && (
             <form
               onSubmit={(event) => void addBase(event)}
               className="flex flex-wrap items-center gap-1.5 rounded-lg border border-dashed border-line-strong p-3"
@@ -231,9 +262,13 @@ export function WorkspaceScreen({ workspaceId }: { workspaceId: string }) {
                 onChange={(event) => setBaseName(event.target.value)}
                 maxLength={200}
                 required
+                autoFocus
               />
               <Button type="submit" size="sm" icon={Plus} disabled={baseName.trim() === ""}>
                 Add base
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setAddingBase(false)}>
+                Cancel
               </Button>
             </form>
           )}
