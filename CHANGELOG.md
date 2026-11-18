@@ -98,6 +98,28 @@ mỗi cột chọn *As their role allows*, *Read only* hoặc *Hidden*, lưu m�
 
 ## 5. Nhật ký thay đổi
 
+### 18/11/2026: Reports, Phase 2: trang Overview (mười con số, xu hướng, bộ lọc)
+Nâng cấp Reports thành hệ thống quản trị hiệu suất theo từng phase (kế hoạch trong ghi chú
+`workbase-reports-performance-plan`). Phase 2 = trang **Overview** thật, là tab đầu của Reports.
+- **API** `GET /api/v1/reports/dashboard` (file mới `reports/dashboard.py`, không đụng module nào
+  khác, không migration, không bảng mới). Số liệu đếm lúc gọi từ task người xem được mở, đúng quy
+  tắc của bảng; cột bị ẩn thì số tương ứng là `null` (hiện "—"). Lọc theo người/phòng ban mà cột
+  người phụ trách bị ẩn thì không khớp gì (không dò được ai làm gì).
+- **Mười thẻ:** Objectives, Key results, OKR progress (chu kỳ đang mở), Tasks completed, in
+  progress, Overdue, At risk, Blocked, On-time rate, Quality score (chưa đo được: "—", chờ phase 3).
+- **Quy tắc (tất cả nằm trong code):** hoàn thành = trạng thái loại `done`; quá hạn = chưa xong và hạn
+  trước hôm nay; At risk = chưa xong, chưa trễ, và đang Blocked hoặc hạn trong 2 ngày tới; On-time
+  rate = trong các task đã xong có hạn và có ngày hoàn thành, tỷ lệ xong đúng hoặc trước hạn (ngày
+  hoàn thành lấy từ lịch sử: lần cuối task chuyển sang trạng thái done; task không có lịch sử bị bỏ ra,
+  không bị tính là trễ). Task thuộc kỳ nếu có hạn trong kỳ, hoặc xong trong kỳ, hoặc (không có hạn)
+  tạo trong kỳ. Mặc định: 8 tuần qua và 2 tuần tới.
+- **Biểu đồ** tạo/hoàn thành theo tuần (SVG, hai cột, có chú thích, bảng số liệu thay thế, tooltip).
+  **Bảng** theo dự án và theo nhân viên; số trong bảng dự án bấm mở bảng task đã lọc. Thẻ bấm được khi
+  chỉ có một bảng trong phạm vi.
+- **Bộ lọc:** từ ngày, đến ngày, dự án, phòng ban, nhân viên, trạng thái. (Chưa có: mức ưu tiên, vì
+  bảng task chưa có cột ưu tiên; quản lý trực tiếp; xuất Excel của trang Overview.)
+- Test: backend 9 (`test_dashboard.py`), frontend 9 (`overview.test.tsx`). Tổng: backend 872, frontend 689.
+
 ### 18/11/2026: Report là OKR (module riêng, theo mẫu Base của Feishu)
 Trang **Reports** giờ có hai phần: **OKR** (mới, mở đầu) và **Task overview** (trang số liệu task
 cũ, giữ nguyên, kèm ba tab Summary / At risk / Review trên bảng task ở mục dưới).
