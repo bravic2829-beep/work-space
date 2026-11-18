@@ -36,7 +36,16 @@ from app.modules.permissions.service import (
     load_table_context,
     require_table_read,
 )
-from app.modules.records import links, listing, live, repository, sharing, subtasks, visibility
+from app.modules.records import (
+    groups,
+    links,
+    listing,
+    live,
+    repository,
+    sharing,
+    subtasks,
+    visibility,
+)
 from app.modules.records.models import Record
 from app.modules.records.schemas import RecordPublic
 from app.modules.sheets import access as sheet_access
@@ -454,6 +463,57 @@ async def list_in_context(
     rendered = await render(session, actor, context, [row[0] for row in rows], visible)
     return Page[RecordPublic](
         items=rendered, next_cursor=listing.cursor_for(built, rows[-1]) if more else None
+    )
+
+
+async def list_groups(
+    session: AsyncSession,
+    actor: User,
+    table_id: uuid.UUID,
+    *,
+    group_by: str,
+    bucket: str | None,
+    aggregates: list[str],
+    filter_json: str | None,
+) -> groups.Groups:
+    """The groups of a table (see groups.py), over the records the person may see."""
+    context = await require_table_read(session, actor, table_id)
+    return await groups_in_context(
+        session,
+        actor,
+        context,
+        group_by=group_by,
+        bucket=bucket,
+        aggregates=aggregates,
+        filter_json=filter_json,
+    )
+
+
+async def groups_in_context(
+    session: AsyncSession,
+    actor: User,
+    context: TableContext,
+    *,
+    group_by: str,
+    bucket: str | None,
+    aggregates: list[str],
+    filter_json: str | None,
+    extra_filters: list[Any] | None = None,
+) -> groups.Groups:
+    """`list_groups` once the caller's right to read the table is settled. `extra_filters` are the
+    conditions the caller adds itself, as for the record list (a sheet adds "names its owner")."""
+    visible = visible_columns(await fields_with_access(session, actor, context))
+    return await groups.compute(
+        session,
+        actor,
+        context,
+        visible,
+        group_by=group_by,
+        bucket=bucket,
+        aggregates=aggregates,
+        filter_json=filter_json,
+        sees_all=sees_everything(actor, context),
+        extra_filters=extra_filters,
     )
 
 

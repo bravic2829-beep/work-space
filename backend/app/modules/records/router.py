@@ -6,7 +6,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_session
 from app.core.pagination import DEFAULT_PAGE_SIZE, Page
 from app.modules.auth.dependencies import get_current_user
-from app.modules.records import handover, live, review, service, sharing, timer, trash  # noqa: F401 (live registers its listeners)
+from app.modules.records import (  # noqa: F401 (live registers its listeners)
+    groups,
+    handover,
+    live,
+    review,
+    service,
+    sharing,
+    timer,
+    trash,
+)
 from app.modules.records.schemas import (
     RecordCreate,
     RecordPublic,
@@ -33,6 +42,31 @@ async def list_records(
     `filter=[{"field": <id>, "op": "eq", "value": ...}]` (JSON). See docs/api-conventions.md."""
     return await service.list_records(
         session, actor, table_id, limit=limit, cursor=cursor, sort=sort, filter_json=filter
+    )
+
+
+@router.get("/tables/{table_id}/groups", response_model=groups.Groups)
+async def list_groups(
+    table_id: uuid.UUID,
+    group_by: uuid.UUID,
+    bucket: str | None = None,
+    aggregate: list[str] = Query(default=[]),
+    filter: str | None = None,
+    actor: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> groups.Groups:
+    """The records folded into groups of one column, each with its number of records and totals.
+    `bucket=day|week|month` for a date column; `aggregate=<field_id>:sum|avg|min|max` (repeatable)
+    for a number column; `filter` as for the record list. Every group carries the `filter` that
+    selects its records, so open it with the normal record list."""
+    return await service.list_groups(
+        session,
+        actor,
+        table_id,
+        group_by=str(group_by),
+        bucket=bucket,
+        aggregates=aggregate,
+        filter_json=filter,
     )
 
 

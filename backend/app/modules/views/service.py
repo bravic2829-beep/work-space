@@ -9,8 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import flush_or_conflict
 from app.core.errors import FORBIDDEN, ProblemError
 from app.modules.fields import service as fields_service
+from app.modules.fields.models import FieldType
 from app.modules.permissions.service import require_table_read
-from app.modules.records import listing
+from app.modules.records import groups, listing
 from app.modules.users.models import User
 from app.modules.views.models import View
 from app.modules.views.schemas import ViewConfig, ViewCreate, ViewPublic, ViewUpdate
@@ -50,7 +51,45 @@ async def _check_config(
             "One or more values are invalid.",
             errors=[{"field": "config.hidden_fields", "message": "Unknown field."}],
         )
+    _check_grouping(clean, by_id)
+    # A view that does not group is stored as it always was, without the grouping keys.
+    for key in ("group_by", "group_bucket", "totals"):
+        if not clean[key]:
+            del clean[key]
     return clean
+
+
+def _check_grouping(clean: dict[str, Any], by_id: dict[str, Any]) -> None:
+    """The grouping and the totals of a view follow the rules of the groups endpoint."""
+
+    def invalid(name: str, message: str) -> ProblemError:
+        return ProblemError(
+            422,
+            "One or more values are invalid.",
+            errors=[{"field": f"config.{name}", "message": message}],
+        )
+
+    group_by = clean["group_by"]
+    if group_by is None:
+        if clean["group_bucket"] is not None or clean["totals"]:
+            raise invalid("group_by", "Choose a column to group by first.")
+        return
+    field = by_id.get(group_by)
+    if field is None:
+        raise invalid("group_by", "Unknown field.")
+    if field.type not in groups.GROUPABLE:
+        raise invalid("group_by", "Records cannot be grouped by this kind of column.")
+    if clean["group_bucket"] is not None and field.type not in (
+        FieldType.DATE,
+        FieldType.CREATED_TIME,
+    ):
+        raise invalid("group_bucket", "Only a date column is grouped by day, week or month.")
+    for total in clean["totals"]:
+        column = by_id.get(total["field"])
+        if column is None:
+            raise invalid("totals", "Unknown field.")
+        if column.type not in listing.NUMBER_TYPES:
+            raise invalid("totals", "Only a number column can be totalled.")
 
 
 async def list_views(session: AsyncSession, actor: User, table_id: uuid.UUID) -> list[ViewPublic]:
