@@ -33,10 +33,12 @@ import {
 } from "./api";
 import { ColumnAccessDrawer } from "./ColumnAccessDrawer";
 import { ColumnsMenu } from "./ColumnsMenu";
+import { groupKey } from "./groups";
+import { GroupMenu } from "./GroupMenu";
 import { FilterBar } from "./FilterBar";
 import { presetFilter, type Preset } from "./presets";
 import { ManageFieldsPanel } from "./ManageFieldsPanel";
-import { RecordGrid } from "./RecordGrid";
+import { RecordGrid, type GridSection } from "./RecordGrid";
 import { RecordSidebar } from "./RecordSidebar";
 import type { RecordTab } from "./recordTabs";
 import { SortMenu } from "./SortMenu";
@@ -45,13 +47,17 @@ import { TaskCounts } from "./TaskCounts";
 import type {
   Condition,
   FieldItem,
+  GroupBucket,
   RecordItem,
   SortColumn,
   TableDetail,
+  TotalFn,
   ViewItem,
+  ViewTotal,
 } from "./schema";
 import { fieldBySemantic } from "./taskWorkflow";
 import { timerColumns } from "./timer";
+import { useGroupedRecords } from "./useGroupedRecords";
 import { useHiddenColumns } from "./useHiddenColumns";
 import { useUserNames } from "./useUserNames";
 import { emptyColumnIds, userIdsIn } from "./values";
@@ -111,6 +117,10 @@ export function TableScreen({ tableId, sheet, onShare, preset }: Props) {
   const [activeView, setActiveView] = useState("");
   const [rawFilter, setFilter] = useState<Condition[]>([]);
   const [rawSort, setSort] = useState<SortColumn[]>([]);
+  // The column the rows are folded under (null: no grouping), and the totals on each group.
+  const [rawGroupBy, setGroupBy] = useState<string | null>(null);
+  const [groupBucket, setGroupBucket] = useState<GroupBucket | null>(null);
+  const [rawTotals, setTotals] = useState<ViewTotal[]>([]);
   const [rawHidden, setHidden] = useHiddenColumns(tableId);
   const [records, setRecords] = useState<RecordsState>({ kind: "loading" });
   const [recordsKey, setRecordsKey] = useState(0);
@@ -143,6 +153,11 @@ export function TableScreen({ tableId, sheet, onShare, preset }: Props) {
   );
   const sort = useMemo(() => keepKnown(rawSort, knownIds, (c) => c.field), [rawSort, knownIds]);
   const hidden = useMemo(() => keepKnown(rawHidden, knownIds, (id) => id), [rawHidden, knownIds]);
+  // A column that was deleted (or hidden from this person) cannot be grouped or totalled.
+  const groupBy = rawGroupBy !== null && knownIds?.has(rawGroupBy) ? rawGroupBy : null;
+  const totals = useMemo(() => keepKnown(rawTotals, knownIds, (t) => t.field), [rawTotals, knownIds]);
+  // Groups are for a whole table; a person's sheet is one flat list.
+  const grouped = groupBy !== null && !sheetId;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -179,8 +194,19 @@ export function TableScreen({ tableId, sheet, onShare, preset }: Props) {
   // The records wait for a ready-made filter (it needs the columns), so the full list never
   // flashes on the screen before it is narrowed.
   const waitingForPreset = preset !== undefined && !presetApplied;
+  // Grouped, the rows come group by group (useGroupedRecords) instead of as one flat list.
+  const groupedData = useGroupedRecords({
+    enabled: grouped && !waitingForPreset,
+    tableId,
+    groupBy: groupBy ?? "",
+    bucket: groupBucket,
+    totals,
+    filter,
+    sort,
+    refreshKey: recordsKey,
+  });
   useEffect(() => {
-    if (waitingForPreset) return;
+    if (waitingForPreset || grouped) return;
     const controller = new AbortController();
     async function load() {
       try {
@@ -195,7 +221,7 @@ export function TableScreen({ tableId, sheet, onShare, preset }: Props) {
     }
     void load();
     return () => controller.abort();
-  }, [tableId, sheetId, filter, sort, recordsKey, waitingForPreset]);
+  }, [tableId, sheetId, filter, sort, recordsKey, waitingForPreset, grouped]);
 
   const table = tableState.kind === "ready" ? tableState.table : null;
   usePageCrumb(table?.name ?? null);
@@ -207,7 +233,10 @@ export function TableScreen({ tableId, sheet, onShare, preset }: Props) {
     return table.fields.map((field) => ({ ...field, access: sheetAccess(sheetRole, field) }));
   }, [table, sheetRole]);
 
-  const items = useMemo(() => (records.kind === "ready" ? records.items : []), [records]);
+  const items = useMemo(
+    () => (grouped ? groupedData.items : records.kind === "ready" ? records.items : []),
+    [grouped, groupedData.items, records],
+  );
   const [hideEmpty, setHideEmpty] = useStoredFlag(`table-hide-empty:${tableId}`);
   const emptyIds = useMemo(() => emptyColumnIds(fields, items), [fields, items]);
   const shownFields = useMemo<FieldItem[]>(() => {
@@ -253,19 +282,68 @@ export function TableScreen({ tableId, sheet, onShare, preset }: Props) {
   // Workspace admins choose which columns each person sees.
   const canSetAccess = !sheet && (isAdmin || table.my_role === "admin");
   const selectedRecord = selected && selected !== "new" ? items.find((r) => r.id === selected) : null;
+  const sections: GridSection[] = groupedData.groups.map((group) => {
+    const key = groupKey(group);
+    const loaded = groupedData.rows.get(key);
+    return {
+      key,
+      group,
+      records: loaded?.items ?? [],
+      open: groupedData.open.has(key),
+      loading: loaded?.loading ?? false,
+      hasMore: loaded?.next != null,
+      error: loaded?.error ?? null,
+    };
+  });
 
   function reloadRecords() {
-    setRecords({ kind: "loading" });
+    // Grouped, the old groups stay on screen until the new ones arrive.
+    if (!grouped) setRecords({ kind: "loading" });
     setRecordsKey((n) => n + 1);
   }
 
   /** A row came back from the server changed: show it in place, without a reload. */
   function replaceRecord(saved: RecordItem) {
+    if (grouped) {
+      groupedData.replace(saved);
+      // The change may have moved the record to another group, so the counts are read again.
+      setRecordsKey((n) => n + 1);
+      return;
+    }
     setRecords((current) =>
       current.kind === "ready"
         ? { ...current, items: current.items.map((item) => (item.id === saved.id ? saved : item)) }
         : current,
     );
+  }
+
+  /** A row is gone (deleted here): take it off the list, and read the group counts again. */
+  function dropRecord(id: string) {
+    if (grouped) {
+      groupedData.remove(id);
+      setRecordsKey((n) => n + 1);
+      return;
+    }
+    setRecords((current) =>
+      current.kind === "ready"
+        ? { ...current, items: current.items.filter((item) => item.id !== id) }
+        : current,
+    );
+  }
+
+  function chooseGroup(field: string | null) {
+    setActiveView("");
+    setGroupBy(field);
+    // Only a date column has a bucket; the others never keep one from the column before.
+    setGroupBucket(null);
+  }
+
+  function chooseTotal(field: string, fn: TotalFn | null) {
+    setActiveView("");
+    setTotals((current) => [
+      ...current.filter((total) => total.field !== field),
+      ...(fn ? [{ field, fn }] : []),
+    ]);
   }
 
   /** Gives an older task table a timer column (new task tables already have one). */
@@ -315,11 +393,7 @@ export function TableScreen({ tableId, sheet, onShare, preset }: Props) {
     try {
       await deleteRecord(record.id);
       if (selected === record.id) setSelected(null);
-      setRecords((current) =>
-        current.kind === "ready"
-          ? { ...current, items: current.items.filter((item) => item.id !== record.id) }
-          : current,
-      );
+      dropRecord(record.id);
     } catch (error) {
       setNotice(errorMessage(error, "Could not delete the record."));
     }
@@ -333,9 +407,13 @@ export function TableScreen({ tableId, sheet, onShare, preset }: Props) {
     setFilter(view ? view.config.filter.filter((c) => known.has(c.field)) : []);
     setSort(view ? view.config.sort.filter((c) => known.has(c.field)) : []);
     setHidden(view ? view.config.hidden_fields.filter((f) => known.has(f)) : []);
+    const groupColumn = view?.config.group_by;
+    setGroupBy(groupColumn && known.has(groupColumn) ? groupColumn : null);
+    setGroupBucket(view?.config.group_bucket ?? null);
+    setTotals((view?.config.totals ?? []).filter((total) => known.has(total.field)));
   }
 
-  /** Saves the current filter, sort and columns as a view. True when it was saved. */
+  /** Saves the current filter, sort, columns and grouping as a view. True when it was saved. */
   async function saveView(name: string): Promise<boolean> {
     setNotice(null);
     try {
@@ -343,6 +421,14 @@ export function TableScreen({ tableId, sheet, onShare, preset }: Props) {
         filter,
         sort,
         hidden_fields: hidden,
+        // The grouping keys are only sent when the rows are grouped.
+        ...(groupBy
+          ? {
+              group_by: groupBy,
+              ...(groupBucket ? { group_bucket: groupBucket } : {}),
+              ...(totals.length > 0 ? { totals } : {}),
+            }
+          : {}),
       });
       setViews((current) => [...current, view]);
       setActiveView(view.id);
@@ -369,7 +455,7 @@ export function TableScreen({ tableId, sheet, onShare, preset }: Props) {
       {/* The name and the way back are in the top bar; the heading stays for screen readers. */}
       <h1 className="sr-only">{table.name}</h1>
 
-      {isTaskTable && records.kind === "ready" && (
+      {isTaskTable && !grouped && records.kind === "ready" && (
         <TaskCounts fields={fields} records={items} hasMore={records.nextCursor !== null} />
       )}
 
@@ -394,6 +480,20 @@ export function TableScreen({ tableId, sheet, onShare, preset }: Props) {
             }}
           >
             <SortMenu fields={shownFields} sort={sort} onToggle={toggleSort} />
+            {!sheet && (
+              <GroupMenu
+                fields={fields}
+                groupBy={groupBy}
+                bucket={groupBucket}
+                totals={totals}
+                onGroupBy={chooseGroup}
+                onBucket={(bucket) => {
+                  setActiveView("");
+                  setGroupBucket(bucket);
+                }}
+                onTotal={chooseTotal}
+              />
+            )}
           </FilterBar>
         </div>
         <div className="flex items-center gap-2">
@@ -508,10 +608,53 @@ export function TableScreen({ tableId, sheet, onShare, preset }: Props) {
 
       <div>
         <div className="min-w-0">
-          {records.kind === "loading" && (
+          {grouped && groupedData.status === "loading" && (
+            <SkeletonTable headings={shownFields.map((field) => field.name)} label="Loading groups…" />
+          )}
+          {grouped && groupedData.status === "error" && (
+            <Alert>
+              <span className="mr-2">{describe(groupedData.error)}</span>
+              <Button size="sm" className="mr-1.5" onClick={() => chooseGroup(null)}>
+                Remove the grouping
+              </Button>
+              <Button size="sm" onClick={reloadRecords}>
+                Try again
+              </Button>
+            </Alert>
+          )}
+          {grouped && groupedData.status === "ready" && (
+            <>
+              <RecordGrid
+                fields={shownFields}
+                records={groupedData.items}
+                sections={sections}
+                onToggleSection={groupedData.toggle}
+                onLoadMoreSection={(key) => void groupedData.loadMore(key)}
+                names={names}
+                sort={sort}
+                selectedId={selectedRecord?.id ?? null}
+                hasMore={false}
+                loadingMore={false}
+                onSort={toggleSort}
+                onSelect={(record) => setSelected(record.id)}
+                onLoadMore={() => undefined}
+                currentUserId={me}
+                isAdmin={isAdmin || sheetManager}
+                canDeleteAny={isAdmin}
+                onRecordChanged={replaceRecord}
+                onDelete={(record) => void removeRecord(record)}
+              />
+              {groupedData.truncated && (
+                <p className="m-0 mt-2 text-xs text-muted">
+                  Only the first groups are shown. Narrow the filter to see the others.
+                </p>
+              )}
+            </>
+          )}
+          {!grouped && records.kind === "loading" && (
             <SkeletonTable headings={shownFields.map((field) => field.name)} label="Loading records…" />
           )}
-          {records.kind === "error" && (
+          {!grouped && records.kind === "error" && (
             <Alert>
               <span className="mr-2">{describe(records.error)}</span>
               {filter.length + sort.length > 0 && (
@@ -532,7 +675,7 @@ export function TableScreen({ tableId, sheet, onShare, preset }: Props) {
               </Button>
             </Alert>
           )}
-          {records.kind === "ready" && (
+          {!grouped && records.kind === "ready" && (
             <RecordGrid
               fields={shownFields}
               records={items}
@@ -586,11 +729,7 @@ export function TableScreen({ tableId, sheet, onShare, preset }: Props) {
             onSaved={replaceRecord}
             onDeleted={(id) => {
               setSelected(null);
-              setRecords((current) =>
-                current.kind === "ready"
-                  ? { ...current, items: current.items.filter((item) => item.id !== id) }
-                  : current,
-              );
+              dropRecord(id);
             }}
             onReload={reloadRecords}
             onClose={() => setSelected(null)}
