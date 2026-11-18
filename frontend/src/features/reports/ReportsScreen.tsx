@@ -185,8 +185,8 @@ function OverviewView({ data }: { data: Overview }) {
         <section aria-label="Work per person" className="grid gap-2">
           <div className="flex items-baseline justify-between">
             <h2 className="m-0 text-base">Work per person</h2>
-            <Link href="/work" className="text-[13px]">
-              Open Work summary
+            <Link href={`/tables/${data.table_id}`} className="text-[13px]">
+              Open the table
             </Link>
           </div>
           {data.people.length === 0 ? (

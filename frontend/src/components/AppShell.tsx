@@ -11,7 +11,6 @@ import {
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
-  Table2,
   Trash2,
   Users,
   type LucideIcon,
@@ -38,7 +37,6 @@ type NavItem = { href: string; label: string; icon: LucideIcon; adminOnly?: bool
 const NAV: NavItem[] = [
   { href: "/", label: "Home", icon: Home },
   { href: "/my-tasks", label: "My tasks", icon: ListChecks },
-  { href: "/work", label: "Work summary", icon: Table2 },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/workspaces", label: "Workspaces", icon: FolderKanban },
   { href: "/trash", label: "Trash", icon: Trash2 },

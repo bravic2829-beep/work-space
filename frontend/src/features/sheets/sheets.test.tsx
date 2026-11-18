@@ -22,7 +22,7 @@ import { CreateSheetDrawer } from "./CreateSheetDrawer";
 import { sheetAccess, type SheetItem, type SheetMemberItem } from "./schema";
 import { ShareSheetDrawer } from "./ShareSheetDrawer";
 import { ALL_TASKS, SheetTabs } from "./SheetTabs";
-import { WorkScreen } from "./WorkScreen";
+import { TableWithSheets } from "./TableWithSheets";
 
 vi.mock("next/link", () => ({
   default: ({ href, children }: { href: string; children: React.ReactNode }) => (
@@ -162,11 +162,11 @@ describe("SheetTabs", () => {
   });
 });
 
-describe("WorkScreen", () => {
+describe("TableWithSheets", () => {
   function renderWork() {
     render(
       <AuthProvider>
-        <WorkScreen />
+        <TableWithSheets tableId="t-1" />
       </AuthProvider>,
     );
   }
@@ -197,6 +197,21 @@ describe("WorkScreen", () => {
     expect(screen.queryByRole("button", { name: /Create sheet/ })).not.toBeInTheDocument();
   });
 
+  it("shows the plain table, without tabs, when nobody made a sheet on it", async () => {
+    fetchMeMock.mockResolvedValue(adminUser);
+    listSheetsMock.mockResolvedValue([sheet("s-9", "Cai", { table_id: "t-2" })]);
+    renderWork();
+    expect(await screen.findByTestId("table")).toHaveTextContent("t-1:whole table");
+    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+  });
+
+  it("still opens the table when the sheets cannot be listed", async () => {
+    fetchMeMock.mockResolvedValue(adminUser);
+    listSheetsMock.mockRejectedValue(new ApiError("Server is down.", 500));
+    renderWork();
+    expect(await screen.findByTestId("table")).toHaveTextContent("t-1:whole table");
+  });
+
   it("keeps only navigation in the tab strip and hands Share to the table of a sheet", async () => {
     fetchMeMock.mockResolvedValue(sampleUser({ id: "u-x" }));
     listSheetsMock.mockResolvedValue([
@@ -212,29 +227,6 @@ describe("WorkScreen", () => {
 
     await user.click(screen.getByRole("button", { name: "Share" }));
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
-  });
-
-  it("explains an empty list to an admin and to an employee", async () => {
-    fetchMeMock.mockResolvedValue(adminUser);
-    listSheetsMock.mockResolvedValue([]);
-    renderWork();
-    expect(await screen.findByText("No sheets yet.")).toBeInTheDocument();
-    expect(screen.getByText(/Create sheet/)).toBeInTheDocument();
-    cleanup();
-
-    fetchMeMock.mockResolvedValue(sampleUser());
-    renderWork();
-    expect(await screen.findByText(/Nobody has shared a sheet with you/)).toBeInTheDocument();
-  });
-
-  it("lets the person try again when the sheets cannot be loaded", async () => {
-    fetchMeMock.mockResolvedValue(adminUser);
-    listSheetsMock.mockRejectedValueOnce(new ApiError("Server is down.", 500));
-    listSheetsMock.mockResolvedValue([sheet("s-1", "Ann")]);
-    renderWork();
-    expect(await screen.findByText("Server is down.")).toBeInTheDocument();
-    await userEvent.setup().click(screen.getByRole("button", { name: "Try again" }));
-    expect(await screen.findByTestId("table")).toBeInTheDocument();
   });
 
   it("opens the tab used last time in this browser", async () => {
@@ -263,19 +255,6 @@ describe("WorkScreen", () => {
     expect(JSON.parse(window.localStorage.getItem("workbase.work.pins") ?? "[]")).toEqual(["s-2"]);
   });
 
-  it("chooses a table when the sheets belong to several", async () => {
-    fetchMeMock.mockResolvedValue(adminUser);
-    listSheetsMock.mockResolvedValue([
-      sheet("s-1", "Ann"),
-      sheet("s-9", "Cai", { table_id: "t-2", table_name: "Projects" }),
-    ]);
-    renderWork();
-    await screen.findByTestId("table");
-    await userEvent.setup().selectOptions(screen.getByRole("combobox", { name: "Table" }), "t-2");
-    expect(screen.getByTestId("table")).toHaveTextContent("t-2:whole table");
-    expect(screen.getByRole("tab", { name: /Cai/ })).toBeInTheDocument();
-    expect(screen.queryByRole("tab", { name: /Ann/ })).not.toBeInTheDocument();
-  });
 });
 
 describe("CreateSheetDrawer", () => {

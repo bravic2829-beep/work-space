@@ -2,10 +2,11 @@
 
 import { useSearchParams } from "next/navigation";
 
+import { TableWithSheets } from "@/features/sheets/TableWithSheets";
 import { localToday } from "@/features/mytasks/schema";
 
 import { isPreset } from "./presets";
-import { TableScreen } from "./TableScreen";
+
 
 /**
  * The page of one table. `?show=overdue` (and `&person=<user id>`) opens it with a ready-made
@@ -17,5 +18,5 @@ export function TableRoute({ tableId }: { tableId: string }) {
   const preset = isPreset(show)
     ? { show, person: params.get("person"), today: localToday() }
     : undefined;
-  return <TableScreen tableId={tableId} preset={preset} />;
+  return <TableWithSheets tableId={tableId} preset={preset} />;
 }
