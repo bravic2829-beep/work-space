@@ -87,15 +87,12 @@ type Props = {
    * controls its role allows. A person who is not a member of the workspace uses a table this way.
    */
   sheet?: SheetItem;
-  /**
-   * A number that goes up each time somebody presses "Add task" outside this screen (the sheet
-   * tab strip keeps that button next to Share); the new-task form opens on every change.
-   */
-  addTaskSignal?: number;
+  /** On a sheet: opens the sharing drawer. Offered in the ⋯ menu to the sheet's manager. */
+  onShare?: () => void;
 };
 
 /** The table view: columns, rows, filter, sort, saved views, and the record panel. */
-export function TableScreen({ tableId, sheet, addTaskSignal = 0 }: Props) {
+export function TableScreen({ tableId, sheet, onShare }: Props) {
   const { state: auth } = useAuth();
   const sheetId = sheet?.id;
   const sheetRole = sheet?.my_role;
@@ -159,14 +156,6 @@ export function TableScreen({ tableId, sheet, addTaskSignal = 0 }: Props) {
     void load();
     return () => controller.abort();
   }, [tableId, tableKey, sheetId]);
-
-  // "Add task" pressed outside this screen: open the new-task form once per press. The signal the
-  // screen starts with is already handled, so a sheet opened later does not open the form.
-  const [seenSignal, setSeenSignal] = useState(addTaskSignal);
-  if (addTaskSignal !== seenSignal) {
-    setSeenSignal(addTaskSignal);
-    setSelected("new");
-  }
 
   // A task given to me appears at once. Reads again without the loading flash or closing the panel.
   useLiveRefresh(() => setRecordsKey((n) => n + 1));
@@ -397,9 +386,13 @@ export function TableScreen({ tableId, sheet, addTaskSignal = 0 }: Props) {
               setHidden(next);
             }}
           />
-          {!sheet && (
+          {/* The same place on every tab: Columns, ⋯, then the one main button. */}
+          {(!sheet || canEdit || (sheetRole === "manager" && onShare)) && (
             <TableActions
               canEdit={canEdit}
+              canEditColumns={!sheet && canEdit}
+              addLabel={sheet ? "Add task" : undefined}
+              onShare={sheetRole === "manager" ? onShare : undefined}
               canAssign={canAssign}
               canMakeSheet={canMakeSheet}
               canAddTimer={canAddTimer}

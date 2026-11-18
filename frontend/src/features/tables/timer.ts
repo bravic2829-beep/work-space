@@ -70,6 +70,15 @@ export function formatMoment(value: unknown): string {
   });
 }
 
+/** When a timer cell started and finished, ready to show ("" for a moment that has not come). */
+export function timerMoments(value: unknown): { started: string; finished: string } {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return { started: "", finished: "" };
+  }
+  const cell = value as Record<string, unknown>;
+  return { started: formatMoment(cell.started_at), finished: formatMoment(cell.finished_at) };
+}
+
 /** One timer cell in words, for lists and the history: "Nov 14, 08:00 → Nov 14, 09:30 (1:30:05)". */
 export function describeTimer(value: unknown): string {
   const { startedAt, stoppedAt } = cellMoments(value);

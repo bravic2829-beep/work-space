@@ -17,6 +17,9 @@ import {
   listViews,
   lookupUsers,
 } from "./api";
+import { listSheetRecords } from "@/features/sheets/api";
+import type { SheetItem, SheetRole } from "@/features/sheets/schema";
+
 import { FIELDS, makeRecord, makeTable, makeView } from "./fixtures";
 import type { Role } from "./schema";
 import { TableScreen } from "./TableScreen";
@@ -42,6 +45,11 @@ vi.mock("./api", () => ({
   createField: vi.fn(),
   listTables: vi.fn(),
   getRecordViewers: vi.fn(),
+}));
+
+vi.mock("@/features/sheets/api", () => ({
+  listSheetRecords: vi.fn(),
+  createSheetRecord: vi.fn(),
 }));
 
 const fetchMeMock = vi.mocked(fetchMe);
@@ -181,22 +189,6 @@ describe("who can change things", () => {
     await user.click(screen.getByRole("menuitem", { name: "New record" }));
     expect(screen.getByRole("heading", { name: "New record" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Create record" })).toBeInTheDocument();
-  });
-
-  it("opens the new record form when Add task is pressed somewhere else", async () => {
-    getTableMock.mockResolvedValue(makeTable("editor"));
-    listRecordsMock.mockResolvedValue({ items: [], next_cursor: null });
-    const view = (signal: number) => (
-      <AuthProvider>
-        <TableScreen tableId="t-1" addTaskSignal={signal} />
-      </AuthProvider>
-    );
-    const { rerender } = render(view(3)); // already handled when the screen starts
-    await screen.findByRole("heading", { name: "Tasks" });
-    expect(screen.queryByRole("heading", { name: "New record" })).not.toBeInTheDocument();
-
-    rerender(view(4));
-    expect(await screen.findByRole("heading", { name: "New record" })).toBeInTheDocument();
   });
 
   it("opens a record from the grid", async () => {
@@ -566,5 +558,51 @@ describe("the counts above the table", () => {
   it("shows none for a table without a status column", async () => {
     await renderTable();
     expect(screen.queryByRole("list", { name: "Task counts" })).not.toBeInTheDocument();
+  });
+});
+
+describe("on a sheet", () => {
+  async function renderSheet(role: SheetRole, onShare?: () => void) {
+    const sheet = {
+      id: "s-1",
+      table_id: "t-1",
+      table_name: "Tasks",
+      owner: { id: "u-me", full_name: "Me", employee_code: "E1" },
+      name: "Me",
+      my_role: role,
+      is_admin: false,
+      can_see_all: false,
+      member_count: 1,
+    } satisfies SheetItem;
+    vi.mocked(listSheetRecords).mockResolvedValue({ items: [alpha], next_cursor: null });
+    render(
+      <AuthProvider>
+        <TableScreen tableId="t-1" sheet={sheet} onShare={onShare} />
+      </AuthProvider>,
+    );
+    await screen.findByText("Alpha");
+  }
+
+  it("puts Add task and Share (in the menu) in the table toolbar for a manager", async () => {
+    const user = userEvent.setup();
+    const onShare = vi.fn();
+    await renderSheet("manager", onShare);
+    expect(screen.getByRole("button", { name: "Add task" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Table menu" }));
+    expect(screen.queryByRole("menuitem", { name: "Add a column" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("menuitem", { name: "Share" }));
+    expect(onShare).toHaveBeenCalled();
+  });
+
+  it("gives an editor Add task but no menu to share with", async () => {
+    await renderSheet("editor");
+    expect(screen.getByRole("button", { name: "Add task" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Table menu" })).not.toBeInTheDocument();
+  });
+
+  it("gives a viewer neither", async () => {
+    await renderSheet("viewer");
+    expect(screen.queryByRole("button", { name: "Add task" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Table menu" })).not.toBeInTheDocument();
   });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { FolderKanban, Plus, Share2 } from "lucide-react";
+import { FolderKanban } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -53,8 +53,6 @@ export function WorkScreen() {
 
   const [state, setState] = useState<State>({ kind: "loading" });
   const [tableId, setTableId] = useState<string | null>(null);
-  // Pressing "Add task" up in the tab strip asks the table below to open its new-task form.
-  const [addTaskSignal, setAddTaskSignal] = useState(0);
   const [chosen, setChosen] = useState<string | null>(null);
   const [showShare, setShowShare] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
@@ -188,25 +186,14 @@ export function WorkScreen() {
         onCreate={canMake ? () => setShowCreate(true) : undefined}
         pinned={pinned}
         onTogglePin={togglePin}
-        actions={
-          sheet && (
-            <>
-              {sheet.my_role === "manager" && (
-                <Button size="sm" icon={Share2} onClick={() => setShowShare(true)}>
-                  Share
-                </Button>
-              )}
-              {(sheet.my_role === "editor" || sheet.my_role === "manager") && (
-                <Button size="sm" variant="primary" icon={Plus} onClick={() => setAddTaskSignal((n) => n + 1)}>
-                  Add task
-                </Button>
-              )}
-            </>
-          )
-        }
       />
 
-      <TableScreen key={active} tableId={currentTable} sheet={sheet} addTaskSignal={addTaskSignal} />
+      <TableScreen
+        key={active}
+        tableId={currentTable}
+        sheet={sheet}
+        onShare={sheet ? () => setShowShare(true) : undefined}
+      />
 
       {showShare && sheet && (
         <ShareSheetDrawer
