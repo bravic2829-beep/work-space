@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronRight, ClipboardCheck, Lock, Pencil, Plus, Target } from "lucide-react";
+import { ChevronDown, ChevronRight, ClipboardCheck, Link2, Lock, Pencil, Plus, Target } from "lucide-react";
 import { Fragment, useState } from "react";
 
 import { Avatar, Badge, Button, DataTable, EmptyState, plainName } from "@/components/ui";
@@ -9,6 +9,7 @@ import { ProgressBar, StatusPill } from "./Progress";
 import {
   averageScore,
   formatValue,
+  percent,
   LEVEL_LABELS,
   scoreText,
   type KeyResult,
@@ -29,6 +30,7 @@ type Props = {
   onEditObjective: (objective: Objective) => void;
   onReviewObjective: (objective: Objective) => void;
   onReviewKr: (kr: KeyResult, objective: Objective) => void;
+  onLinkTasks?: (kr: KeyResult, objective: Objective) => void;
 };
 
 const MERITS = "Review: merits";
@@ -43,11 +45,10 @@ function Person({ name }: { name: string }) {
   );
 }
 
-/** Long text in a cell: cut to one line, the whole text on hover. */
 function Note({ text }: { text: string | null }) {
   if (!text) return <span className="text-line-strong">—</span>;
   return (
-    <span className="block max-w-64 truncate" title={text}>
+    <span className="block w-48 max-w-64 whitespace-pre-wrap break-words">
       {text}
     </span>
   );
@@ -68,6 +69,7 @@ export function OkrTable({
   onEditObjective,
   onReviewObjective,
   onReviewKr,
+  onLinkTasks,
 }: Props) {
   const [closed, setClosed] = useState<ReadonlySet<string>>(new Set());
   const review = mode === "review";
@@ -112,6 +114,7 @@ export function OkrTable({
               Now / target
             </th>
           )}
+          <th scope="col">Linked tasks</th>
           <th scope="col">
             <span className="sr-only">Actions</span>
           </th>
@@ -122,6 +125,7 @@ export function OkrTable({
           const open = !closed.has(objective.id);
           const Chevron = open ? ChevronDown : ChevronRight;
           const average = averageScore(objective);
+          const totalProgress = objective.key_results.reduce((sum, kr) => sum + kr.progress, 0);
           return (
             <Fragment key={objective.id}>
               <tr className="bg-surface-muted" data-objective={objective.id}>
@@ -154,17 +158,24 @@ export function OkrTable({
                 <td />
                 <td>
                   <ProgressBar value={objective.progress} label={`Progress of ${objective.title}`} />
+                  {objective.key_results.length > 0 && (
+                    <span className="text-xs text-muted tabular-nums">
+                      {review
+                        ? `Average ${percent(totalProgress / objective.key_results.length)}`
+                        : `Total ${percent(totalProgress)}`}
+                    </span>
+                  )}
                 </td>
                 {review ? (
                   <>
                     <td className="text-right tabular-nums">
-                      {objective.score !== null ? (
-                        <b>{scoreText(objective.score)}</b>
-                      ) : (
-                        <span className="text-muted" title="Average of the key results">
-                          {average !== null ? `avg ${scoreText(average)}` : "—"}
+                      {objective.score !== null && <b className="block">{scoreText(objective.score)}</b>}
+                      {average !== null && (
+                        <span className="text-xs text-muted" title="Average of the key results">
+                          avg {scoreText(average)}
                         </span>
                       )}
+                      {objective.score === null && average === null && scoreText(null)}
                     </td>
                     <td>
                       <Note text={objective.merits} />
@@ -176,6 +187,7 @@ export function OkrTable({
                 ) : (
                   <td />
                 )}
+                <td />
                 <td className="text-right">
                   <span className="inline-flex items-center gap-1">
                     {cycleOpen && objective.can_edit && (
@@ -261,6 +273,23 @@ export function OkrTable({
                         <span className="text-muted"> / {formatValue(kr.target_value, kr.unit)}</span>
                       </td>
                     )}
+                    <td>
+                      <div className="flex min-w-40 flex-wrap items-center gap-1">
+                        {kr.tasks?.map((task) => (
+                          <span key={task.id} className="max-w-52 truncate rounded bg-surface-muted px-2 py-0.5 text-xs"
+                            title={task.title ?? "Task name hidden"}>
+                            {task.title ?? "Task name hidden"}
+                          </span>
+                        ))}
+                        {cycleOpen && kr.can_check_in && onLinkTasks && (
+                          <Button size="icon" variant="ghost" className="size-7"
+                            aria-label={`Manage linked tasks for ${kr.title}`}
+                            onClick={() => onLinkTasks(kr, objective)}>
+                            <Link2 className="size-4" aria-hidden />
+                          </Button>
+                        )}
+                      </div>
+                    </td>
                     <td className="text-right">
                       {review && objective.can_review && (
                         <Button
@@ -279,7 +308,7 @@ export function OkrTable({
                 ))}
               {open && objective.key_results.length === 0 && (
                 <tr>
-                  <td colSpan={review ? 8 : 6} className="pl-9 text-sm text-muted">
+                  <td colSpan={review ? 9 : 7} className="pl-9 text-sm text-muted">
                     No key results yet.
                     {cycleOpen && objective.can_edit && " Use + to add the first."}
                   </td>

@@ -1,5 +1,6 @@
+import asyncio
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,6 +10,7 @@ from app.core.config import Settings, get_settings
 from app.core.csrf import install_origin_check
 from app.core.db import create_engine, create_sessionmaker
 from app.core.errors import install_error_handlers
+from app.modules.attachments.trash import run_cleanup
 from app.modules.auth.rate_limiter import LoginFailureLimiter
 
 
@@ -22,10 +24,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             settings.require_jwt_secret()
         engine = create_engine(settings.database_url) if settings.database_url else None
         app.state.engine = engine
-        app.state.sessionmaker = create_sessionmaker(engine) if engine else None
+        sessions = create_sessionmaker(engine) if engine else None
+        app.state.sessionmaker = sessions
+        cleanup = (
+            asyncio.create_task(run_cleanup(sessions, settings.attachments_dir))
+            if sessions is not None and settings.app_env != "test"
+            else None
+        )
         try:
             yield
         finally:
+            if cleanup is not None:
+                cleanup.cancel()
+                with suppress(asyncio.CancelledError):
+                    await cleanup
             if engine is not None:
                 await engine.dispose()
 

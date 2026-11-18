@@ -1,11 +1,12 @@
 import uuid
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import get_session
 from app.modules.auth.dependencies import get_current_user
-from app.modules.okr import service
+from app.modules.okr import export, service
 from app.modules.okr.models import KrStatus, OkrLevel
 from app.modules.okr.schemas import (
     CheckInCreate,
@@ -22,9 +23,25 @@ from app.modules.okr.schemas import (
     Overview,
     ReviewUpdate,
 )
+from app.modules.reports.export import XLSX
 from app.modules.users.models import User
 
 router = APIRouter(prefix="/okr", tags=["okr"])
+
+
+@router.post("/key-results/{key_result_id}/tasks/{record_id}", status_code=204)
+@router.delete("/key-results/{key_result_id}/tasks/{record_id}", status_code=204)
+async def change_task_link(
+    key_result_id: uuid.UUID,
+    record_id: uuid.UUID,
+    request: Request,
+    actor: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> None:
+    await service.change_task_link(
+        session, actor, key_result_id, record_id, attach=request.method == "POST"
+    )
+    await session.commit()
 
 
 # --- cycles --------------------------------------------------------------------------------------
@@ -100,6 +117,20 @@ async def overview(
         department_id=department_id,
         kr_status=kr_status or None,
         mine=mine,
+    )
+
+
+@router.get("/export", response_class=Response)
+async def export_overview(data: Overview = Depends(overview)) -> Response:
+    content = await run_in_threadpool(export.build, data)
+    return Response(
+        content,
+        media_type=XLSX,
+        headers={
+            "Content-Disposition": f'attachment; filename="okr-{data.cycle.starts_on}.xlsx"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 

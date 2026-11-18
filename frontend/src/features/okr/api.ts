@@ -18,6 +18,10 @@ import {
 
 const BASE = `${API}/okr`;
 
+export function changeTaskLink(krId: string, recordId: string, attach: boolean): Promise<void> {
+  return apiRequest(attach ? "POST" : "DELETE", `${BASE}/key-results/${krId}/tasks/${recordId}`);
+}
+
 // --- cycles ----------------------------------------------------------------------------------------
 
 export function listCycles(signal?: AbortSignal): Promise<Cycle[]> {
@@ -52,12 +56,20 @@ export type OverviewQuery = {
   mine?: boolean;
 };
 
-export function getOverview(query: OverviewQuery, signal?: AbortSignal): Promise<Overview> {
+function overviewParams(query: OverviewQuery): URLSearchParams {
   const params = new URLSearchParams({ cycle_id: query.cycleId });
   for (const status of query.krStatus ?? []) params.append("kr_status", status);
   if (query.level) params.set("level", query.level);
   if (query.mine) params.set("mine", "true");
-  return apiRequest("GET", `${BASE}/overview?${params.toString()}`, {
+  return params;
+}
+
+export function exportOverviewUrl(query: OverviewQuery): string {
+  return `${BASE}/export?${overviewParams(query)}`;
+}
+
+export function getOverview(query: OverviewQuery, signal?: AbortSignal): Promise<Overview> {
+  return apiRequest("GET", `${BASE}/overview?${overviewParams(query)}`, {
     guard: isOverview,
     signal,
   });

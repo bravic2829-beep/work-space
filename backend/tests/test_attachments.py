@@ -1,11 +1,16 @@
 """Files attached to a task: who may add, see, download and remove them."""
 
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
 import pytest
+from sqlalchemy import update
 
+from app.core.db import create_engine, create_sessionmaker
+from app.modules.attachments.models import TrashedAttachment
+from app.modules.attachments.trash import purge_expired
 from tests.api_helpers import assert_problem
 from tests.test_records import Board
 from tests.test_sheets import add_member, make_sheet
@@ -262,7 +267,7 @@ async def test_the_admin_can_do_everything(board: Board) -> None:
 # --- removing, history, clean-up ----------------------------------------------------------------
 
 
-async def test_removing_a_file_deletes_it_from_the_disk_and_is_written_down(
+async def test_removing_a_file_keeps_it_in_trash_and_is_written_down(
     board: Board, files_dir: Path
 ) -> None:
     work = board.work
@@ -273,13 +278,87 @@ async def test_removing_a_file_deletes_it_from_the_disk_and_is_written_down(
     gone = await work.api("DELETE", f"/attachments/{file['id']}")
     assert gone.status_code == 200
     assert gone.json()["data"][board.f["Files"]] == []
-    assert on_disk(files_dir) == []
+    assert len(on_disk(files_dir)) == 1
     assert_problem(await work.api("GET", f"/attachments/{file['id']}"), 404)
 
     entries = (await work.api("GET", f"/records/{task['id']}/activity")).json()
     assert [e["action"] for e in entries] == ["attachment_removed", "attachment_added", "created"]
     assert entries[1]["changes"][0]["after"] == "old.pdf"
     assert entries[0]["changes"][0]["before"] == "old.pdf"
+
+    [trashed] = (await work.api("GET", "/trash/attachments")).json()["items"]
+    assert trashed["original"]["record_name"] == "Plan"
+    assert datetime.fromisoformat(trashed["purge_at"]) - datetime.fromisoformat(
+        trashed["deleted_at"]
+    ) == timedelta(days=7)
+    assert (await work.api("POST", f"/trash/attachments/{file['id']}/restore")).status_code == 204
+    assert await files_of(board, task) == [file]
+    assert (await work.api("GET", f"/attachments/{file['id']}")).content == XLSX
+
+
+async def test_admin_manages_any_trashed_file_in_their_organization(board: Board) -> None:
+    work = board.work
+    task = await board.create(Name="Plan")
+    [file] = (await upload(board, task, "editor")).json()["data"][board.f["Files"]]
+    await work.api("DELETE", f"/attachments/{file['id']}", "editor")
+    url = f"/trash/attachments/{file['id']}"
+    assert (await work.api("GET", "/trash/attachments", "editor")).json()["items"][0]["can_restore"]
+    assert_problem(await work.api("DELETE", url, "editor"), 403)
+    assert_problem(await work.api("GET", f"{url}/download", "editor"), 403)
+    assert_problem(await work.api("POST", f"{url}/restore", "viewer"), 404)
+    assert_problem(await work.api("DELETE", url, "other_admin"), 404)
+    assert_problem(await work.api("GET", f"{url}/download", "other_admin"), 404)
+    assert (await work.api("GET", "/trash/attachments", "other_admin")).json()["items"] == []
+
+    await work.api(
+        "PUT",
+        f"/fields/{board.f['Files']}/access/{board.user('editor')}",
+        json={"access": "hidden"},
+    )
+    assert (await work.api("GET", "/trash/attachments", "editor")).json()["items"] == []
+    assert_problem(await work.api("POST", f"{url}/restore", "editor"), 404)
+    assert (await work.api("GET", f"{url}/download")).content == XLSX
+    assert (await work.api("POST", f"{url}/restore")).status_code == 204
+
+    assert (await work.api("DELETE", f"/attachments/{file['id']}")).status_code == 200
+    assert (await work.api("DELETE", f"/records/{task['id']}")).status_code == 204
+    [orphan] = (await work.api("GET", "/trash/attachments")).json()["items"]
+    assert orphan["original"] is None and not orphan["can_restore"]
+    assert (await work.api("GET", f"{url}/download")).content == XLSX
+    assert (await work.api("DELETE", url)).status_code == 204
+    assert_problem(await work.api("GET", f"{url}/download"), 404)
+
+
+async def test_expiry_blocks_restore_and_sweep_only_removes_expired_files(
+    board: Board, files_dir: Path, migrated_database_url: str
+) -> None:
+    work = board.work
+    task = await board.create(Name="Plan")
+    file_ids = {}
+    for name in ("expired.pdf", "fresh.pdf"):
+        [file] = (await upload(board, task, name=name)).json()["data"][board.f["Files"]]
+        file_ids[name] = file["id"]
+        assert (await work.api("DELETE", f"/attachments/{file['id']}")).status_code == 200
+    engine = create_engine(migrated_database_url)
+    sessions = create_sessionmaker(engine)
+    try:
+        async with sessions.begin() as session:
+            await session.execute(
+                update(TrashedAttachment)
+                .where(TrashedAttachment.name == "expired.pdf")
+                .values(purge_at=TrashedAttachment.purge_at - timedelta(days=8))
+            )
+        items = (await work.api("GET", "/trash/attachments")).json()["items"]
+        assert [item["name"] for item in items] == ["fresh.pdf"]
+        expired = f"/trash/attachments/{file_ids['expired.pdf']}"
+        assert_problem(await work.api("POST", f"{expired}/restore"), 404)
+        assert len(on_disk(files_dir)) == 2
+        await purge_expired(sessions, str(files_dir))
+        assert len(on_disk(files_dir)) == 1
+        fresh = f"/trash/attachments/{file_ids['fresh.pdf']}/download"
+        assert (await work.api("GET", fresh)).content == XLSX
+    finally:
+        await engine.dispose()
 
 
 async def test_deleting_the_task_deletes_its_files(board: Board, files_dir: Path) -> None:

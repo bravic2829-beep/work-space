@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   CalendarRange,
   CheckCircle2,
+  Download,
   ListChecks,
   Plus,
   Target,
@@ -17,6 +18,7 @@ import {
   Badge,
   Button,
   Checkbox,
+  Drawer,
   EmptyState,
   LoadingState,
   PageHeader,
@@ -30,27 +32,26 @@ import { isOrgAdmin } from "@/features/auth/schema";
 import { useApiResource } from "@/lib/useApiResource";
 
 import { AlignmentTree } from "./AlignmentTree";
-import { getOverview, listCycles, listOkrDepartments, reviewKeyResult, reviewObjective } from "./api";
+import { exportOverviewUrl, getOverview, listCycles, listOkrDepartments, reviewKeyResult, reviewObjective, type OverviewQuery } from "./api";
 import { CycleDrawer } from "./CycleDrawer";
 import { CheckInDrawer, KeyResultDrawer, ReviewDrawer } from "./KeyResultDrawers";
 import { ObjectiveDrawer } from "./ObjectiveDrawer";
 import { OkrTable } from "./OkrTable";
+import { TaskLinksDrawer } from "./TaskLinksDrawer";
 import { percent, LEVEL_LABELS, LEVELS, type Objective, type OkrLevel } from "./schema";
 
-type Tab = "summary" | "risk" | "review" | "alignment";
+type Tab = "summary" | "risk" | "review";
 
 const TABS: TabItem<Tab>[] = [
   { id: "summary", label: "OKR Summary" },
   { id: "risk", label: "Risky KRs" },
   { id: "review", label: "Review" },
-  { id: "alignment", label: "Alignment" },
 ];
 
 const EMPTY: Record<Tab, string> = {
   summary: "Make an objective with “New objective”, then add its key results.",
   risk: "No key result is at risk or off track. They show here as soon as an owner says so in a check-in.",
   review: "Nothing to review in this cycle yet.",
-  alignment: "",
 };
 
 type Panel =
@@ -59,12 +60,12 @@ type Panel =
   | { kind: "check-in"; objectiveId: string; krId: string }
   | { kind: "review-objective"; objectiveId: string }
   | { kind: "review-key-result"; objectiveId: string; krId: string }
+  | { kind: "task-links"; objectiveId: string; krId: string }
+  | { kind: "alignment" }
   | { kind: "cycles" };
 
 /**
- * OKR: the objectives of a cycle (a quarter, a year) with the key results that measure them. Four
- * views of the same data, like the tabs of the design: the summary grouped by objective, the key
- * results at risk, the review (score and notes), and how the objectives support each other.
+ * Three OKR views of a cycle: its summary, risky key results, and review.
  */
 export function OkrScreen() {
   const { state: auth } = useAuth();
@@ -83,15 +84,16 @@ export function OkrScreen() {
   const cycle =
     list.find((c) => c.id === cycleId) ?? list.find((c) => c.status === "open") ?? list[0] ?? null;
   const risky = tab === "risk";
+  const query: OverviewQuery | null = cycle ? {
+    cycleId: cycle.id,
+    krStatus: risky ? ["at_risk", "off_track"] : undefined,
+    level,
+    mine,
+  } : null;
 
   const overview = useApiResource(
     (signal) =>
-      cycle
-        ? getOverview(
-            { cycleId: cycle.id, krStatus: risky ? ["at_risk", "off_track"] : undefined, level, mine },
-            signal,
-          )
-        : Promise.resolve(null),
+      query ? getOverview(query, signal) : Promise.resolve(null),
     "Could not load the OKRs.",
     [cycle?.id, risky, level, mine, refresh],
   );
@@ -112,13 +114,31 @@ export function OkrScreen() {
   const objectiveOf = (id: string): Objective | undefined =>
     all.find((o) => o.id === id) ?? objectives.find((o) => o.id === id);
   const found = (() => {
-    if (!panel || panel.kind === "cycles") return null;
+    if (!panel || panel.kind === "cycles" || panel.kind === "alignment") return null;
     const objective = panel.objectiveId ? objectiveOf(panel.objectiveId) : undefined;
     return objective ?? null;
   })();
 
   function renderPanel() {
     if (!panel) return null;
+    if (panel.kind === "alignment") {
+      return (
+        <Drawer open wide title="Alignment" onClose={close}>
+          <div className="p-4">
+            {everything.kind === "loading" && <LoadingState />}
+            {everything.kind === "error" && <Alert>{everything.message}</Alert>}
+            {everything.kind === "ready" && <AlignmentTree objectives={all}
+              onOpen={(o) => setPanel({ kind: "objective", objectiveId: o.id })} />}
+          </div>
+        </Drawer>
+      );
+    }
+    if (panel.kind === "task-links") {
+      const kr = found?.key_results.find((item) => item.id === panel.krId);
+      return kr && cycleOpen && kr.can_check_in
+        ? <TaskLinksDrawer key={kr.id} kr={kr} onChanged={again} onClose={close} />
+        : null;
+    }
     if (panel.kind === "cycles") {
       return (
         <CycleDrawer
@@ -261,6 +281,14 @@ export function OkrScreen() {
               />
             </div>
             <div className="flex items-center gap-2">
+              {query && (
+                <a href={exportOverviewUrl(query)} download
+                  className="inline-flex items-center gap-1.5 rounded-md border border-line-strong bg-surface px-2.5 py-1 text-xs font-medium whitespace-nowrap text-fg no-underline hover:bg-surface-muted">
+                  <Download className="size-4" aria-hidden />
+                  Export OKR to Excel
+                </a>
+              )}
+              <Button size="sm" onClick={() => setPanel({ kind: "alignment" })}>Alignment</Button>
               {admin && (
                 <Button size="sm" icon={CalendarRange} onClick={() => setPanel({ kind: "cycles" })}>
                   Cycles
@@ -304,13 +332,7 @@ export function OkrScreen() {
           <div role="tabpanel" id={`okr-panel-${tab}`} aria-labelledby={`okr-tab-${tab}`}>
             {overview.kind === "loading" && <LoadingState>Loading the OKRs…</LoadingState>}
             {overview.kind === "error" && <Alert>{overview.message}</Alert>}
-            {overview.kind === "ready" &&
-              (tab === "alignment" ? (
-                <AlignmentTree
-                  objectives={all}
-                  onOpen={(o) => setPanel({ kind: "objective", objectiveId: o.id })}
-                />
-              ) : (
+            {overview.kind === "ready" && (
                 <OkrTable
                   objectives={objectives}
                   mode={tab === "review" ? "review" : "summary"}
@@ -318,13 +340,14 @@ export function OkrScreen() {
                   emptyText={EMPTY[tab]}
                   onOpenKr={(kr, o) => setPanel({ kind: "check-in", objectiveId: o.id, krId: kr.id })}
                   onAddKr={(o) => setPanel({ kind: "key-result", objectiveId: o.id, krId: null })}
+                  onLinkTasks={(kr, o) => setPanel({ kind: "task-links", objectiveId: o.id, krId: kr.id })}
                   onEditObjective={(o) => setPanel({ kind: "objective", objectiveId: o.id })}
                   onReviewObjective={(o) => setPanel({ kind: "review-objective", objectiveId: o.id })}
                   onReviewKr={(kr, o) =>
                     setPanel({ kind: "review-key-result", objectiveId: o.id, krId: kr.id })
                   }
                 />
-              ))}
+            )}
           </div>
         </div>
       )}

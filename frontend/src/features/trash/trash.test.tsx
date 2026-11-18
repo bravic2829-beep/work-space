@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ToastProvider } from "@/components/ui";
 import { ApiError } from "@/lib/api/client";
 
-import { deleteForever, listTrash, restoreRecord } from "./api";
+import { deleteForever, listFileTrash, listTrash, restoreFile, restoreRecord } from "./api";
 import { isTrashItem, isTrashPage } from "./schema";
 import type { TrashItem } from "./schema";
 import { TrashScreen } from "./TrashScreen";
@@ -19,6 +19,8 @@ vi.mock("./api", () => ({
   listTrash: vi.fn(),
   restoreRecord: vi.fn(),
   deleteForever: vi.fn(),
+  listFileTrash: vi.fn(),
+  restoreFile: vi.fn(),
 }));
 
 const deleteMock = vi.mocked(deleteForever);
@@ -55,6 +57,32 @@ describe("trash shapes", () => {
 });
 
 describe("TrashScreen", () => {
+  it("restores a file from Files and hides permanent deletion for a regular user", async () => {
+    listMock.mockResolvedValue({ items: [], next_cursor: null });
+    vi.mocked(listFileTrash).mockResolvedValue({
+      items: [{
+        id: "a-1",
+        name: "plan.pdf",
+        deleted_by: "Editor",
+        deleted_at: "2026-11-18T10:00:00Z",
+        purge_at: "2026-11-25T10:00:00Z",
+        original: { table_id: "t-1", table_name: "Tasks", record_name: "Plan", field_name: "Files" },
+        can_restore: true,
+        can_delete_forever: false,
+      }],
+      next_cursor: null,
+    });
+    vi.mocked(restoreFile).mockResolvedValue(undefined);
+    render(<ToastProvider><TrashScreen /></ToastProvider>);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("tab", { name: "Files" }));
+    expect(await screen.findByText("plan.pdf")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete plan.pdf forever" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Restore plan.pdf" }));
+    expect(await screen.findByText("No deleted files.")).toBeInTheDocument();
+    expect(restoreFile).toHaveBeenCalledWith("a-1");
+  });
+
   it("lists what I deleted, with the table and the dates", async () => {
     listMock.mockResolvedValue({
       items: [item("r-1", "Launch")],

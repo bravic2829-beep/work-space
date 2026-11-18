@@ -1,12 +1,15 @@
 """OKR: cycles, objectives, key results, check-ins, the review, who sees and who may do what."""
 
 from decimal import Decimal
+from io import BytesIO
 from typing import Any
 
 import pytest
+from openpyxl import load_workbook
 
 from app.modules.okr import service
 from tests.api_helpers import assert_problem
+from tests.test_records import Board
 from tests.work_world import Work
 
 # --- small helpers -------------------------------------------------------------------------------
@@ -81,6 +84,66 @@ async def make_department(work: Work, head: str) -> str:
     )
     assert response.status_code == 201, response.text
     return str(response.json()["id"])
+
+
+async def test_task_links_respect_access_and_can_be_removed(
+    work: Work, cycle: dict[str, Any]
+) -> None:
+    obj = await add_kr(work, await objective(work, cycle))
+    kr = obj["key_results"][0]
+    board = Board(work, await work.make_table(await work.make_base(), template="tasks"))
+    record = await board.create(Name="Linked task")
+    url = f"/okr/key-results/{kr['id']}/tasks/{record['id']}"
+
+    assert_problem(await work.api("POST", url, "viewer"), 403)
+    assert_problem(await work.api("POST", url, "other_admin"), 404)
+    for _ in range(2):
+        assert (await work.api("POST", url)).status_code == 204
+    assert (await overview(work, cycle))["objectives"][0]["key_results"][0]["tasks"] == [
+        {"id": record["id"], "table_id": board.id, "title": "Linked task"}
+    ]
+    await work.api(
+        "PUT", f"/fields/{board.f['Name']}/access/{work.users['viewer']}", json={"access": "hidden"}
+    )
+    visible = (await overview(work, cycle, "viewer"))["objectives"][0]["key_results"][0]["tasks"]
+    assert visible == [{"id": record["id"], "table_id": board.id, "title": None}]
+    assert (await work.api("DELETE", url)).status_code == 204
+    assert (await overview(work, cycle))["objectives"][0]["key_results"][0]["tasks"] == []
+
+
+async def test_excel_uses_the_same_risk_filter_and_visibility(
+    work: Work, cycle: dict[str, Any]
+) -> None:
+    public = await objective(work, cycle, title="Public")
+    public = await add_kr(work, public, title="=2+2")
+    risk = public["key_results"][0]["id"]
+    assert (await check_in(work, risk, 60, status="at_risk")).status_code == 201
+    await add_kr(work, public, title="On track result")
+    private = await objective(work, cycle, title="Private objective", is_private=True)
+    private = await add_kr(work, private, title="Private result")
+    assert (
+        await check_in(work, private["key_results"][0]["id"], 10, status="at_risk")
+    ).status_code == 201
+
+    result = await work.api(
+        "GET",
+        "/okr/export",
+        "viewer",
+        params={
+            "cycle_id": cycle["id"],
+            "kr_status": "at_risk",
+        },
+    )
+    assert result.status_code == 200, result.text
+    assert result.headers["content-disposition"] == 'attachment; filename="okr-2026-10-01.xlsx"'
+    book = load_workbook(BytesIO(result.content))
+    assert book.sheetnames == ["Summary", "Objectives", "Key results"]
+    assert book["Objectives"].max_row == 2
+    rows = book["Key results"]
+    assert rows.max_row == 2
+    assert rows["A2"].value == "Public"
+    assert rows["B2"].value == "=2+2" and rows["B2"].data_type == "s"
+    assert rows["E2"].value == 0.6 and rows["E2"].number_format == "0.0%"
 
 
 # --- the arithmetic ------------------------------------------------------------------------------

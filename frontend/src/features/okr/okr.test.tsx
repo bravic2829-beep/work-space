@@ -45,7 +45,8 @@ vi.mock("@/features/tables/api", () => ({
   searchDirectory: vi.fn().mockResolvedValue([]),
   lookupUsers: vi.fn().mockResolvedValue([]),
 }));
-vi.mock("./api", () => ({
+vi.mock("./api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./api")>()),
   listCycles: vi.fn(),
   createCycle: vi.fn(),
   updateCycle: vi.fn(),
@@ -377,7 +378,6 @@ describe("OkrScreen", () => {
       "OKR Summary",
       "Risky KRs",
       "Review",
-      "Alignment",
     ]);
     expect(getOverviewMock).toHaveBeenCalledWith(
       { cycleId: "c-1", krStatus: undefined, level: null, mine: false },
@@ -390,6 +390,12 @@ describe("OkrScreen", () => {
     await open();
     await screen.findByRole("button", { name: HEADER });
     await user.click(screen.getByRole("tab", { name: "Risky KRs" }));
+    const exportLink = screen.getByRole("link", { name: "Export OKR to Excel" });
+    const url = new URL(exportLink.getAttribute("href") ?? "", "http://localhost");
+    expect(exportLink).toHaveAttribute("download");
+    expect(url.pathname).toBe("/api/v1/okr/export");
+    expect(url.searchParams.get("cycle_id")).toBe("c-1");
+    expect(url.searchParams.getAll("kr_status")).toEqual(["at_risk", "off_track"]);
     await waitFor(() =>
       expect(getOverviewMock).toHaveBeenCalledWith(
         { cycleId: "c-1", krStatus: ["at_risk", "off_track"], level: null, mine: false },
@@ -422,8 +428,9 @@ describe("OkrScreen", () => {
     const user = userEvent.setup();
     await open();
     await screen.findByRole("button", { name: HEADER });
-    await user.click(screen.getByRole("tab", { name: "Alignment" }));
+    await user.click(screen.getByRole("button", { name: "Alignment" }));
     expect(await screen.findByRole("list", { name: "Alignment" })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
     await user.click(screen.getByRole("tab", { name: "Review" }));
     expect(await screen.findByText("Score (0-1)")).toBeInTheDocument();
   });

@@ -127,6 +127,18 @@ class Objective(Base):
     )
 
 
+class TaskLink(Base):
+    __tablename__ = "okr_task_links"
+    __table_args__ = (Index("ix_okr_task_links_record_id", "record_id"),)
+
+    key_result_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("okr_key_results.id", ondelete="CASCADE"), primary_key=True
+    )
+    record_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("records.id", ondelete="CASCADE"), primary_key=True
+    )
+
+
 class KeyResult(Base):
     __tablename__ = "okr_key_results"
     __table_args__ = (

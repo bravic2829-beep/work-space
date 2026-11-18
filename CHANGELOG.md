@@ -1,6 +1,6 @@
 # WorkBase: tình trạng dự án và nhật ký thay đổi
 
-Cập nhật: 17/11/2026. Ghi lại những gì đã làm, đang ở đâu, cách chạy, và việc tiếp theo.
+Cập nhật: 18/11/2026. Ghi lại những gì đã làm, đang ở đâu, cách chạy, và việc tiếp theo.
 Thiết kế chi tiết (kiến trúc, ma trận quyền, API) nằm ở `docs/DESIGN.md` (thư mục `docs/` đang nằm
 trong `.gitignore` nên chỉ có trên máy, không lên GitHub).
 
@@ -97,6 +97,15 @@ mỗi cột chọn *As their role allows*, *Read only* hoặc *Hidden*, lưu m�
 - Thêm file không đổi số phiên bản của task, nên không gây xung đột sửa.
 
 ## 5. Nhật ký thay đổi
+
+### 18/11/2026: Xuất Excel cho OKR
+- **Export OKR to Excel** xuất chu kỳ và các bộ lọc đang chọn, bao gồm Risky KRs, cấp Objective và Only mine.
+- File có ba sheet **Summary**, **Objectives** và **Key results**, gồm tiến độ, điểm, nhận xét và tên task liên kết mà người tải có quyền xem.
+
+### 18/11/2026: Ba tab OKR và liên kết task
+- Reports → OKR có ba tab **OKR Summary**, **Risky KRs** và **Review**. Mở cây mục tiêu qua nút **Alignment**.
+- Dòng Objective hiển thị tổng tiến độ ở Summary và trung bình tiến độ ở Review. Nhận xét dài xuống dòng trong bảng.
+- **Linked tasks** nối Key Result với công việc có sẵn (migration `0020`). Chủ KR hoặc người có quyền sửa Objective có thể gắn hoặc bỏ liên kết khi chu kỳ đang mở. Bảng chỉ hiện task và tên mà người xem có quyền thấy.
 
 ### 18/11/2026: Reports, Phase 3 (đợt 1): tiêu chí đánh giá và điểm hiệu suất theo tháng
 Tab mới **Performance** trong Reports. Trả lời câu hỏi "thêm tiêu chí đánh giá khác thế nào".

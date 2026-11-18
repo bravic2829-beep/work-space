@@ -125,6 +125,12 @@ class ReviewUpdate(BaseModel):
     to_improve: Long | None = None
 
 
+class LinkedTask(BaseModel):
+    id: uuid.UUID
+    table_id: uuid.UUID
+    title: str | None
+
+
 class KeyResultPublic(BaseModel):
     id: uuid.UUID
     objective_id: uuid.UUID
@@ -145,6 +151,7 @@ class KeyResultPublic(BaseModel):
     last_check_in_at: datetime | None
     # What the person who asks may do with this key result.
     can_check_in: bool
+    tasks: list[LinkedTask] = []
 
 
 # --- objectives ----------------------------------------------------------------------------------

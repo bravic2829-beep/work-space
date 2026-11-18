@@ -21,10 +21,16 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import delete, func, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import flush_or_conflict
 from app.core.errors import FORBIDDEN, ProblemError
+from app.modules.bases.models import Table, WorkBase
+from app.modules.bases.repository import live_conditions
+from app.modules.fields.models import Field
+from app.modules.fields.repository import list_fields
+from app.modules.fields.titles import title_field
 from app.modules.okr.models import (
     CheckIn,
     CycleStatus,
@@ -33,6 +39,7 @@ from app.modules.okr.models import (
     Objective,
     OkrCycle,
     OkrLevel,
+    TaskLink,
 )
 from app.modules.okr.schemas import (
     CheckInCreate,
@@ -44,6 +51,7 @@ from app.modules.okr.schemas import (
     KeyResultCreate,
     KeyResultPublic,
     KeyResultUpdate,
+    LinkedTask,
     ObjectiveCreate,
     ObjectivePublic,
     ObjectiveUpdate,
@@ -54,8 +62,16 @@ from app.modules.okr.schemas import (
     UserRef,
 )
 from app.modules.organizations.models import Department
-from app.modules.permissions.service import is_org_admin
+from app.modules.permissions.service import (
+    TableContext,
+    can_view_record,
+    is_org_admin,
+    load_table_context,
+)
+from app.modules.records import service as records
+from app.modules.records.models import Record
 from app.modules.users.models import User, UserStatus
+from app.modules.workspaces.models import Workspace
 
 MAX_KEY_RESULTS = 20
 MAX_CHECK_INS = 200
@@ -97,6 +113,64 @@ class Book:
     users: dict[uuid.UUID, User] = field(default_factory=dict)
     departments: dict[uuid.UUID, Department] = field(default_factory=dict)
     last_check_in: dict[uuid.UUID, datetime] = field(default_factory=dict)
+    tasks: dict[uuid.UUID, list[LinkedTask]] = field(default_factory=dict)
+
+
+async def _load_tasks(session: AsyncSession, actor: User, book: Book) -> None:
+    keys = [
+        kr.id
+        for objective_id, krs in book.key_results.items()
+        if can_see(actor, book.objectives[objective_id], book)
+        for kr in krs
+    ]
+    if not keys:
+        return
+    rows = await session.execute(
+        select(TaskLink.key_result_id, Record)
+        .join(Record, Record.id == TaskLink.record_id)
+        .join(Table, Table.id == Record.table_id)
+        .join(WorkBase, WorkBase.id == Table.base_id)
+        .join(Workspace, Workspace.id == WorkBase.workspace_id)
+        .where(
+            TaskLink.key_result_id.in_(keys),
+            Record.deleted_at.is_(None),
+            *live_conditions(actor.organization_id),
+        )
+        .order_by(Record.id)
+    )
+    contexts: dict[uuid.UUID, TableContext] = {}
+    titles: dict[uuid.UUID, Field | None] = {}
+    visible_tasks: dict[uuid.UUID, LinkedTask | None] = {}
+    for key, record in rows:
+        table_id = record.table_id
+        if record.id not in visible_tasks:
+            if table_id not in contexts:
+                contexts[table_id] = await load_table_context(session, actor, table_id)
+                titles[table_id] = title_field(await list_fields(session, table_id=table_id))
+            context = contexts[table_id]
+            visible_tasks[record.id] = None
+            if await can_view_record(session, actor, context, record):
+                title = titles[table_id]
+                visible = records.visible_columns(
+                    await records.fields_with_access(
+                        session,
+                        actor,
+                        context,
+                        is_creator=record.created_by == actor.id,
+                        record=record,
+                    )
+                )
+                value = (
+                    record.data.get(str(title.id))
+                    if title and any(col.id == title.id for col, _ in visible)
+                    else None
+                )
+                visible_tasks[record.id] = LinkedTask(
+                    id=record.id, table_id=table_id, title=value if isinstance(value, str) else None
+                )
+        task = visible_tasks[record.id]
+        if task is not None:
+            book.tasks.setdefault(key, []).append(task)
 
 
 async def _book(session: AsyncSession, objectives: list[Objective]) -> Book:
@@ -217,6 +291,7 @@ def _kr_public(actor: User, kr: KeyResult, objective: Objective, book: Book) -> 
         updated_at=kr.updated_at,
         last_check_in_at=book.last_check_in.get(kr.id),
         can_check_in=can_check_in(actor, kr, objective, book),
+        tasks=book.tasks.get(kr.id, []),
     )
 
 
@@ -323,6 +398,31 @@ async def _open_cycle(session: AsyncSession, objective: Objective) -> None:
         raise ProblemError(409, CLOSED)
 
 
+async def change_task_link(
+    session: AsyncSession,
+    actor: User,
+    key_result_id: uuid.UUID,
+    record_id: uuid.UUID,
+    *,
+    attach: bool,
+) -> None:
+    kr, objective, book = await _key_result(session, actor, key_result_id)
+    if not can_check_in(actor, kr, objective, book):
+        raise ProblemError(403, FORBIDDEN)
+    await _open_cycle(session, objective)
+    await records.load_record(session, actor, record_id, for_update=True)
+    if attach:
+        await session.execute(
+            insert(TaskLink)
+            .values(key_result_id=kr.id, record_id=record_id)
+            .on_conflict_do_nothing()
+        )
+    else:
+        await session.execute(
+            delete(TaskLink).where(TaskLink.key_result_id == kr.id, TaskLink.record_id == record_id)
+        )
+
+
 async def _person(session: AsyncSession, actor: User, user_id: uuid.UUID, name: str) -> User:
     user = (
         await session.execute(
@@ -342,6 +442,7 @@ async def _public_one(
     session: AsyncSession, actor: User, objective_id: uuid.UUID
 ) -> ObjectivePublic:
     objective, book = await _objective(session, actor, objective_id)
+    await _load_tasks(session, actor, book)
     return _objective_public(actor, objective, book)
 
 
@@ -442,6 +543,7 @@ async def overview(
         .all()
     )
     book = await _book(session, list(rows))
+    await _load_tasks(session, actor, book)
     only = set(kr_status) if kr_status else None
 
     def works_on(person: uuid.UUID, objective: Objective) -> bool:

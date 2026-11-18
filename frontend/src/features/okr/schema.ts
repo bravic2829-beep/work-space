@@ -49,6 +49,7 @@ export type KeyResult = {
   updated_at: string;
   last_check_in_at: string | null;
   can_check_in: boolean;
+  tasks?: { id: string; table_id: string; title: string | null }[];
 };
 
 export type Objective = {
@@ -145,7 +146,10 @@ function isKeyResult(value: unknown): value is KeyResult {
     isNumber(value.position) &&
     isString(value.updated_at) &&
     orNull(isString)(value.last_check_in_at) &&
-    isBoolean(value.can_check_in)
+    isBoolean(value.can_check_in) &&
+    (value.tasks === undefined || isArrayOf((task): task is NonNullable<KeyResult["tasks"]>[number] =>
+      isRecord(task) && isString(task.id) && isString(task.table_id) && orNull(isString)(task.title),
+    )(value.tasks))
   );
 }
 
