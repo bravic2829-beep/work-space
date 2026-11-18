@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.users.models import User
@@ -67,6 +67,18 @@ async def list_members(
         .order_by(User.employee_code)
     )
     return [(row[0], row[1]) for row in result.all()]
+
+
+async def count_admins(session: AsyncSession, *, workspace_id: uuid.UUID) -> int:
+    result = await session.execute(
+        select(func.count())
+        .select_from(WorkspaceMember)
+        .where(
+            WorkspaceMember.workspace_id == workspace_id,
+            WorkspaceMember.role == WorkspaceRole.ADMIN,
+        )
+    )
+    return int(result.scalar_one())
 
 
 async def get_member(

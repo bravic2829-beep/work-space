@@ -409,6 +409,41 @@ async def test_workspace_admin_manages_members(client: AsyncClient, world: World
     assert_problem(await client.get(path(world), headers=world.headers["outsider"]), 403)
 
 
+async def test_the_last_admin_cannot_be_demoted_or_removed(
+    client: AsyncClient, world: World
+) -> None:
+    headers = world.headers["admin"]
+    wsadmin = world.users["wsadmin"]
+    admin = world.users["admin"]
+
+    # Two admins: one can step down.
+    stepped_down = await client.patch(
+        path(world, f"/members/{wsadmin}"), json={"role": "editor"}, headers=headers
+    )
+    assert stepped_down.status_code == 200
+
+    # The one left can neither be demoted nor removed.
+    assert_problem(
+        await client.patch(
+            path(world, f"/members/{admin}"), json={"role": "editor"}, headers=headers
+        ),
+        409,
+    )
+    assert_problem(await client.delete(path(world, f"/members/{admin}"), headers=headers), 409)
+    members = (await client.get(path(world, "/members"), headers=headers)).json()
+    assert {m["employee_code"]: m["role"] for m in members}["ADMIN"] == "admin"
+
+    # Setting the role they already have is fine, and so is promoting someone else first.
+    same = await client.patch(
+        path(world, f"/members/{admin}"), json={"role": "admin"}, headers=headers
+    )
+    assert same.status_code == 200
+    await client.patch(path(world, f"/members/{wsadmin}"), json={"role": "admin"}, headers=headers)
+    assert (
+        await client.delete(path(world, f"/members/{admin}"), headers=headers)
+    ).status_code == 204
+
+
 async def test_membership_input_rules(
     client: AsyncClient, world: World, migrated_database_url: str
 ) -> None:
