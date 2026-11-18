@@ -88,7 +88,7 @@ def _cells(field: Field, value: Any, people: dict[str, str]) -> list[Any]:
         return [value if isinstance(value, int | float) and not isinstance(value, bool) else ""]
     if kind == FieldType.CHECKBOX:
         return ["Yes" if value else "No"]
-    if kind in (FieldType.SINGLE_SELECT, FieldType.MULTI_SELECT, FieldType.STATUS):
+    if kind in (FieldType.SELECT, FieldType.STATUS):
         return [_option_names(field, value)]
     if kind == FieldType.USER:
         return [_names(value, people)]

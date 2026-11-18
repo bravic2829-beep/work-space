@@ -138,7 +138,7 @@ async def seed_demo(session: AsyncSession, actor: User, password: str) -> SeedRe
             str(column["Name"].id): name,
             str(column["Assignee"].id): [str(ids[code])],
             str(column["Status"].id): kinds[kind],
-            str(column["Priority"].id): priority[level],
+            str(column["Priority"].id): [priority[level]],
             str(column["Due date"].id): (today + timedelta(days=days)).isoformat(),
         }
         if progress:

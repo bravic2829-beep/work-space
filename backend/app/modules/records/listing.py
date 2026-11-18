@@ -28,6 +28,7 @@ from sqlalchemy import (
     select,
     true,
 )
+from sqlalchemy.dialects.postgresql import array
 
 from app.core.errors import ProblemError
 from app.core.pagination import decode_cursor, encode_cursor
@@ -46,24 +47,24 @@ MAX_IN_VALUES = 100
 # SQLAlchemy columns and expressions have unrelated static types, so they are typed loosely.
 Expression = Any
 
-TEXT_TYPES = {FieldType.TEXT, FieldType.LONG_TEXT, FieldType.URL}
+TEXT_TYPES = {FieldType.TEXT, FieldType.LONG_TEXT}
 NUMBER_TYPES = {FieldType.NUMBER, FieldType.AUTO_NUMBER}
-SELECT_TYPES = {FieldType.SINGLE_SELECT, FieldType.STATUS}
-LIST_TYPES = {FieldType.MULTI_SELECT, FieldType.USER}
+# Sorted by the position of the option in the settings. A select holds a list: it is sorted by
+# its first option.
+SELECT_TYPES = {FieldType.SELECT, FieldType.STATUS}
+LIST_TYPES = {FieldType.SELECT, FieldType.USER}
 
 _ORDER_OPS = ("gt", "gte", "lt", "lte")
 OPERATORS: dict[FieldType, tuple[str, ...]] = {
     FieldType.TEXT: ("eq", "neq", "contains", "is_empty", "is_not_empty"),
     FieldType.LONG_TEXT: ("eq", "neq", "contains", "is_empty", "is_not_empty"),
-    FieldType.URL: ("eq", "neq", "contains", "is_empty", "is_not_empty"),
     FieldType.NUMBER: ("eq", "neq", *_ORDER_OPS, "is_empty", "is_not_empty"),
     FieldType.AUTO_NUMBER: ("eq", "neq", *_ORDER_OPS),
     FieldType.DATE: ("eq", "neq", *_ORDER_OPS, "is_empty", "is_not_empty"),
     FieldType.CREATED_TIME: ("eq", "neq", *_ORDER_OPS),
     FieldType.CHECKBOX: ("eq", "neq"),
-    FieldType.SINGLE_SELECT: ("eq", "neq", "in", "is_empty", "is_not_empty"),
+    FieldType.SELECT: ("eq", "neq", "in", "contains", "is_empty", "is_not_empty"),
     FieldType.STATUS: ("eq", "neq", "in", "is_empty", "is_not_empty"),
-    FieldType.MULTI_SELECT: ("contains", "is_empty", "is_not_empty"),
     FieldType.USER: ("contains", "is_empty", "is_not_empty"),
     FieldType.CREATED_BY: ("eq", "neq", "in"),
     FieldType.LINK_RECORD: ("contains", "is_empty", "is_not_empty"),
@@ -156,7 +157,7 @@ def _clean_value(field: Field, op: str, value: Any, name: str) -> Any:
             if "\x00" in value:
                 raise ValueError("Text cannot contain the NUL character.")
             return value
-        if field.type in SELECT_TYPES or field.type == FieldType.MULTI_SELECT:
+        if field.type in SELECT_TYPES:
             if not isinstance(value, str) or value not in option_ids(field.config):
                 raise ValueError("Must be the id of one of the options.")
             return value
@@ -197,11 +198,26 @@ def parse_filter(raw: str | None, fields: dict[str, Field]) -> list[Expression]:
     return conditions
 
 
+def _select_condition(field: Field, op: str, value: Any, name: str) -> Expression:
+    """A select holds a list of option ids: `eq` and `contains` ask whether the option is in the
+    list, `in` whether any of the options is."""
+    key = str(field.id)
+    if op == "in":
+        if not isinstance(value, list) or not 0 < len(value) <= MAX_IN_VALUES:
+            raise _bad(name, f"Must be a list of 1 to {MAX_IN_VALUES} values.")
+        cleaned = [_clean_value(field, op, item, name) for item in value]
+        return Record.data[key].has_any(array(cleaned))
+    has_option = Record.data.contains({key: [_clean_value(field, op, value, name)]})
+    return ~has_option if op == "neq" else has_option
+
+
 def _condition(field: Field, op: str, value: Any, name: str) -> Expression:
     if op == "is_empty":
         return _is_empty(field)
     if op == "is_not_empty":
         return ~_is_empty(field)
+    if field.type == FieldType.SELECT:
+        return _select_condition(field, op, value, name)
     if op == "in":
         if not isinstance(value, list) or not 0 < len(value) <= MAX_IN_VALUES:
             raise _bad(name, f"Must be a list of 1 to {MAX_IN_VALUES} values.")
@@ -211,7 +227,7 @@ def _condition(field: Field, op: str, value: Any, name: str) -> Expression:
     clean = _clean_value(field, op, value, name)
     if field.type == FieldType.LINK_RECORD:
         return _has_link(field, clean)
-    if field.type == FieldType.MULTI_SELECT or field.type == FieldType.USER:
+    if field.type == FieldType.USER:
         return Record.data.contains({str(field.id): [str(clean)]})
     expression = value_expression(field)
     if field.type == FieldType.CREATED_BY:
@@ -259,9 +275,12 @@ def _sort_expression(field: Field) -> Expression:
         options = field.config.get("options", [])
         if not options:
             return literal(0)
+        chosen = (
+            Record.data[str(field.id)][0].astext if field.type == FieldType.SELECT else _text(field)
+        )
         return case(
             {option["id"]: index for index, option in enumerate(options)},
-            value=_text(field),
+            value=chosen,
             else_=None,
         )
     return value_expression(field)

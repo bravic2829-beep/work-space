@@ -35,10 +35,20 @@ OPTIONS = {"options": [{"id": "a", "name": "A"}, {"id": "b", "name": "B"}]}
             "2026-11-13T02:00:00Z",
         ),
         (FieldType.CHECKBOX, {}, True, True),
-        (FieldType.URL, {}, "https://example.com/a?b=1", "https://example.com/a?b=1"),
-        (FieldType.SINGLE_SELECT, OPTIONS, "a", "a"),
+        (
+            FieldType.TEXT,
+            {"format": "url"},
+            "https://example.com/a?b=1",
+            "https://example.com/a?b=1",
+        ),
+        (FieldType.TEXT, {"format": "email"}, " a.b@example.com ", "a.b@example.com"),
+        (FieldType.TEXT, {"format": "phone"}, "+84 912 345 678", "+84 912 345 678"),
+        (FieldType.SELECT, OPTIONS, ["a"], ["a"]),
         (FieldType.STATUS, OPTIONS, "b", "b"),
-        (FieldType.MULTI_SELECT, OPTIONS, ["a", "b", "a"], ["a", "b"]),
+        (FieldType.SELECT, {**OPTIONS, "multiple": True}, ["a", "b", "a"], ["a", "b"]),
+        (FieldType.NUMBER, {"precision": 0, "min": 0, "max": 100}, 100, 100),
+        (FieldType.TEXT, {"max_length": 5}, "12345", "12345"),
+        (FieldType.LONG_TEXT, {"max_length": 5}, "12345", "12345"),
         (
             FieldType.USER,
             {"multiple": True},
@@ -70,13 +80,21 @@ def test_valid_values(
         (FieldType.DATE, {"include_time": True}, "2026-11-13"),
         (FieldType.CHECKBOX, {}, "yes"),
         (FieldType.CHECKBOX, {}, 1),
-        (FieldType.URL, {}, "javascript:alert(1)"),
-        (FieldType.URL, {}, "data:text/html,<script>"),
-        (FieldType.URL, {}, "https://exa mple.com"),
-        (FieldType.SINGLE_SELECT, OPTIONS, "zzz"),
-        (FieldType.SINGLE_SELECT, OPTIONS, ["a"]),
-        (FieldType.MULTI_SELECT, OPTIONS, ["a", "zzz"]),
-        (FieldType.MULTI_SELECT, OPTIONS, "a"),
+        (FieldType.TEXT, {"format": "url"}, "javascript:alert(1)"),
+        (FieldType.TEXT, {"format": "url"}, "data:text/html,<script>"),
+        (FieldType.TEXT, {"format": "url"}, "https://exa mple.com"),
+        (FieldType.TEXT, {"format": "email"}, "not an email"),
+        (FieldType.TEXT, {"format": "email"}, "a@b"),
+        (FieldType.TEXT, {"format": "phone"}, "call me"),
+        (FieldType.TEXT, {"max_length": 5}, "123456"),
+        (FieldType.LONG_TEXT, {"max_length": 5}, "123456"),
+        (FieldType.NUMBER, {"precision": 0, "min": 0}, -1),
+        (FieldType.NUMBER, {"precision": 0, "max": 100}, 101),
+        (FieldType.SELECT, OPTIONS, ["zzz"]),
+        (FieldType.SELECT, OPTIONS, "a"),
+        (FieldType.SELECT, OPTIONS, ["a", "b"]),
+        (FieldType.SELECT, {**OPTIONS, "multiple": True}, ["a", "zzz"]),
+        (FieldType.STATUS, OPTIONS, ["a"]),
         (FieldType.USER, {"multiple": True}, "not-a-list"),
         (FieldType.USER, {"multiple": True}, ["not-a-uuid"]),
         (
@@ -135,13 +153,13 @@ def test_status_gets_default_options_with_kinds() -> None:
         (FieldType.TEXT, {"anything": 1}),
         (FieldType.DATE, {"include_time": "yes"}),
         (FieldType.USER, {"multiple": 1}),
-        (FieldType.SINGLE_SELECT, {"options": "nope"}),
-        (FieldType.SINGLE_SELECT, {"options": [{"name": "A"}, {"name": "a"}]}),
-        (FieldType.SINGLE_SELECT, {"options": [{"name": ""}]}),
-        (FieldType.SINGLE_SELECT, {"options": [{"name": "A", "kind": "done"}]}),
-        (FieldType.SINGLE_SELECT, {"options": [{"name": "A", "color": "red; x"}]}),
-        (FieldType.SINGLE_SELECT, {"options": [{"id": "invented", "name": "A"}]}),
-        (FieldType.SINGLE_SELECT, {"options": [{"name": "A"}] * 2}),
+        (FieldType.SELECT, {"options": "nope"}),
+        (FieldType.SELECT, {"options": [{"name": "A"}, {"name": "a"}]}),
+        (FieldType.SELECT, {"options": [{"name": ""}]}),
+        (FieldType.SELECT, {"options": [{"name": "A", "kind": "done"}]}),
+        (FieldType.SELECT, {"options": [{"name": "A", "color": "red; x"}]}),
+        (FieldType.SELECT, {"options": [{"id": "invented", "name": "A"}]}),
+        (FieldType.SELECT, {"options": [{"name": "A"}] * 2}),
         (FieldType.STATUS, {"options": [{"name": "A", "kind": "finished"}]}),
         (FieldType.LINK_RECORD, {}),
         (FieldType.LINK_RECORD, {"table_id": "nope"}),
@@ -154,22 +172,24 @@ def test_invalid_configs_are_rejected(field_type: FieldType, config: dict[str, A
 
 
 def test_options_keep_their_id_when_renamed() -> None:
-    first = normalize_config(FieldType.SINGLE_SELECT, {"options": [{"name": "Open"}]})
+    first = normalize_config(FieldType.SELECT, {"options": [{"name": "Open"}]})
     option_id = first["options"][0]["id"]
     again = normalize_config(
-        FieldType.SINGLE_SELECT,
+        FieldType.SELECT,
         {"options": [{"id": option_id, "name": "Opened"}, {"name": "New"}]},
         existing=first,
     )
-    assert again["options"][0] == {"id": option_id, "name": "Opened"}
+    assert again["options"][0] == {
+        "id": option_id,
+        "name": "Opened",
+        "color": first["options"][0]["color"],
+    }
     assert again["options"][1]["id"] != option_id
 
 
 def test_too_many_options_are_rejected() -> None:
     with pytest.raises(FieldConfigError):
-        normalize_config(
-            FieldType.SINGLE_SELECT, {"options": [{"name": f"o{i}"} for i in range(101)]}
-        )
+        normalize_config(FieldType.SELECT, {"options": [{"name": f"o{i}"} for i in range(101)]})
 
 
 @pytest.mark.parametrize(

@@ -53,12 +53,13 @@ describe("adding a column", () => {
   });
 
   it("takes the options of a choice column one per line", async () => {
-    const user = await fill("Stage", "single_select");
+    const user = await fill("Stage", "select");
     await user.type(screen.getByLabelText("Options (one per line)"), "Open{Enter}  Closed  {Enter}{Enter}");
     await user.click(screen.getByRole("button", { name: "Add column" }));
     await waitFor(() => expect(createFieldMock).toHaveBeenCalled());
     expect(createFieldMock.mock.calls[0][1].config).toEqual({
       options: [{ name: "Open" }, { name: "Closed" }],
+      multiple: false,
     });
   });
 
@@ -86,33 +87,98 @@ describe("adding a column", () => {
     expect(createFieldMock.mock.calls[0][1].config).toEqual({ include_time: true });
   });
 
-  it("picks the date by hand unless told otherwise", async () => {
-    const user = await fill("Due", "date");
-    expect(screen.getByLabelText("How is the date set?")).toHaveValue("manual");
-    await user.click(screen.getByRole("button", { name: "Add column" }));
-    await waitFor(() => expect(createFieldMock).toHaveBeenCalled());
-    expect(createFieldMock.mock.calls[0][1].config).toEqual({ include_time: false });
+  it("has no way to fill a date automatically any more", async () => {
+    await fill("Due", "date");
+    expect(screen.queryByLabelText("How is the date set?")).not.toBeInTheDocument();
   });
 
-  it("can fill the date when the record is created", async () => {
-    const user = await fill("Created on", "date");
-    await user.selectOptions(screen.getByLabelText("How is the date set?"), "created");
-    expect(screen.getByText(/The day the record is made is filled in/)).toBeInTheDocument();
-    await user.click(screen.getByLabelText("Include the time"));
+  it("can allow more than one choice in a choice list", async () => {
+    const user = await fill("Tags", "select");
+    await user.type(screen.getByLabelText("Options (one per line)"), "x{Enter}y");
+    await user.click(screen.getByLabelText("Allow more than one choice"));
     await user.click(screen.getByRole("button", { name: "Add column" }));
     await waitFor(() => expect(createFieldMock).toHaveBeenCalled());
     expect(createFieldMock.mock.calls[0][1].config).toEqual({
-      include_time: true,
-      fill: "created",
+      options: [{ name: "x" }, { name: "y" }],
+      multiple: true,
     });
   });
 
-  it("forgets the mode when the type changes to something else", async () => {
-    const user = await fill("X", "date");
-    await user.selectOptions(screen.getByLabelText("How is the date set?"), "created");
-    await user.selectOptions(screen.getByLabelText("Type"), "text");
-    await user.selectOptions(screen.getByLabelText("Type"), "date");
-    expect(screen.getByLabelText("How is the date set?")).toHaveValue("manual");
+  it("shows the color each new option will get", async () => {
+    const user = await fill("Stage", "select");
+    await user.type(screen.getByLabelText("Options (one per line)"), "Open{Enter}Closed");
+    const preview = screen.getByLabelText("Preview of the options");
+    expect(preview.children).toHaveLength(2);
+    expect((preview.children[0] as HTMLElement).style.backgroundColor).toBe("rgb(229, 72, 77)");
+  });
+
+  it("makes a text column with a format and a length limit", async () => {
+    const user = await fill("Contact", "text");
+    await user.selectOptions(screen.getByLabelText("Format"), "email");
+    await user.type(screen.getByLabelText("Longest text"), "80");
+    await user.click(screen.getByRole("button", { name: "Add column" }));
+    await waitFor(() => expect(createFieldMock).toHaveBeenCalled());
+    expect(createFieldMock.mock.calls[0][1].config).toEqual({ format: "email", max_length: 80 });
+  });
+
+  it("sends the hint, the unique flag and the preset value only when they are set", async () => {
+    const user = await fill("SKU", "text");
+    await user.type(screen.getByLabelText("Hint"), "  Stock code  ");
+    await user.click(screen.getByLabelText("Unique"));
+    await user.type(screen.getByLabelText("Value for new records"), "A-0");
+    await user.click(screen.getByRole("button", { name: "Add column" }));
+    await waitFor(() => expect(createFieldMock).toHaveBeenCalled());
+    expect(createFieldMock.mock.calls[0][1]).toEqual({
+      name: "SKU",
+      type: "text",
+      config: {},
+      description: "Stock code",
+      unique: true,
+      default: "A-0",
+    });
+  });
+
+  it("offers uniqueness only to text and numbers", async () => {
+    const user = await fill("X", "text");
+    expect(screen.getByLabelText("Unique")).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Type"), "long_text");
+    expect(screen.queryByLabelText("Unique")).not.toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Type"), "number");
+    expect(screen.getByLabelText("Unique")).toBeInTheDocument();
+  });
+
+  it("limits a number and shows it as money", async () => {
+    const user = await fill("Price", "number");
+    await user.type(screen.getByLabelText("Lowest"), "0");
+    await user.type(screen.getByLabelText("Highest"), "1000");
+    await user.selectOptions(screen.getByLabelText("Show as"), "currency");
+    await user.click(screen.getByRole("button", { name: "Add column" }));
+    await waitFor(() => expect(createFieldMock).toHaveBeenCalled());
+    expect(createFieldMock.mock.calls[0][1].config).toEqual({
+      min: 0,
+      max: 1000,
+      format: "currency",
+      currency: "VND",
+    });
+  });
+
+  it("limits the files a column takes", async () => {
+    const user = await fill("Files", "attachment");
+    await user.type(screen.getByLabelText("Most files"), "3");
+    await user.type(screen.getByLabelText("Only these files"), ".pdf, image/*");
+    await user.click(screen.getByRole("button", { name: "Add column" }));
+    await waitFor(() => expect(createFieldMock).toHaveBeenCalled());
+    expect(createFieldMock.mock.calls[0][1].config).toEqual({
+      max_files: 3,
+      accept: [".pdf", "image/*"],
+    });
+  });
+
+  it("forgets the settings when the type changes to something else", async () => {
+    const user = await fill("X", "text");
+    await user.type(screen.getByLabelText("Hint"), "keep?");
+    await user.selectOptions(screen.getByLabelText("Type"), "number");
+    expect(screen.getByLabelText("Hint")).toHaveValue("");
   });
 
   it("links to another table of the same base", async () => {

@@ -23,6 +23,9 @@ export function makeField(
     semantic: null,
     grants_view: false,
     is_required: false,
+    unique: false,
+    default: null,
+    description: null,
     position: 0,
     access: "edit",
     ...overrides,
@@ -32,16 +35,18 @@ export function makeField(
 export const NAME = makeField("f-name", "Name", "text");
 export const POINTS = makeField("f-points", "Points", "number", { config: { precision: 0 } });
 export const DONE = makeField("f-done", "Done", "checkbox");
-export const PRIORITY = makeField("f-priority", "Priority", "single_select", {
+export const PRIORITY = makeField("f-priority", "Priority", "select", {
   config: {
+    multiple: false,
     options: [
       { id: "o-high", name: "High" },
       { id: "o-low", name: "Low" },
     ],
   },
 });
-export const TAGS = makeField("f-tags", "Tags", "multi_select", {
+export const TAGS = makeField("f-tags", "Tags", "select", {
   config: {
+    multiple: true,
     options: [
       { id: "o-x", name: "x" },
       { id: "o-y", name: "y" },

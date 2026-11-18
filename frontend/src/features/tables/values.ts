@@ -23,12 +23,11 @@ const COMPUTED: ReadonlySet<FieldType> = new Set([
 const SORTABLE: ReadonlySet<FieldType> = new Set([
   "text",
   "long_text",
-  "url",
   "number",
   "auto_number",
   "date",
   "checkbox",
-  "single_select",
+  "select",
   "status",
   "created_time",
 ]);
@@ -61,8 +60,42 @@ export function optionName(field: FieldItem, id: unknown): string {
   return optionsOf(field).find((option) => option.id === id)?.name ?? "";
 }
 
+/** People and links hold many unless told otherwise; a select holds one unless told otherwise. */
 export function isMultiple(field: FieldItem): boolean {
-  return field.config.multiple !== false;
+  return field.type === "select" ? field.config.multiple === true : field.config.multiple !== false;
+}
+
+export type TextFormat = "plain" | "url" | "email" | "phone";
+
+export function textFormat(field: FieldItem): TextFormat {
+  const format = field.config.format;
+  return format === "url" || format === "email" || format === "phone" ? format : "plain";
+}
+
+export function maxLengthOf(field: FieldItem): number | undefined {
+  const limit = field.config.max_length;
+  return typeof limit === "number" ? limit : undefined;
+}
+
+/** A number as the column wants it shown: plain, a percentage, or money. */
+export function formatNumber(field: FieldItem, value: unknown): string {
+  if (typeof value !== "number") return String(value);
+  const precision = typeof field.config.precision === "number" ? field.config.precision : 0;
+  if (field.config.format === "percent") return `${value.toFixed(precision)}%`;
+  if (field.config.format === "currency") {
+    const code = typeof field.config.currency === "string" ? field.config.currency : "VND";
+    try {
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: code,
+        minimumFractionDigits: precision,
+        maximumFractionDigits: precision,
+      }).format(value);
+    } catch {
+      return `${value.toFixed(precision)} ${code}`;
+    }
+  }
+  return value.toFixed(precision);
 }
 
 export function linkTarget(field: FieldItem): string | null {
@@ -94,13 +127,14 @@ export function displayValue(
   switch (field.type) {
     case "checkbox":
       return value === true ? "✓" : "";
-    case "single_select":
     case "status":
       return optionName(field, value);
-    case "multi_select":
+    case "select":
       return Array.isArray(value)
         ? value.map((id) => optionName(field, id)).filter(Boolean).join(", ")
         : "";
+    case "number":
+      return formatNumber(field, value);
     case "user":
       return Array.isArray(value)
         ? value.map((id) => names.get(String(id)) ?? "…").join(", ")
@@ -135,7 +169,7 @@ export function draftFromValue(field: FieldItem, value: unknown): Draft {
   switch (field.type) {
     case "checkbox":
       return value === true;
-    case "multi_select":
+    case "select":
     case "user":
     case "link_record":
       return Array.isArray(value) ? value.map(String) : [];
@@ -150,21 +184,9 @@ export function draftFromValue(field: FieldItem, value: unknown): Draft {
   }
 }
 
-/**
- * What a date column set to "created" holds for a record made now, by the clock of this computer
- * (so somebody in Vietnam at 22:00 gets their own day): "YYYY-MM-DD", or a UTC moment when the
- * column has a time. Null for every other column.
- */
-export function createdDateValue(field: FieldItem, now: Date = new Date()): string | null {
-  if (field.type !== "date" || field.config.fill !== "created") return null;
-  if (field.config.include_time === true) return now.toISOString();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-}
-
-/** The start of a form for a new record: an automatic date is already there (and can be changed). */
+/** The start of a form for a new record: the preset value of each column is already there. */
 export function newRecordDraft(field: FieldItem): Draft {
-  return draftFromValue(field, createdDateValue(field) ?? undefined);
+  return draftFromValue(field, field.default ?? undefined);
 }
 
 function toLocalInput(iso: string): string {
@@ -184,7 +206,9 @@ export function parseDraft(field: FieldItem, draft: Draft): Parsed {
   switch (field.type) {
     case "checkbox":
       return { ok: true, value: draft === true };
-    case "multi_select":
+    case "select":
+      // No choice clears the cell.
+      return { ok: true, value: Array.isArray(draft) && draft.length > 0 ? draft : null };
     case "user":
     case "link_record":
       return { ok: true, value: Array.isArray(draft) ? draft : [] };
@@ -207,7 +231,6 @@ export function parseDraft(field: FieldItem, draft: Draft): Parsed {
       }
       return { ok: true, value: text };
     }
-    case "single_select":
     case "status":
       return { ok: true, value: draft === "" ? null : String(draft) };
     default: {
@@ -278,7 +301,6 @@ export function operatorsFor(field: FieldItem): OperatorChoice[] {
   switch (field.type) {
     case "text":
     case "long_text":
-    case "url":
       return [
         { op: "eq", label: "is", needsValue: true },
         { op: "neq", label: "is not", needsValue: true },
@@ -293,15 +315,19 @@ export function operatorsFor(field: FieldItem): OperatorChoice[] {
       return COMPARE;
     case "checkbox":
       return [{ op: "eq", label: "is", needsValue: true }];
-    case "single_select":
     case "status":
       return [
         { op: "eq", label: "is", needsValue: true },
         { op: "neq", label: "is not", needsValue: true },
         ...IS_EMPTY,
       ];
-    case "multi_select":
-      return [{ op: "contains", label: "contains", needsValue: true }, ...IS_EMPTY];
+    case "select":
+      // A select holds a list: "is" asks whether the option is among the chosen ones.
+      return [
+        { op: "eq", label: isMultiple(field) ? "includes" : "is", needsValue: true },
+        { op: "neq", label: isMultiple(field) ? "does not include" : "is not", needsValue: true },
+        ...IS_EMPTY,
+      ];
     default:
       // People, links and the creator are compared by id, which is not something to type.
       // Files are not searched or filtered.
@@ -322,7 +348,7 @@ export function describeCondition(fields: FieldItem[], condition: Condition): st
   const op = operatorsFor(field).find((o) => o.op === condition.op);
   let value = "";
   if (op?.needsValue) {
-    if (field.type === "single_select" || field.type === "status" || field.type === "multi_select") {
+    if (field.type === "status" || field.type === "select") {
       value = optionName(field, condition.value);
     } else {
       value = String(condition.value);

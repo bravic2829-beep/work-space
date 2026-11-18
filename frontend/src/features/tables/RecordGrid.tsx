@@ -14,7 +14,6 @@ import { Fragment } from "react";
 
 import {
   Avatar,
-  Badge,
   Button,
   DataTable,
   EmptyState,
@@ -26,12 +25,13 @@ import { cn } from "@/lib/cn";
 import { formatShortDay } from "@/lib/format";
 
 import { attachmentUrl, formatSize } from "./attachments";
+import { optionColor } from "./colors";
 import { filesOf, type AttachmentItem, type FieldItem, type RecordItem, type SortColumn } from "./schema";
-import { StatusBadge } from "./StatusBadge";
+import { OptionBadge } from "./OptionBadge";
 import { statusKind } from "./taskWorkflow";
 import { describeTimer, isTimerField, timerHeadings, timerMoments } from "./timer";
 import { TimerCell } from "./TimerCell";
-import { displayValue, isSortable, optionsOf } from "./values";
+import { displayValue, isSortable, optionsOf, textFormat } from "./values";
 
 type Props = {
   fields: FieldItem[];
@@ -134,23 +134,28 @@ function PeopleCell({ ids, names }: { ids: unknown[]; names: ReadonlyMap<string,
   );
 }
 
-function isWebLink(text: string): boolean {
-  return /^https?:\/\//i.test(text);
+/** The address a text cell opens: a link, an email or a phone, by the format of its column. */
+function hrefOf(field: FieldItem, text: string): string | null {
+  const format = textFormat(field);
+  if (field.type !== "text" || text === "") return null;
+  if (format === "url") return /^https?:\/\//i.test(text) ? text : null;
+  if (format === "email") return `mailto:${text}`;
+  if (format === "phone") return `tel:${text.replace(/[^+0-9]/g, "")}`;
+  return null;
 }
 
-/** A choice shown as a small label; a status takes its colour from the kind of the option. */
+/** A choice shown as a small label on the color of its option. */
 function Choice({ field, value }: { field: FieldItem; value: unknown }) {
   const ids = Array.isArray(value) ? value : [value];
   const options = optionsOf(field);
   return (
-    <span className="inline-flex items-center gap-1">
+    <span className="inline-flex flex-wrap items-center gap-1">
       {ids.map((id) => {
-        const option = options.find((o) => o.id === id);
-        if (!option) return null;
-        return field.type === "status" && option.kind ? (
-          <StatusBadge key={option.id} name={option.name} kind={option.kind} />
-        ) : (
-          <Badge key={option.id}>{option.name}</Badge>
+        const index = options.findIndex((o) => o.id === id);
+        if (index < 0) return null;
+        const option = options[index];
+        return (
+          <OptionBadge key={option.id} name={option.name} color={optionColor(option, index)} />
         );
       })}
     </span>
@@ -304,8 +309,7 @@ export function RecordGrid({
                         >
                           <span className="truncate">{text || "(untitled)"}</span>
                         </button>
-                      ) : (field.type === "status" || field.type === "single_select" || field.type === "multi_select") &&
-                        text ? (
+                      ) : (field.type === "status" || field.type === "select") && text ? (
                         <Choice field={field} value={value} />
                       ) : field.semantic === "due_date" && field.type === "date" && text ? (
                         <DueCell
@@ -316,8 +320,12 @@ export function RecordGrid({
                       ) : field.type === "attachment" ? (
                         <FileLinks files={filesOf(value)} />                      ) : field.type === "user" && Array.isArray(value) && value.length > 0 ? (
                         <PeopleCell ids={value} names={names} />
-                      ) : field.type === "url" && isWebLink(text) ? (
-                        <a href={text} target="_blank" rel="noopener noreferrer">
+                      ) : hrefOf(field, text) ? (
+                        <a
+                          href={hrefOf(field, text) ?? undefined}
+                          target={textFormat(field) === "url" ? "_blank" : undefined}
+                          rel="noopener noreferrer"
+                        >
                           {text}
                         </a>
                       ) : field.type === "number" || field.type === "auto_number" ? (

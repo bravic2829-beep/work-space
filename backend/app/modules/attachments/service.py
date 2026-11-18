@@ -88,8 +88,14 @@ async def upload(
             .where(Attachment.record_id == record.id, Attachment.field_id == column.id)
         )
     ).scalar_one()
-    if count >= storage.MAX_FILES_PER_CELL:
-        raise ProblemError(409, f"At most {storage.MAX_FILES_PER_CELL} files fit in one column.")
+    most = min(
+        int(column.config.get("max_files", storage.MAX_FILES_PER_CELL)), storage.MAX_FILES_PER_CELL
+    )
+    if count >= most:
+        raise ProblemError(409, f"At most {most} files fit in one column.")
+    accept = column.config.get("accept")
+    if accept and not storage.is_accepted(name, accept):
+        raise ProblemError(415, f"This column only takes: {', '.join(accept)}.")
 
     root = settings.attachments_dir
     key = storage.new_key()

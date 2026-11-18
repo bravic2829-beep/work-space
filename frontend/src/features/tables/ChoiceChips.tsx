@@ -5,7 +5,9 @@ import { useId } from "react";
 
 import { cn } from "@/lib/cn";
 
-export type Choice = { id: string; name: string };
+import { inkFor, optionColor } from "./colors";
+
+export type Choice = { id: string; name: string; color?: string; kind?: string };
 
 type Props = {
   /** Names the group for screen readers. */
@@ -42,18 +44,19 @@ export function ChoiceChips({ label, options, value, onChange, multiple, disable
       aria-label={label}
       className="flex flex-wrap items-center gap-1.5"
     >
-      {options.map((option) => {
+      {options.map((option, index) => {
         const checked = value.includes(option.id);
+        // A chosen option is filled with its color; the others show it as a dot.
+        const color = optionColor(option, index);
         return (
           <label
             key={option.id}
             className={cn(
-              "inline-flex cursor-pointer items-center gap-1 rounded-full border px-3 py-1 text-sm font-medium select-none has-focus-visible:outline-2 has-focus-visible:outline-primary",
-              checked
-                ? "border-primary bg-primary-soft text-primary"
-                : "border-line-strong bg-surface text-fg hover:border-primary",
+              "inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium select-none has-focus-visible:outline-2 has-focus-visible:outline-primary",
+              checked ? "border-transparent" : "border-line-strong bg-surface text-fg hover:border-primary",
               disabled && "cursor-not-allowed opacity-60 hover:border-line-strong",
             )}
+            style={checked ? { backgroundColor: color, color: inkFor(color).color } : undefined}
           >
             <input
               type={multiple ? "checkbox" : "radio"}
@@ -64,6 +67,13 @@ export function ChoiceChips({ label, options, value, onChange, multiple, disable
               className="sr-only"
             />
             {checked && multiple && <span aria-hidden="true">✓</span>}
+            {!checked && (
+              <span
+                aria-hidden="true"
+                className="size-2 shrink-0 rounded-full"
+                style={{ backgroundColor: color }}
+              />
+            )}
             {option.name}
           </label>
         );

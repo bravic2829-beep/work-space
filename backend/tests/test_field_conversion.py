@@ -117,19 +117,19 @@ async def test_text_becomes_a_single_choice_by_matching_option_names(sheet: Shee
     await sheet.column("text")
     await sheet.add("Open", "closed", " OPEN ", "", None)
     # The options must be given: they are what the texts are matched against.
-    assert_problem(await sheet.convert("single_select"), 422)
+    assert_problem(await sheet.convert("select"), 422)
     options = {"options": [{"name": "Open"}, {"name": "Closed"}]}
-    response = await sheet.convert("single_select", options)
+    response = await sheet.convert("select", options)
     assert response.status_code == 200, response.text
     ids = {o["name"]: o["id"] for o in response.json()["config"]["options"]}
-    assert await sheet.values() == [ids["Open"], ids["Closed"], ids["Open"], None, None]
+    assert await sheet.values() == [[ids["Open"]], [ids["Closed"]], [ids["Open"]], None, None]
 
 
 async def test_a_text_without_a_matching_option_blocks_the_change(sheet: Sheet) -> None:
     await sheet.column("text")
     await sheet.add("Open", "Pending")
     options = {"options": [{"name": "Open"}, {"name": "Closed"}]}
-    assert_problem(await sheet.convert("single_select", options), 409)
+    assert_problem(await sheet.convert("select", options), 409)
     assert (await sheet.work.api("GET", f"/fields/{sheet.field['id']}")).json()["type"] == "text"
 
 
@@ -166,52 +166,63 @@ async def test_text_becomes_long_text_and_back(sheet: Sheet) -> None:
     assert await sheet.values() == ["hello"]
 
 
-async def test_single_choice_becomes_multiple_choice_and_back(sheet: Sheet) -> None:
-    field = await sheet.column("single_select", config={"options": [{"name": "A"}, {"name": "B"}]})
-    a, b = (o["id"] for o in field["config"]["options"])
-    await sheet.add(a, b, None)
-    response = await sheet.convert("multi_select")
-    assert response.status_code == 200, response.text
-    assert [o["id"] for o in response.json()["config"]["options"]] == [a, b]  # ids are kept
-    assert await sheet.values() == [[a], [b], None]
-    back = await sheet.convert("single_select")
-    assert back.status_code == 200, back.text
-    assert await sheet.values() == [a, b, None]
-
-
-async def test_multiple_choices_with_two_values_cannot_become_a_single_choice(
+async def test_a_select_becomes_multiple_and_back_without_touching_the_values(
     sheet: Sheet,
 ) -> None:
-    field = await sheet.column("multi_select", config={"options": [{"name": "A"}, {"name": "B"}]})
+    field = await sheet.column("select", config={"options": [{"name": "A"}, {"name": "B"}]})
+    assert field["config"]["multiple"] is False
+    a, b = (o["id"] for o in field["config"]["options"])
+    await sheet.add([a], [b], None)
+    url = f"/fields/{field['id']}"
+    wider = await sheet.work.api("PATCH", url, json={"config": {"multiple": True}})
+    assert wider.status_code == 200, wider.text
+    assert [o["id"] for o in wider.json()["config"]["options"]] == [a, b]  # ids are kept
+    assert await sheet.values() == [[a], [b], None]
+    back = await sheet.work.api("PATCH", url, json={"config": {"multiple": False}})
+    assert back.status_code == 200, back.text
+    assert await sheet.values() == [[a], [b], None]
+
+
+async def test_a_select_with_two_values_cannot_become_single(sheet: Sheet) -> None:
+    field = await sheet.column(
+        "select", config={"options": [{"name": "A"}, {"name": "B"}], "multiple": True}
+    )
     a, b = (o["id"] for o in field["config"]["options"])
     await sheet.add([a], [], [a, b])
-    assert_problem(await sheet.convert("single_select"), 409)
+    url = f"/fields/{field['id']}"
+    assert_problem(await sheet.work.api("PATCH", url, json={"config": {"multiple": False}}), 409)
+    assert_problem(await sheet.convert("status"), 409)
     assert await sheet.values() == [[a], [], [a, b]]
 
 
-async def test_multiple_choices_become_text_joined_by_commas(sheet: Sheet) -> None:
-    field = await sheet.column("multi_select", config={"options": [{"name": "A"}, {"name": "B"}]})
+async def test_a_multiple_select_becomes_text_joined_by_commas(sheet: Sheet) -> None:
+    field = await sheet.column(
+        "select", config={"options": [{"name": "A"}, {"name": "B"}], "multiple": True}
+    )
     a, b = (o["id"] for o in field["config"]["options"])
     await sheet.add([a, b], [b], [])
     assert (await sheet.convert("text")).status_code == 200
     assert await sheet.values() == ["A, B", "B", None]
 
 
-async def test_single_choice_and_status_convert_both_ways_keeping_ids(sheet: Sheet) -> None:
+async def test_select_and_status_convert_both_ways_keeping_ids_and_colors(sheet: Sheet) -> None:
     field = await sheet.column(
-        "single_select", config={"options": [{"name": "Open"}, {"name": "Shut"}]}
+        "select",
+        config={"options": [{"name": "Open", "color": "#123456"}, {"name": "Shut"}]},
     )
     open_id = field["config"]["options"][0]["id"]
-    await sheet.add(open_id)
+    await sheet.add([open_id])
     status = await sheet.convert("status")
     assert status.status_code == 200, status.text
     assert [o["kind"] for o in status.json()["config"]["options"]] == ["todo", "todo"]
     assert status.json()["config"]["options"][0]["id"] == open_id
+    assert status.json()["config"]["options"][0]["color"] == "#123456"
     assert await sheet.values() == [open_id]
-    plain = await sheet.convert("single_select")
+    plain = await sheet.convert("select")
     assert plain.status_code == 200, plain.text
     assert all("kind" not in o for o in plain.json()["config"]["options"])
-    assert await sheet.values() == [open_id]
+    assert plain.json()["config"]["multiple"] is False
+    assert await sheet.values() == [[open_id]]
 
 
 async def test_status_becomes_text(sheet: Sheet) -> None:
@@ -281,19 +292,16 @@ async def test_a_big_table_is_converted_in_chunks(sheet: Sheet, migrated_databas
     ("source", "target"),
     [
         ("text", "checkbox"),
-        ("text", "multi_select"),
         ("text", "status"),
         ("text", "user"),
         ("long_text", "number"),
         ("long_text", "date"),
         ("number", "date"),
-        ("number", "single_select"),
+        ("number", "select"),
         ("date", "number"),
         ("checkbox", "text"),
-        ("url", "text"),
         ("user", "text"),
-        ("single_select", "number"),
-        ("multi_select", "status"),
+        ("select", "number"),
         ("created_by", "text"),
         ("created_time", "date"),
         ("auto_number", "number"),
@@ -308,7 +316,7 @@ async def test_unsupported_changes_are_rejected(sheet: Sheet, source: str, targe
 async def test_fields_with_a_role_keep_their_type(work: Work) -> None:
     table = await work.make_table(await work.make_base(), "Tasks", template="tasks")
     by_name = {f["name"]: f["id"] for f in table["fields"]}
-    for name, target in (("Status", "single_select"), ("Assignee", "text"), ("Due date", "text")):
+    for name, target in (("Status", "select"), ("Assignee", "text"), ("Due date", "text")):
         response = await work.api("PATCH", f"/fields/{by_name[name]}", json={"type": target})
         assert_problem(response, 422)
 
@@ -345,10 +353,10 @@ async def test_bad_config_for_the_new_type_is_rejected(sheet: Sheet) -> None:
 
 async def test_an_option_that_records_use_cannot_be_removed(sheet: Sheet) -> None:
     field = await sheet.column(
-        "single_select", config={"options": [{"name": "A"}, {"name": "B"}, {"name": "C"}]}
+        "select", config={"options": [{"name": "A"}, {"name": "B"}, {"name": "C"}]}
     )
     a, b, c = field["config"]["options"]
-    await sheet.add(a["id"], a["id"], b["id"])
+    await sheet.add([a["id"]], [a["id"]], [b["id"]])
     url = f"/fields/{field['id']}"
 
     used = await sheet.work.api(
@@ -373,11 +381,13 @@ async def test_an_option_that_records_use_cannot_be_removed(sheet: Sheet) -> Non
         },
     )
     assert renamed.status_code == 200
-    assert await sheet.values() == [a["id"], a["id"], b["id"]]
+    assert await sheet.values() == [[a["id"]], [a["id"]], [b["id"]]]
 
 
 async def test_a_multiple_choice_option_in_use_cannot_be_removed(sheet: Sheet) -> None:
-    field = await sheet.column("multi_select", config={"options": [{"name": "A"}, {"name": "B"}]})
+    field = await sheet.column(
+        "select", config={"options": [{"name": "A"}, {"name": "B"}], "multiple": True}
+    )
     a, b = field["config"]["options"]
     await sheet.add([a["id"], b["id"]])
     response = await sheet.work.api(

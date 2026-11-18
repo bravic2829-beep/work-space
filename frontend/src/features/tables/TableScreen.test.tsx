@@ -68,7 +68,7 @@ function rowOf(text: string): HTMLElement {
 const lookupUsersMock = vi.mocked(lookupUsers);
 
 const alpha = makeRecord("r-1", { "f-name": "Alpha", "f-points": 10, "f-assignee": ["u-2"] });
-const beta = makeRecord("r-2", { "f-name": "Beta", "f-points": 5, "f-priority": "o-low" });
+const beta = makeRecord("r-2", { "f-name": "Beta", "f-points": 5, "f-priority": ["o-low"] });
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -313,7 +313,7 @@ describe("sorting", () => {
 
   it("has no sort button on columns that have no order", async () => {
     await renderTable();
-    expect(screen.queryByRole("button", { name: "Sort by Tags" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sort by Tags" })).toBeInTheDocument(); // by its first option
     expect(screen.queryByRole("button", { name: "Sort by Assignee" })).not.toBeInTheDocument();
   });
 });

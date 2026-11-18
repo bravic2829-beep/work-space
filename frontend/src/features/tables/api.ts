@@ -96,6 +96,10 @@ export type NewField = {
   type: FieldType;
   config?: Record<string, unknown>;
   is_required?: boolean;
+  unique?: boolean;
+  /** A preset value in the form of a cell. */
+  default?: unknown;
+  description?: string | null;
   /** The role of the column (assignee, status, due_date...). */
   semantic?: string | null;
 };
@@ -112,6 +116,10 @@ export type FieldPatch = {
   type?: FieldType;
   config?: Record<string, unknown>;
   is_required?: boolean;
+  unique?: boolean;
+  /** A preset value, or null to take it away. */
+  default?: unknown;
+  description?: string | null;
   /** A role (assignee, follower, status, due_date), or null to take the role away. */
   semantic?: string | null;
 };

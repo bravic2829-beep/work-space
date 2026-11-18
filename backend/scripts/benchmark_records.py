@@ -72,10 +72,13 @@ class Schema:
                 field_id = str(uuid.uuid4())
                 config: dict[str, Any] = {}
                 if kind in ("single_select", "multi_select"):
+                    # Both are the `select` type now; the kind only says how many options a
+                    # cell holds, so the old query cases keep their meaning.
                     config = {
                         "options": [
                             {"id": uuid.uuid4().hex, "name": f"Option {n}"} for n in range(5)
-                        ]
+                        ],
+                        "multiple": kind == "multi_select",
                     }
                 if kind == "number":
                     config = {"precision": 0}
@@ -111,7 +114,7 @@ def value_sql(field: dict[str, Any], user_ids: list[uuid.UUID]) -> str:
         array = "ARRAY[" + ",".join(f"'{i}'" for i in ids) + "]"
         pick = f"({array})[1 + (random() * 4)::int]"
         if kind == "single_select":
-            return f"to_jsonb({pick})"
+            return f"jsonb_build_array({pick})"
         return f"jsonb_build_array({pick}, ({array})[1])"
     if kind == "checkbox":
         return "to_jsonb(random() < 0.5)"
@@ -174,7 +177,7 @@ async def seed(url: str, records: int, field_count: int) -> dict[str, Any]:
                 uuid.UUID(field["id"]),
                 table,
                 field["name"],
-                field["kind"],
+                "select" if field["kind"] in ("single_select", "multi_select") else field["kind"],
                 json.dumps(field["config"]),
                 semantic,
                 field["assignee"],

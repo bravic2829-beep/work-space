@@ -28,6 +28,12 @@ type Props = {
   onChanged: (record: RecordItem) => void;
 };
 
+/** The kinds of file this column is limited to, as the `accept` of a file input. */
+function columnAccept(field: FieldItem): string | null {
+  const list = field.config.accept;
+  return Array.isArray(list) && list.length > 0 ? list.join(",") : null;
+}
+
 /**
  * The files of one column in the task panel: the list (each name downloads the file), and, for
  * somebody who may edit the column, a way to add files (the button, or drop them here) and to
@@ -143,7 +149,7 @@ export function AttachmentsField({ field, record, canEdit, onChanged }: Props) {
                 type="file"
                 multiple
                 hidden
-                accept={FILE_ACCEPT}
+                accept={columnAccept(field) ?? FILE_ACCEPT}
                 aria-label={`Choose files for ${field.name}`}
                 onChange={(event) => {
                   void add([...(event.target.files ?? [])]);

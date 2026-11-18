@@ -2,9 +2,13 @@
 
 import { useEffect, useState } from "react";
 
-import { Alert, Button, Checkbox, FormField, Input, Select, Textarea } from "@/components/ui";
+import { Alert, Button, FormField, Input, Select, Textarea } from "@/components/ui";
 
 import { createField, listTables } from "./api";
+import { PALETTE } from "./colors";
+import { FieldSettings } from "./FieldSettings";
+import { EMPTY_SETTINGS, type Settings } from "./columnRules";
+import { OptionBadge } from "./OptionBadge";
 import { FIELD_TYPES, type FieldItem, type FieldType, type TableSummary } from "./schema";
 import { errorMessage } from "@/lib/api/errors";
 
@@ -14,11 +18,9 @@ export const LABELS: Record<FieldType, string> = {
   number: "Number",
   date: "Date",
   checkbox: "Checkbox",
-  single_select: "Single choice",
-  multi_select: "Multiple choice",
+  select: "Choice list",
   status: "Status",
   user: "People",
-  url: "Link (URL)",
   link_record: "Link to records",
   created_by: "Created by",
   created_time: "Created time",
@@ -58,14 +60,12 @@ const ROLE_HINTS: Partial<Record<FieldType, string>> = {
   date: "Choose Due date so the task shows in Today's tasks when it is due. Without a role this is just a date.",
 };
 
-/** Adds a column. Choice fields take their options one per line. */
+/** Adds a column. Choice fields take their options one per line, and get a color each. */
 export function AddFieldForm({ tableId, baseId, existing = [], onCreated }: Props) {
   const [name, setName] = useState("");
   const [type, setType] = useState<FieldType>("text");
   const [options, setOptions] = useState("");
-  const [precision, setPrecision] = useState("0");
-  const [includeTime, setIncludeTime] = useState(false);
-  const [fill, setFill] = useState<"manual" | "created">("manual");
+  const [settings, setSettings] = useState<Settings>(EMPTY_SETTINGS);
   const [role, setRole] = useState("");
   const [target, setTarget] = useState("");
   const [tables, setTables] = useState<TableSummary[]>([]);
@@ -89,19 +89,16 @@ export function AddFieldForm({ tableId, baseId, existing = [], onCreated }: Prop
     .filter(Boolean);
 
   function configFor(): Record<string, unknown> {
-    if (type === "single_select" || type === "multi_select" || type === "status") {
-      const lines = optionLines;
-      // A status field without options gets the default four states from the server.
-      return type === "status" && lines.length === 0
-        ? {}
-        : { options: lines.map((line) => ({ name: line })) };
-    }
-    if (type === "number") return { precision: Number(precision) };
-    if (type === "date") {
-      return { include_time: includeTime, ...(fill === "created" ? { fill } : {}) };
+    if (type === "select" || type === "status") {
+      // A status field without options gets the default states from the server.
+      const base =
+        type === "status" && optionLines.length === 0
+          ? {}
+          : { options: optionLines.map((line) => ({ name: line })) };
+      return type === "select" ? { ...base, multiple: settings.config.multiple === true } : base;
     }
     if (type === "link_record") return { table_id: target };
-    return {};
+    return settings.config;
   }
 
   async function submit(event: React.FormEvent) {
@@ -109,16 +106,20 @@ export function AddFieldForm({ tableId, baseId, existing = [], onCreated }: Prop
     setError(null);
     setSaving(true);
     try {
+      const description = settings.description.trim();
       const field = await createField(tableId, {
         name: name.trim(),
         type,
         config: configFor(),
         ...(role ? { semantic: role } : {}),
+        ...(description ? { description } : {}),
+        ...(settings.unique ? { unique: true } : {}),
+        ...(settings.default !== null ? { default: settings.default } : {}),
       });
       setName("");
       setRole("");
-      setFill("manual");
       setOptions("");
+      setSettings(EMPTY_SETTINGS);
       onCreated(field);
     } catch (caught) {
       setError(errorMessage(caught, "Could not add the field."));
@@ -127,7 +128,8 @@ export function AddFieldForm({ tableId, baseId, existing = [], onCreated }: Prop
     }
   }
 
-  const needsOptions = type === "single_select" || type === "multi_select" || type === "status";
+  const needsOptions = type === "select" || type === "status";
+  const hasSettings = type !== "link_record" && type !== "status" && !isSystem(type);
   return (
     <form onSubmit={(event) => void submit(event)} aria-label="Add a column" className="grid gap-4">
       <FormField label="Column name">
@@ -139,7 +141,7 @@ export function AddFieldForm({ tableId, baseId, existing = [], onCreated }: Prop
           onChange={(e) => {
             setType(e.target.value as FieldType);
             setRole("");
-            setFill("manual");
+            setSettings(EMPTY_SETTINGS);
           }}
         >
           {FIELD_TYPES.map((t) => (
@@ -150,10 +152,7 @@ export function AddFieldForm({ tableId, baseId, existing = [], onCreated }: Prop
         </Select>
       </FormField>
       {ROLES[type] && (
-        <FormField
-          label="Role of this column"
-          hint={ROLE_HINTS[type]}
-        >
+        <FormField label="Role of this column" hint={ROLE_HINTS[type]}>
           <Select value={role} onChange={(e) => setRole(e.target.value)}>
             <option value="">No role</option>
             {ROLES[type]?.map((item) => {
@@ -173,8 +172,8 @@ export function AddFieldForm({ tableId, baseId, existing = [], onCreated }: Prop
           label="Options (one per line)"
           hint={
             type === "status"
-              ? "Leave empty for To do, In progress, In review, Done."
-              : "Press Enter to start a new option."
+              ? "Leave empty for To do, In progress, In review, Done, Paused, Blocked."
+              : "Press Enter to start a new option. Each one gets a color you can change later."
           }
         >
           <Textarea
@@ -188,48 +187,15 @@ export function AddFieldForm({ tableId, baseId, existing = [], onCreated }: Prop
       {needsOptions && optionLines.length > 0 && (
         <div aria-label="Preview of the options" className="flex flex-wrap gap-1.5">
           {optionLines.map((line, index) => (
-            <span
+            <OptionBadge
               key={`${line}-${index}`}
-              className="rounded-full border border-line-strong bg-surface px-3 py-1 text-sm font-medium"
-            >
-              {line}
-            </span>
+              name={line}
+              color={PALETTE[index % PALETTE.length].hex}
+            />
           ))}
         </div>
       )}
-      {type === "number" && (
-        <FormField label="Decimal places">
-          <Input
-            type="number"
-            min={0}
-            max={10}
-            value={precision}
-            onChange={(e) => setPrecision(e.target.value)}
-          />
-        </FormField>
-      )}
-      {type === "date" && (
-        <FormField
-          label="How is the date set?"
-          hint={
-            fill === "created"
-              ? "The day the record is made is filled in for you. It can still be changed."
-              : "Whoever edits the record picks the date."
-          }
-        >
-          <Select value={fill} onChange={(e) => setFill(e.target.value as "manual" | "created")}>
-            <option value="manual">Pick a date</option>
-            <option value="created">Filled automatically when the record is created</option>
-          </Select>
-        </FormField>
-      )}
-      {type === "date" && (
-        <Checkbox
-          label="Include the time"
-          checked={includeTime}
-          onChange={(e) => setIncludeTime(e.target.checked)}
-        />
-      )}
+      {hasSettings && <FieldSettings type={type} value={settings} onChange={setSettings} />}
       {type === "link_record" && (
         <FormField label="Link to table">
           <Select value={target} onChange={(e) => setTarget(e.target.value)} required>
@@ -250,4 +216,9 @@ export function AddFieldForm({ tableId, baseId, existing = [], onCreated }: Prop
       </div>
     </form>
   );
+}
+
+/** Columns the system fills in: nothing to set up. */
+function isSystem(type: FieldType): boolean {
+  return type === "created_by" || type === "created_time" || type === "auto_number" || type === "timer";
 }

@@ -30,7 +30,8 @@ async def test_create_a_field_of_every_simple_type(work: Work) -> None:
         ("number", {"precision": 2}, {"precision": 2}),
         ("date", {}, {"include_time": False}),
         ("checkbox", {}, {}),
-        ("url", {}, {}),
+        ("text", {"format": "url"}, {"format": "url"}),
+        ("text", {"format": "email", "max_length": 80}, {"format": "email", "max_length": 80}),
         ("user", {}, {"multiple": True}),
         ("created_by", {}, {}),
         ("created_time", {}, {}),
@@ -56,7 +57,7 @@ async def test_select_fields_get_ids_for_their_options(work: Work) -> None:
     field = await work.make_field(
         table["id"],
         "Priority",
-        "single_select",
+        "select",
         config={"options": [{"name": "High", "color": "#ff0000"}, {"name": "Low"}]},
     )
     options = field["config"]["options"]
@@ -99,7 +100,7 @@ async def test_invalid_field_definitions_are_422(work: Work) -> None:
         {"name": "A", "type": "text", "config": {"surprise": True}},
         {
             "name": "A",
-            "type": "single_select",
+            "type": "select",
             "config": {"options": [{"name": "a"}, {"name": "A"}]},
         },
         {"name": "A", "type": "status", "config": {"options": [{"name": "a", "kind": "nope"}]}},
@@ -225,7 +226,7 @@ async def test_rename_and_reorder_a_field(work: Work) -> None:
 async def test_editing_options_keeps_ids_of_the_existing_ones(work: Work) -> None:
     table = await blank_table(work)
     field = await work.make_field(
-        table["id"], "Stage", "single_select", config={"options": [{"name": "Open"}]}
+        table["id"], "Stage", "select", config={"options": [{"name": "Open"}]}
     )
     open_id = field["config"]["options"][0]["id"]
     response = await work.api(
@@ -235,7 +236,7 @@ async def test_editing_options_keeps_ids_of_the_existing_ones(work: Work) -> Non
     )
     assert response.status_code == 200, response.text
     options = response.json()["config"]["options"]
-    assert options[0] == {"id": open_id, "name": "Opened"}
+    assert options[0]["id"] == open_id and options[0]["name"] == "Opened"
     assert options[1]["name"] == "Closed"
     invented = await work.api(
         "PATCH",

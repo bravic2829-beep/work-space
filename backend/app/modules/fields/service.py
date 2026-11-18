@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import flush_or_conflict
 from app.core.errors import ProblemError
 from app.modules.bases.models import Table
-from app.modules.fields import conversion, repository
+from app.modules.fields import constraints, conversion, repository
 from app.modules.fields.access import column_access
 from app.modules.fields.models import (
     Field,
@@ -26,9 +26,12 @@ from app.modules.fields.schemas import (
     PersonAccessSet,
 )
 from app.modules.fields.types import (
+    SPECS,
     FieldConfigError,
+    check_properties,
     check_semantic,
     normalize_config,
+    normalize_default,
 )
 from app.modules.permissions.service import (
     TableContext,
@@ -56,6 +59,9 @@ def public(field: Field, access: FieldAccessLevel) -> FieldPublic:
         semantic=field.semantic,
         grants_view=field.grants_view,
         is_required=field.is_required,
+        unique=field.is_unique,
+        default=field.default_value,
+        description=field.description,
         position=field.position,
         access=access,
         created_at=field.created_at,
@@ -64,6 +70,13 @@ def public(field: Field, access: FieldAccessLevel) -> FieldPublic:
 
 def _invalid(message: str) -> ProblemError:
     return ProblemError(422, message)
+
+
+def _clean_description(value: str | None) -> str | None:
+    """A description is trimmed, and an empty one is no description."""
+    if value is None:
+        return None
+    return value.strip() or None
 
 
 async def visible_fields(
@@ -121,6 +134,9 @@ async def _insert(
     semantic: FieldSemantic | None,
     grants_view: bool,
     is_required: bool,
+    is_unique: bool = False,
+    default_value: Any | None = None,
+    description: str | None = None,
 ) -> Field:
     field = Field(
         table_id=table.id,
@@ -130,6 +146,9 @@ async def _insert(
         semantic=semantic,
         grants_view=grants_view,
         is_required=is_required,
+        is_unique=is_unique,
+        default_value=default_value,
+        description=description,
         position=await repository.next_position(session, table_id=table.id),
     )
     session.add(field)
@@ -201,9 +220,17 @@ async def create_field(
 ) -> FieldPublic:
     context = await require_table_role(session, actor, table_id, WorkspaceRole.EDITOR)
     table = context.table
+    description = _clean_description(data.description)
     try:
         config = normalize_config(data.type, data.config)
         grants_view = check_semantic(data.type, data.semantic, data.grants_view)
+        check_properties(
+            data.type,
+            is_required=data.is_required,
+            is_unique=data.unique,
+            description=description,
+        )
+        default = normalize_default(data.type, config, data.default)
     except FieldConfigError as exc:
         raise _invalid(str(exc)) from None
 
@@ -211,8 +238,6 @@ async def create_field(
         raise ProblemError(409, TOO_MANY_FIELDS)
     if await repository.name_taken(session, table_id=table.id, name=data.name):
         raise ProblemError(409, DUPLICATE_NAME)
-    if data.type == FieldType.TIMER and data.is_required:
-        raise _invalid("A timer cannot be required.")
     if data.semantic is not None:
         taken = [data.semantic]
         if data.semantic in (FieldSemantic.PARENT, FieldSemantic.SUBTASKS):
@@ -262,6 +287,9 @@ async def create_field(
             semantic=data.semantic,
             grants_view=grants_view,
             is_required=data.is_required,
+            is_unique=data.unique,
+            default_value=default,
+            description=description,
         )
         if data.type == FieldType.AUTO_NUMBER:
             await records.backfill_auto_number(session, field=field)
@@ -326,9 +354,9 @@ async def create_template_fields(session: AsyncSession, table: Table, template: 
         session,
         table,
         name="Priority",
-        field_type=FieldType.SINGLE_SELECT,
+        field_type=FieldType.SELECT,
         config=normalize_config(
-            FieldType.SINGLE_SELECT,
+            FieldType.SELECT,
             {"options": [{"name": "High"}, {"name": "Medium"}, {"name": "Low"}]},
         ),
         semantic=None,
@@ -407,12 +435,10 @@ async def update_field(
 
     if "is_required" in changes and data.is_required is not None:
         if data.is_required and not field.is_required:
-            if field.type in (FieldType.LINK_RECORD,):
-                raise _invalid("A link field cannot be required.")
-            if field.type == FieldType.ATTACHMENT:
-                raise _invalid("A files column cannot be required.")
-            if field.type == FieldType.TIMER:
-                raise _invalid("A timer cannot be required.")
+            try:
+                check_properties(field.type, is_required=True, is_unique=False, description=None)
+            except FieldConfigError as exc:
+                raise _invalid(str(exc)) from None
             missing = await records.count_missing_value(session, field=field)
             if missing:
                 raise ProblemError(
@@ -423,6 +449,11 @@ async def update_field(
 
     if data.type is not None and data.type != field.type:
         await conversion.change_type(session, field, data.type, data.config)
+        # What the old type allowed may not fit the new one.
+        spec = SPECS[field.type]
+        field.is_unique = field.is_unique and spec.unique
+        field.is_required = field.is_required and spec.required
+        field.default_value = None
     elif "config" in changes and data.config is not None:
         try:
             new_config = normalize_config(field.type, data.config, existing=field.config)
@@ -431,7 +462,40 @@ async def update_field(
         if field.type == FieldType.LINK_RECORD and new_config != {**field.config}:
             raise _invalid("The target of a link cannot be changed. Make a new field instead.")
         await conversion.check_removed_options(session, field, new_config)
+        await constraints.check_config(session, field, field.type, new_config)
+        if field.default_value is not None and "default" not in changes:
+            try:
+                normalize_default(field.type, new_config, field.default_value)
+            except FieldConfigError:
+                raise ProblemError(
+                    409, "The default value no longer fits this setting. Change the default too."
+                ) from None
         field.config = new_config
+
+    if "description" in changes:
+        description = _clean_description(data.description)
+        try:
+            check_properties(
+                field.type, is_required=False, is_unique=False, description=description
+            )
+        except FieldConfigError as exc:
+            raise _invalid(str(exc)) from None
+        field.description = description
+
+    if "unique" in changes and data.unique is not None and data.unique != field.is_unique:
+        try:
+            check_properties(field.type, is_required=False, is_unique=data.unique, description=None)
+        except FieldConfigError as exc:
+            raise _invalid(str(exc)) from None
+        if data.unique:
+            await constraints.check_unique(session, field)
+        field.is_unique = data.unique
+
+    if "default" in changes:
+        try:
+            field.default_value = normalize_default(field.type, field.config, data.default)
+        except FieldConfigError as exc:
+            raise _invalid(str(exc)) from None
 
     if "semantic" in changes:
         if await _change_role(session, field, data.semantic):
