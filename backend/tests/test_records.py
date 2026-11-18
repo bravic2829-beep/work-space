@@ -98,12 +98,15 @@ async def test_every_field_type_can_hold_a_value(work: Work) -> None:
         "date": await work.make_field(t, "Date", "date"),
         "when": await work.make_field(t, "When", "date", config={"include_time": True}),
         "check": await work.make_field(t, "Check", "checkbox"),
-        "url": await work.make_field(t, "Url", "url"),
+        "url": await work.make_field(t, "Url", "text", config={"format": "url"}),
         "pick": await work.make_field(
-            t, "Pick", "single_select", config={"options": [{"name": "A"}, {"name": "B"}]}
+            t, "Pick", "select", config={"options": [{"name": "A"}, {"name": "B"}]}
         ),
         "tags": await work.make_field(
-            t, "Tags", "multi_select", config={"options": [{"name": "x"}, {"name": "y"}]}
+            t,
+            "Tags",
+            "select",
+            config={"options": [{"name": "x"}, {"name": "y"}], "multiple": True},
         ),
         "status": await work.make_field(t, "State", "status"),
         "people": await work.make_field(t, "People", "user"),
@@ -122,7 +125,7 @@ async def test_every_field_type_can_hold_a_value(work: Work) -> None:
         fields["when"]["id"]: "2026-11-13T09:00:00+07:00",
         fields["check"]["id"]: True,
         fields["url"]["id"]: "https://example.com/x",
-        fields["pick"]["id"]: pick_a,
+        fields["pick"]["id"]: [pick_a],
         fields["tags"]["id"]: tag_ids,
         fields["status"]["id"]: done,
         fields["people"]["id"]: [str(work.users["viewer"])],

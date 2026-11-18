@@ -378,3 +378,33 @@ async def test_a_file_that_vanished_from_the_disk_is_a_clean_404(
     for path in on_disk(files_dir):
         path.unlink()
     assert_problem(await board.work.api("GET", f"/attachments/{file['id']}"), 404)
+
+
+# --- what a files column accepts (config.max_files, config.accept) ----------------------------
+
+
+async def test_a_files_column_can_limit_how_many_files_it_holds(board: Board) -> None:
+    task = await board.create(Name="Limited")
+    response = await board.work.api(
+        "PATCH", f"/fields/{board.f['Files']}", json={"config": {"max_files": 2}}
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["config"] == {"max_files": 2}
+    assert (await upload(board, task, name="a.pdf")).status_code == 201
+    assert (await upload(board, task, name="b.pdf")).status_code == 201
+    third = await upload(board, task, name="c.pdf")
+    body = assert_problem(third, 409)
+    assert "At most 2" in str(body["detail"])
+
+
+async def test_a_files_column_can_limit_the_kind_of_file(board: Board) -> None:
+    task = await board.create(Name="Pictures only")
+    response = await board.work.api(
+        "PATCH", f"/fields/{board.f['Files']}", json={"config": {"accept": [".pdf", "image/*"]}}
+    )
+    assert response.status_code == 200, response.text
+    assert (await upload(board, task, name="a.pdf")).status_code == 201
+    assert (await upload(board, task, name="photo.png")).status_code == 201
+    refused = await upload(board, task, name="sheet.xlsx")
+    assert_problem(refused, 415)
+    assert [f["name"] for f in await files_of(board, task)] == ["a.pdf", "photo.png"]

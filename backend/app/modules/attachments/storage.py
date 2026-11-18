@@ -75,6 +75,22 @@ def content_type_of(name: str) -> str:
     return mimetypes.guess_type(name)[0] or "application/octet-stream"
 
 
+def is_accepted(name: str, accept: list[str]) -> bool:
+    """Does the file match one of the column's endings (.pdf) or types (image/*, image/png)?"""
+    lowered = name.lower()
+    kind = content_type_of(name)
+    for entry in accept:
+        if entry.startswith("."):
+            if lowered.endswith(entry):
+                return True
+        elif entry.endswith("/*"):
+            if kind.startswith(entry[:-1]):
+                return True
+        elif kind == entry:
+            return True
+    return False
+
+
 def new_key() -> str:
     return uuid.uuid4().hex
 

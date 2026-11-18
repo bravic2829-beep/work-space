@@ -76,7 +76,7 @@ function FilterForm({
         </Select>
       );
     }
-    if (["single_select", "status", "multi_select"].includes(field.type)) {
+    if (field.type === "select" || field.type === "status") {
       return (
         <Select
           aria-label="Value"

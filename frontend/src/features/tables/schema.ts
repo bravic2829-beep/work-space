@@ -10,11 +10,9 @@ export const FIELD_TYPES = [
   "number",
   "date",
   "checkbox",
-  "single_select",
-  "multi_select",
+  "select",
   "status",
   "user",
-  "url",
   "link_record",
   "created_by",
   "created_time",
@@ -82,6 +80,12 @@ export type FieldItem = {
   semantic: string | null;
   grants_view: boolean;
   is_required: boolean;
+  /** No two records may share a value (text and number only). */
+  unique: boolean;
+  /** What a new record gets when nobody gives a value; null when there is none. */
+  default: unknown;
+  /** A hint shown next to the column name. */
+  description: string | null;
   position: number;
   access: FieldAccess;
 };
@@ -162,6 +166,8 @@ export function isFieldItem(value: unknown): value is FieldItem {
     (value.semantic === null || typeof value.semantic === "string") &&
     typeof value.grants_view === "boolean" &&
     typeof value.is_required === "boolean" &&
+    typeof value.unique === "boolean" &&
+    (value.description === null || typeof value.description === "string") &&
     typeof value.position === "number" &&
     (value.access === "hidden" || value.access === "read" || value.access === "edit")
   );

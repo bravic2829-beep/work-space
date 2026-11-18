@@ -82,6 +82,7 @@ describe("ManageFieldsPanel", () => {
     await waitFor(() =>
       expect(updateFieldMock).toHaveBeenCalledWith("f-priority", {
         config: {
+          multiple: false,
           options: [
             { id: "o-high", name: "Urgent" },
             { id: "o-low", name: "Low" },
@@ -234,47 +235,117 @@ describe("MembersPanel", () => {
   });
 });
 
-describe("ManageFieldsPanel: how a date is set", () => {
-  const picked = makeField("f-d", "Date", "date", { config: { include_time: false } });
-  const auto = makeField("f-a", "Made on", "date", {
-    config: { include_time: true, fill: "created" },
+describe("ManageFieldsPanel: settings of a column", () => {
+  const code = makeField("f-c", "Code", "text");
+  const date = makeField("f-d", "Date", "date", { config: { include_time: false } });
+
+  it("has no way to fill a date automatically any more", () => {
+    render(<ManageFieldsPanel fields={[date]} onChanged={vi.fn()} />);
+    expect(screen.queryByLabelText(/^Date mode of/)).not.toBeInTheDocument();
   });
 
-  it("switches a date column to being filled when the record is created", async () => {
-    updateFieldMock.mockResolvedValue(picked);
+  it("saves only the settings that changed", async () => {
+    updateFieldMock.mockResolvedValue(code);
     const onChanged = vi.fn();
-    render(<ManageFieldsPanel fields={[picked]} onChanged={onChanged} />);
-    expect(screen.getByLabelText("Date mode of Date")).toHaveValue("manual");
-    await userEvent.selectOptions(screen.getByLabelText("Date mode of Date"), "created");
+    render(<ManageFieldsPanel fields={[code]} onChanged={onChanged} />);
+    const save = screen.getByRole("button", { name: "Save settings of Code" });
+    expect(save).toBeDisabled();
+    await userEvent.type(screen.getByLabelText("Hint of Code"), "Stock code");
+    await userEvent.click(screen.getByLabelText("Unique of Code"));
+    await userEvent.selectOptions(screen.getByLabelText("Format of Code"), "email");
+    await userEvent.click(save);
     await waitFor(() =>
-      expect(updateFieldMock).toHaveBeenCalledWith("f-d", {
-        config: { include_time: false, fill: "created" },
+      expect(updateFieldMock).toHaveBeenCalledWith("f-c", {
+        config: { format: "email" },
+        description: "Stock code",
+        unique: true,
       }),
     );
     expect(onChanged).toHaveBeenCalled();
   });
 
-  it("switches back to picking, and keeps the time setting", async () => {
-    updateFieldMock.mockResolvedValue(auto);
-    render(<ManageFieldsPanel fields={[auto]} onChanged={vi.fn()} />);
-    expect(screen.getByLabelText("Date mode of Made on")).toHaveValue("created");
-    await userEvent.selectOptions(screen.getByLabelText("Date mode of Made on"), "manual");
+  it("takes a hint away with an empty box", async () => {
+    updateFieldMock.mockResolvedValue(code);
+    render(
+      <ManageFieldsPanel fields={[{ ...code, description: "Old hint" }]} onChanged={vi.fn()} />,
+    );
+    await userEvent.clear(screen.getByLabelText("Hint of Code"));
+    await userEvent.click(screen.getByRole("button", { name: "Save settings of Code" }));
     await waitFor(() =>
-      expect(updateFieldMock).toHaveBeenCalledWith("f-a", { config: { include_time: true } }),
+      expect(updateFieldMock).toHaveBeenCalledWith("f-c", { description: null }),
     );
   });
 
-  it("says that existing records are left alone, and shows the server's refusal", async () => {
-    updateFieldMock.mockRejectedValue(new ApiError("Dates and times cannot be switched.", 409));
-    render(<ManageFieldsPanel fields={[picked]} onChanged={vi.fn()} />);
-    expect(screen.getByText(/left alone/)).toBeInTheDocument();
-    await userEvent.selectOptions(screen.getByLabelText("Date mode of Date"), "created");
-    expect(await screen.findByText(/cannot be switched/)).toBeInTheDocument();
+  it("shows the server's refusal when records contradict the setting", async () => {
+    updateFieldMock.mockRejectedValue(
+      new ApiError("1 record(s) hold more than 5 characters, so this change was not made.", 409),
+    );
+    render(<ManageFieldsPanel fields={[code]} onChanged={vi.fn()} />);
+    await userEvent.type(screen.getByLabelText("Longest text of Code"), "5");
+    await userEvent.click(screen.getByRole("button", { name: "Save settings of Code" }));
+    expect(await screen.findByText(/hold more than 5 characters/)).toBeInTheDocument();
   });
 
-  it("offers no such choice for other columns", () => {
-    render(<ManageFieldsPanel fields={[makeField("f-n", "Name", "text")]} onChanged={vi.fn()} />);
-    expect(screen.queryByLabelText(/^Date mode of/)).not.toBeInTheDocument();
+  it("clears a preset value", async () => {
+    updateFieldMock.mockResolvedValue(code);
+    render(<ManageFieldsPanel fields={[{ ...code, default: "web" }]} onChanged={vi.fn()} />);
+    await userEvent.clear(screen.getByLabelText("Value for new records of Code"));
+    await userEvent.click(screen.getByRole("button", { name: "Save settings of Code" }));
+    await waitFor(() => expect(updateFieldMock).toHaveBeenCalledWith("f-c", { default: null }));
+  });
+
+  it("lets a choice list be switched to several choices", async () => {
+    updateFieldMock.mockResolvedValue(PRIORITY);
+    render(<ManageFieldsPanel fields={[PRIORITY]} onChanged={vi.fn()} />);
+    await userEvent.click(screen.getByLabelText("Allow more than one choice"));
+    await userEvent.click(screen.getByRole("button", { name: "Save settings of Priority" }));
+    await waitFor(() =>
+      expect(updateFieldMock).toHaveBeenCalledWith("f-priority", {
+        config: { ...PRIORITY.config, multiple: true },
+      }),
+    );
+  });
+
+  it("does not offer Required or Unique to a checkbox, and no settings to a status", () => {
+    const tick = makeField("f-t", "Tick", "checkbox");
+    const status = makeField("f-s", "State", "status");
+    render(<ManageFieldsPanel fields={[tick, status]} onChanged={vi.fn()} />);
+    expect(screen.queryByLabelText("Tick is required")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Unique of Tick")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save settings of State" })).not.toBeInTheDocument();
+  });
+});
+
+describe("ManageFieldsPanel: the color of an option", () => {
+  it("opens the color dialog from the dot of an option and keeps the picked color", async () => {
+    updateFieldMock.mockResolvedValue(PRIORITY);
+    render(<ManageFieldsPanel fields={[PRIORITY]} onChanged={vi.fn()} />);
+    await userEvent.click(screen.getByRole("button", { name: "Color of option High in Priority" }));
+    const dialog = screen.getByRole("group", { name: "Color of High" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Sky #0b9cd8" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "OK" }));
+    expect(screen.queryByRole("group", { name: "Color of High" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Save options of Priority" }));
+    await waitFor(() =>
+      expect(updateFieldMock).toHaveBeenCalledWith("f-priority", {
+        config: {
+          multiple: false,
+          options: [
+            { id: "o-high", name: "High", color: "#0b9cd8" },
+            { id: "o-low", name: "Low" },
+          ],
+        },
+      }),
+    );
+  });
+
+  it("leaves the option as it was on Cancel", async () => {
+    render(<ManageFieldsPanel fields={[PRIORITY]} onChanged={vi.fn()} />);
+    await userEvent.click(screen.getByRole("button", { name: "Color of option High in Priority" }));
+    const dialog = screen.getByRole("group", { name: "Color of High" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Pink #d6409f" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("button", { name: "Save options of Priority" })).toBeDisabled();
   });
 });
 

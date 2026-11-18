@@ -291,35 +291,33 @@ describe("deleting", () => {
 });
 
 describe("a new record", () => {
-  const auto = makeField("f-d", "Created on", "date", {
-    config: { include_time: false, fill: "created" },
-  });
+  const preset = makeField("f-d", "Source", "text", { default: "web" });
+  const day = makeField("f-day", "Created on", "date", { default: "2026-01-01" });
 
-  it("starts with today's date in a column filled automatically, and saves it", async () => {
+  it("starts with the preset value of a column, and saves it", async () => {
     const user = userEvent.setup();
     createRecordMock.mockResolvedValue(record);
-    renderSidebar({ record: null, fields: [FIELDS[0], auto] });
-    const input = screen.getByLabelText("Created on") as HTMLInputElement;
-    expect(input.value).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    const shown = input.value;
+    renderSidebar({ record: null, fields: [FIELDS[0], preset] });
+    expect(screen.getByLabelText("Source")).toHaveValue("web");
 
     await user.type(screen.getByLabelText("Name"), "Launch");
     await user.click(screen.getByRole("button", { name: "Create record" }));
     await waitFor(() => expect(createRecordMock).toHaveBeenCalled());
-    expect(createRecordMock.mock.calls[0][1]).toMatchObject({ "f-d": shown });
+    expect(createRecordMock.mock.calls[0][1]).toMatchObject({ "f-d": "web" });
   });
 
-  it("lets the person pick another date", async () => {
+  it("lets the person pick another value", async () => {
     const user = userEvent.setup();
     createRecordMock.mockResolvedValue(record);
-    renderSidebar({ record: null, fields: [FIELDS[0], auto] });
+    renderSidebar({ record: null, fields: [FIELDS[0], day] });
     const input = screen.getByLabelText("Created on");
+    expect(input).toHaveValue("2026-01-01");
     await user.clear(input);
     await user.type(input, "2026-01-02");
     await user.type(screen.getByLabelText("Name"), "Launch");
     await user.click(screen.getByRole("button", { name: "Create record" }));
     await waitFor(() => expect(createRecordMock).toHaveBeenCalled());
-    expect(createRecordMock.mock.calls[0][1]).toMatchObject({ "f-d": "2026-01-02" });
+    expect(createRecordMock.mock.calls[0][1]).toMatchObject({ "f-day": "2026-01-02" });
   });
 
   it("leaves a date picked by hand empty", () => {

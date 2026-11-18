@@ -18,6 +18,12 @@ class FieldPublic(BaseModel):
     semantic: FieldSemantic | None
     grants_view: bool
     is_required: bool
+    # No two records may share a value (text and number only).
+    unique: bool
+    # What a new record gets when nobody gives a value; null when the column has no default.
+    default: Any | None
+    # A hint shown next to the column name.
+    description: str | None
     position: int
     # What the caller may do with this column: read or edit (hidden columns are not returned).
     access: FieldAccessLevel
@@ -34,6 +40,9 @@ class FieldCreate(BaseModel):
     # Only for user fields, and only chosen when the field is made (ADR 0003).
     grants_view: bool | None = None
     is_required: bool = False
+    unique: bool = False
+    default: Any | None = None
+    description: str | None = None
     # For link_record fields: the name of the field made on the other table.
     inverse_name: FieldName | None = None
 
@@ -45,6 +54,10 @@ class FieldUpdate(BaseModel):
     type: FieldType | None = None
     config: dict[str, Any] | None = None
     is_required: bool | None = None
+    unique: bool | None = None
+    # null takes the default away.
+    default: Any | None = None
+    description: str | None = None
     position: int | None = None
     # The role of the column (assignee, follower, status, due_date). null takes the role away.
     semantic: FieldSemantic | None = None

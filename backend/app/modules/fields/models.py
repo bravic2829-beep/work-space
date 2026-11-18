@@ -28,11 +28,10 @@ class FieldType(enum.StrEnum):
     NUMBER = "number"
     DATE = "date"
     CHECKBOX = "checkbox"
-    SINGLE_SELECT = "single_select"
-    MULTI_SELECT = "multi_select"
+    # One or many options (config.multiple). The cell holds a list of option ids.
+    SELECT = "select"
     STATUS = "status"
     USER = "user"
-    URL = "url"
     LINK_RECORD = "link_record"
     CREATED_BY = "created_by"
     CREATED_TIME = "created_time"
@@ -98,6 +97,12 @@ class Field(Base):
     # Only for user fields: the people chosen in it can see the record (ADR 0003).
     grants_view: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
     is_required: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    # No two live records of the table may hold the same value (text and number only).
+    is_unique: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    # What a new record gets when nobody gives a value. SQL NULL means no default.
+    default_value: Mapped[Any | None] = mapped_column(JSONB(none_as_null=True))
+    # A hint shown next to the column name.
+    description: Mapped[str | None] = mapped_column(String(500))
     position: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     # Next number of an auto_number field.
     counter: Mapped[int] = mapped_column(BigInteger, default=0, server_default=text("0"))

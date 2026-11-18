@@ -8,7 +8,9 @@ import {
   displayValue,
   isComputed,
   isMultiple,
+  maxLengthOf,
   optionsOf,
+  textFormat,
   type Draft,
 } from "./values";
 
@@ -44,6 +46,7 @@ export function FieldEditor({ field, draft, value, names, onChange, disabled, er
           <textarea
             {...common}
             rows={4}
+            maxLength={maxLengthOf(field)}
             value={String(draft)}
             onChange={(event) => onChange(event.target.value)}
           />
@@ -55,6 +58,8 @@ export function FieldEditor({ field, draft, value, names, onChange, disabled, er
             {...common}
             type="number"
             step="any"
+            min={typeof field.config.min === "number" ? field.config.min : undefined}
+            max={typeof field.config.max === "number" ? field.config.max : undefined}
             value={String(draft)}
             onChange={(event) => onChange(event.target.value)}
           />
@@ -80,7 +85,6 @@ export function FieldEditor({ field, draft, value, names, onChange, disabled, er
           />
         );
         break;
-      case "single_select":
       case "status":
         input = (
           <ChoiceChips
@@ -93,14 +97,15 @@ export function FieldEditor({ field, draft, value, names, onChange, disabled, er
           />
         );
         break;
-      case "multi_select":
+      case "select":
+        // A select always holds a list; a column that takes one choice holds a list of one.
         input = (
           <ChoiceChips
             label={field.name}
             options={optionsOf(field)}
             value={Array.isArray(draft) ? draft : []}
             onChange={onChange}
-            multiple
+            multiple={isMultiple(field)}
             disabled={disabled}
           />
         );
@@ -130,7 +135,16 @@ export function FieldEditor({ field, draft, value, names, onChange, disabled, er
         input = (
           <input
             {...common}
-            type={field.type === "url" ? "url" : "text"}
+            type={
+              textFormat(field) === "url"
+                ? "url"
+                : textFormat(field) === "email"
+                  ? "email"
+                  : textFormat(field) === "phone"
+                    ? "tel"
+                    : "text"
+            }
+            maxLength={maxLengthOf(field)}
             value={String(draft)}
             onChange={(event) => onChange(event.target.value)}
           />
@@ -139,9 +153,8 @@ export function FieldEditor({ field, draft, value, names, onChange, disabled, er
   }
 
   const labelled =
-    field.type === "single_select" ||
+    field.type === "select" ||
     field.type === "status" ||
-    field.type === "multi_select" ||
     field.type === "user" ||
     field.type === "link_record";
   return (
@@ -157,6 +170,7 @@ export function FieldEditor({ field, draft, value, names, onChange, disabled, er
           {field.is_required && <span aria-hidden="true"> *</span>}
         </label>
       )}
+      {field.description && <p className="field-hint m-0 text-xs text-muted">{field.description}</p>}
       {input}
       {error && (
         <p id={errorId} role="alert" className="field-error">

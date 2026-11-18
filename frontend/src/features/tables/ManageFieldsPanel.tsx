@@ -7,10 +7,14 @@ import { Alert, Badge, Button, Checkbox, Input, Select, Textarea } from "@/compo
 
 import { LABELS, ROLES } from "./AddFieldForm";
 import { deleteField, updateField, type FieldPatch } from "./api";
+import { optionColor } from "./colors";
+import { ColorModal } from "./ColorModal";
+import { FieldSettings } from "./FieldSettings";
+import { canBeRequired, settingsOf, type Settings } from "./columnRules";
 import { FIELD_TYPES, type FieldItem, type FieldType, type SelectOption } from "./schema";
 import { errorMessage } from "@/lib/api/errors";
 
-const CHOICE_TYPES: FieldType[] = ["single_select", "multi_select", "status"];
+const CHOICE_TYPES: FieldType[] = ["select", "status"];
 
 function isChoice(type: FieldType): boolean {
   return CHOICE_TYPES.includes(type);
@@ -19,6 +23,11 @@ function isChoice(type: FieldType): boolean {
 function optionsOf(field: FieldItem): SelectOption[] {
   const raw = field.config.options;
   return Array.isArray(raw) ? (raw as SelectOption[]) : [];
+}
+
+/** Columns the system fills in: nothing to set up. */
+function isSystemColumn(type: FieldType): boolean {
+  return type === "created_by" || type === "created_time" || type === "auto_number" || type === "timer";
 }
 
 /** A column that has a role, grants viewing or links to another table keeps its type. */
@@ -37,6 +46,8 @@ function FieldRow({ field, all, onChanged }: RowProps) {
   const [name, setName] = useState(field.name);
   const [options, setOptions] = useState<SelectOption[]>(optionsOf(field));
   const [newOption, setNewOption] = useState("");
+  const [coloring, setColoring] = useState<number | null>(null);
+  const [settings, setSettings] = useState<Settings>(settingsOf(field));
   const [type, setType] = useState<FieldType>(field.type);
   const [typeOptions, setTypeOptions] = useState("");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -83,11 +94,43 @@ function FieldRow({ field, all, onChanged }: RowProps) {
   const roleChoices =
     field.semantic === "parent" || field.semantic === "subtasks" ? undefined : ROLES[field.type];
   const optionsChanged = JSON.stringify(options) !== JSON.stringify(optionsOf(field));
+  const settingsChanged = JSON.stringify(settings) !== JSON.stringify(settingsOf(field));
+
+  /** Only what changed is sent: a setting that is not touched is not asked to be valid again. */
+  function saveSettings() {
+    const before = settingsOf(field);
+    const change: FieldPatch = {};
+    if (JSON.stringify(settings.config) !== JSON.stringify(before.config)) {
+      change.config = settings.config;
+    }
+    if (settings.description.trim() !== before.description) {
+      change.description = settings.description.trim() || null;
+    }
+    if (settings.unique !== before.unique) change.unique = settings.unique;
+    if (JSON.stringify(settings.default) !== JSON.stringify(before.default)) {
+      change.default = settings.default;
+    }
+    void patch(change, "Could not save the settings.");
+  }
   const locked = typeIsLocked(field);
   const label = field.name;
 
+  const coloringOption = coloring === null ? undefined : options[coloring];
   return (
     <li className="rounded-lg border border-line">
+      {coloringOption && coloring !== null && (
+        <ColorModal
+          label={coloringOption.name || "this option"}
+          current={optionColor(coloringOption, coloring)}
+          onCancel={() => setColoring(null)}
+          onPick={(hex) => {
+            setOptions((current) =>
+              current.map((item, at) => (at === coloring ? { ...item, color: hex } : item)),
+            );
+            setColoring(null);
+          }}
+        />
+      )}
       {/* One line per column; open it to rename, edit options, convert or delete. */}
       <details className="group">
         <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 hover:bg-surface-muted [&::-webkit-details-marker]:hidden">
@@ -127,43 +170,39 @@ function FieldRow({ field, all, onChanged }: RowProps) {
         <span className="pb-1.5 text-xs text-muted">{LABELS[field.type]}</span>
       </div>
 
+      {canBeRequired(field.type) && (
       <Checkbox
         label="Required"
         checked={field.is_required}
-        disabled={busy || field.type === "link_record" || field.type === "attachment"}
+        disabled={busy}
         aria-label={`${label} is required`}
         onChange={(event) =>
           void patch({ is_required: event.target.checked }, "Could not change this setting.")
         }
       />
+      )}
 
-      {field.type === "date" && (
-        <div className="grid gap-1">
-          <label className="grid gap-1 text-sm font-medium">
-            How is the date set?
-            <Select
-              aria-label={`Date mode of ${label}`}
-              value={field.config.fill === "created" ? "created" : "manual"}
-              disabled={busy}
-              onChange={(event) =>
-                void patch(
-                  {
-                    config: {
-                      include_time: field.config.include_time === true,
-                      ...(event.target.value === "created" ? { fill: "created" } : {}),
-                    },
-                  },
-                  "Could not change how the date is set.",
-                )
-              }
+      {field.type !== "link_record" && field.type !== "status" && !isSystemColumn(field.type) && (
+        <div className="grid gap-2">
+          <FieldSettings
+            type={field.type}
+            value={settings}
+            onChange={setSettings}
+            options={options}
+            disabled={busy}
+            label={label}
+          />
+          <div>
+            <Button
+              size="sm"
+              variant="primary"
+              disabled={busy || !settingsChanged}
+              onClick={saveSettings}
+              aria-label={`Save settings of ${label}`}
             >
-              <option value="manual">Pick a date</option>
-              <option value="created">Filled automatically when the record is created</option>
-            </Select>
-          </label>
-          <p className="m-0 text-xs text-muted">
-            Only records made from now on are filled. The ones that exist are left alone.
-          </p>
+              Save settings
+            </Button>
+          </div>
         </div>
       )}
 
@@ -205,7 +244,16 @@ function FieldRow({ field, all, onChanged }: RowProps) {
           <p className="m-0 text-sm font-medium">Options</p>
           <ul className="m-0 grid list-none gap-1.5 p-0" aria-label={`Options of ${label}`}>
             {options.map((option, index) => (
-              <li key={option.id || `new-${index}`} className="flex items-center gap-2">
+              <li key={option.id || `new-${index}`}>
+                <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  aria-label={`Color of option ${option.name} in ${label}`}
+                  title="Change color"
+                  onClick={() => setColoring(index)}
+                  className="size-7 shrink-0 cursor-pointer rounded-full border border-line p-0"
+                  style={{ backgroundColor: optionColor(option, index) }}
+                />
                 <Input
                   aria-label={`Option ${index + 1} of ${label}`}
                   value={option.name}
@@ -226,6 +274,7 @@ function FieldRow({ field, all, onChanged }: RowProps) {
                 >
                   Remove
                 </Button>
+                </div>
               </li>
             ))}
           </ul>
@@ -258,7 +307,14 @@ function FieldRow({ field, all, onChanged }: RowProps) {
                   {
                     config: {
                       ...field.config,
-                      options: options.map((o) => (o.id ? o : { name: o.name.trim() })),
+                      // Existing options keep their id and color. A new one gets a color from the
+                      // server unless one was picked.
+                      options: options.map((o) => ({
+                        ...(o.id ? { id: o.id } : {}),
+                        name: o.name.trim(),
+                        ...(o.color ? { color: o.color } : {}),
+                        ...(o.kind ? { kind: o.kind } : {}),
+                      })),
                     },
                   },
                   "Could not save the options.",

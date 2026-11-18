@@ -18,11 +18,12 @@ import {
   canEditField,
   changesFor,
   conditionValue,
-  createdDateValue,
   describeCondition,
   displayValue,
   emptyColumnIds,
   draftFromValue,
+  formatNumber,
+  isMultiple,
   isSortable,
   newRecordDraft,
   operatorsFor,
@@ -38,7 +39,7 @@ describe("display", () => {
     expect(displayValue(POINTS, 12, names)).toBe("12");
     expect(displayValue(DONE, true, names)).toBe("✓");
     expect(displayValue(DONE, false, names)).toBe("");
-    expect(displayValue(PRIORITY, "o-high", names)).toBe("High");
+    expect(displayValue(PRIORITY, ["o-high"], names)).toBe("High");
     expect(displayValue(TAGS, ["o-x", "o-y"], names)).toBe("x, y");
     expect(displayValue(DUE, "2026-11-13", names)).toBe("2026-11-13");
     expect(displayValue(ASSIGNEE, ["u-1"], names)).toBe("Ann (A1)");
@@ -77,7 +78,8 @@ describe("what can be edited and sorted", () => {
   it("some types have no order", () => {
     expect(isSortable(NAME)).toBe(true);
     expect(isSortable(POINTS)).toBe(true);
-    expect(isSortable(TAGS)).toBe(false);
+    expect(isSortable(PRIORITY)).toBe(true);
+    expect(isSortable(TAGS)).toBe(true); // by its first option
     expect(isSortable(ASSIGNEE)).toBe(false);
   });
 });
@@ -100,8 +102,8 @@ describe("drafts and values", () => {
 
   it("sends empty text and an unset choice as a cleared cell", () => {
     expect(parseDraft(NAME, "")).toEqual({ ok: true, value: null });
-    expect(parseDraft(PRIORITY, "")).toEqual({ ok: true, value: null });
-    expect(parseDraft(PRIORITY, "o-low")).toEqual({ ok: true, value: "o-low" });
+    expect(parseDraft(PRIORITY, [])).toEqual({ ok: true, value: null });
+    expect(parseDraft(PRIORITY, ["o-low"])).toEqual({ ok: true, value: ["o-low"] });
   });
 
   it("sends a date and time in UTC", () => {
@@ -120,7 +122,7 @@ describe("what changed", () => {
     "f-points": "5",
     "f-done": false,
     "f-tags": ["o-x"],
-    "f-priority": "",
+    "f-priority": [] as string[],
     "f-due": "",
     "f-assignee": [] as string[],
   };
@@ -136,7 +138,7 @@ describe("what changed", () => {
 
   it("clears a cell with null", () => {
     const result = changesFor(FIELDS, record, { ...unchanged, "f-name": "", "f-tags": [] });
-    expect(result.changes).toEqual({ "f-name": null, "f-tags": [] });
+    expect(result.changes).toEqual({ "f-name": null, "f-tags": null });
   });
 
   it("does not treat an untouched empty cell as a change", () => {
@@ -176,7 +178,9 @@ describe("filters", () => {
     expect(operatorsFor(NAME).map((o) => o.op)).toEqual(["eq", "neq", "contains", "is_empty", "is_not_empty"]);
     expect(operatorsFor(POINTS).map((o) => o.op)).toContain("gt");
     expect(operatorsFor(DONE).map((o) => o.op)).toEqual(["eq"]);
-    expect(operatorsFor(TAGS).map((o) => o.op)).toEqual(["contains", "is_empty", "is_not_empty"]);
+    expect(operatorsFor(TAGS).map((o) => o.op)).toEqual(["eq", "neq", "is_empty", "is_not_empty"]);
+    expect(operatorsFor(TAGS)[0].label).toBe("includes");
+    expect(operatorsFor(PRIORITY)[0].label).toBe("is");
   });
 
   it("people are only filtered by empty or not, and the creator not at all", () => {
@@ -213,43 +217,54 @@ describe("people in the records", () => {
   });
 });
 
-describe("a date column filled when the record is created", () => {
-  const auto = makeField("f-d", "Created on", "date", {
-    config: { include_time: false, fill: "created" },
+describe("a value preset for new records", () => {
+  const withDefault = makeField("f-d", "Source", "text", { default: "web" });
+  const checked = makeField("f-c", "Paid", "checkbox", { default: true });
+  const size = makeField("f-s", "Size", "select", {
+    config: { multiple: false, options: [{ id: "o-m", name: "M" }] },
+    default: ["o-m"],
   });
-  const autoTime = makeField("f-t", "Created at", "date", {
-    config: { include_time: true, fill: "created" },
-  });
-  const noon = new Date(2026, 10, 14, 12, 30); // 14 November 2026, local time
-  // 23:30 local: the UTC day can be another one, and the local day is what a person means.
-  const lateEvening = new Date(2026, 10, 14, 23, 30);
-
-  it("is today's date by the clock of this computer", () => {
-    expect(createdDateValue(auto, noon)).toBe("2026-11-14");
-    expect(createdDateValue(auto, lateEvening)).toBe("2026-11-14");
-  });
-
-  it("is the exact moment when the column has a time", () => {
-    expect(createdDateValue(autoTime, noon)).toBe(noon.toISOString());
-  });
-
-  it("is nothing for a date picked by hand, and for other kinds of column", () => {
-    expect(createdDateValue(DUE, noon)).toBeNull();
-    expect(createdDateValue(NAME, noon)).toBeNull();
-    expect(createdDateValue(CREATED, noon)).toBeNull();
-  });
+  const day = makeField("f-day", "Day", "date", { default: "2026-01-01" });
+  const count = makeField("f-n", "Qty", "number", { default: 3 });
 
   it("is already in the form of a new record, as a draft that can be changed", () => {
-    expect(newRecordDraft(auto)).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(newRecordDraft(autoTime)).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
-    expect(newRecordDraft(DUE)).toBe("");
+    expect(newRecordDraft(withDefault)).toBe("web");
+    expect(newRecordDraft(checked)).toBe(true);
+    expect(newRecordDraft(size)).toEqual(["o-m"]);
+    expect(newRecordDraft(day)).toBe("2026-01-01");
+    expect(newRecordDraft(count)).toBe("3");
+  });
+
+  it("is nothing when the column has no default", () => {
     expect(newRecordDraft(NAME)).toBe("");
+    expect(newRecordDraft(DUE)).toBe("");
+    expect(newRecordDraft(TAGS)).toEqual([]);
   });
 
   it("is sent when the record is saved", () => {
-    const drafts = { [auto.id]: newRecordDraft(auto) };
-    const { changes } = changesFor([auto], null, drafts);
-    expect(changes[auto.id]).toBe(createdDateValue(auto));
+    const drafts = { [withDefault.id]: newRecordDraft(withDefault), [size.id]: newRecordDraft(size) };
+    const { changes } = changesFor([withDefault, size], null, drafts);
+    expect(changes).toEqual({ "f-d": "web", "f-s": ["o-m"] });
+  });
+});
+
+describe("numbers and text with a format", () => {
+  it("shows a number as plain, percent or money", () => {
+    expect(formatNumber(POINTS, 12)).toBe("12");
+    const pct = makeField("f-p", "Done", "number", { config: { precision: 1, format: "percent" } });
+    expect(formatNumber(pct, 12.5)).toBe("12.5%");
+    const money = makeField("f-m", "Price", "number", {
+      config: { precision: 0, format: "currency", currency: "USD" },
+    });
+    expect(formatNumber(money, 1234)).toBe("$1,234");
+    expect(displayValue(money, 1234, names)).toBe("$1,234");
+  });
+
+  it("a select takes one choice unless it says more", () => {
+    expect(isMultiple(PRIORITY)).toBe(false);
+    expect(isMultiple(TAGS)).toBe(true);
+    expect(isMultiple(makeField("f-x", "X", "select"))).toBe(false);
+    expect(isMultiple(ASSIGNEE)).toBe(true);
   });
 });
 

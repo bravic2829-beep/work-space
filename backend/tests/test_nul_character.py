@@ -28,7 +28,7 @@ async def test_names_with_a_nul_character_are_a_422(work: Work) -> None:
 async def test_values_with_a_nul_character_are_a_422(work: Work) -> None:
     table = await work.make_table(await work.make_base(), "Notes")
     long = await work.make_field(table["id"], "Long", "long_text")
-    pick = {"name": "Pick", "type": "single_select", "config": {"options": [{"name": f"a{NUL}"}]}}
+    pick = {"name": "Pick", "type": "select", "config": {"options": [{"name": f"a{NUL}"}]}}
     assert_problem(await work.api("POST", f"/tables/{table['id']}/fields", json=pick), 422)
     name_field = table["fields"][0]["id"]
     for field_id in (name_field, long["id"]):

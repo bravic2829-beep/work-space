@@ -18,10 +18,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import ProblemError
 from app.modules.fields.models import Field, FieldType
 from app.modules.fields.types import (
-    MAX_TEXT_LENGTH,
+    SELECT_TYPES,
     FieldConfigError,
     normalize_config,
     normalize_value,
+    text_limit,
 )
 from app.modules.records.models import Record
 
@@ -29,32 +30,19 @@ CHUNK = 1000
 EXAMPLES = 5
 REMOVE = object()  # the converted cell is empty: take the key out of the data
 
-SELECTS = {FieldType.SINGLE_SELECT, FieldType.MULTI_SELECT, FieldType.STATUS}
-
 # source -> the types it can become (docs/erd.md 3.3). Everything else cannot change type.
 ALLOWED: dict[FieldType, set[FieldType]] = {
     FieldType.TEXT: {
         FieldType.LONG_TEXT,
         FieldType.NUMBER,
         FieldType.DATE,
-        FieldType.SINGLE_SELECT,
+        FieldType.SELECT,
     },
     FieldType.LONG_TEXT: {FieldType.TEXT},
     FieldType.NUMBER: {FieldType.TEXT, FieldType.LONG_TEXT},
     FieldType.DATE: {FieldType.TEXT, FieldType.LONG_TEXT},
-    FieldType.SINGLE_SELECT: {
-        FieldType.TEXT,
-        FieldType.LONG_TEXT,
-        FieldType.MULTI_SELECT,
-        FieldType.STATUS,
-    },
-    FieldType.MULTI_SELECT: {FieldType.TEXT, FieldType.LONG_TEXT, FieldType.SINGLE_SELECT},
-    FieldType.STATUS: {
-        FieldType.TEXT,
-        FieldType.LONG_TEXT,
-        FieldType.SINGLE_SELECT,
-        FieldType.MULTI_SELECT,
-    },
+    FieldType.SELECT: {FieldType.TEXT, FieldType.LONG_TEXT, FieldType.STATUS},
+    FieldType.STATUS: {FieldType.TEXT, FieldType.LONG_TEXT, FieldType.SELECT},
 }
 
 Converter = Callable[[Any], Any]
@@ -76,9 +64,9 @@ def _to_text(field: Field) -> Converter:
     def convert(value: Any) -> Any:
         if field.type == FieldType.NUMBER:
             return _number_text(value, precision)
-        if field.type in (FieldType.SINGLE_SELECT, FieldType.STATUS):
+        if field.type == FieldType.STATUS:
             return names.get(value, REMOVE)
-        if field.type == FieldType.MULTI_SELECT:
+        if field.type == FieldType.SELECT:
             return ", ".join(names[item] for item in value if item in names) or REMOVE
         return value
 
@@ -94,8 +82,9 @@ def _build_converter(field: Field, new_type: FieldType, new_config: dict[str, An
             result = to_text(value)
             if result is REMOVE:
                 return REMOVE
-            if new_type == FieldType.TEXT and len(result) > MAX_TEXT_LENGTH:
-                raise ValueError(f"The text is longer than {MAX_TEXT_LENGTH} characters.")
+            limit = text_limit(new_type, new_config)
+            if len(result) > limit:
+                raise ValueError(f"The text is longer than {limit} characters.")
             return result
 
         return text_converter
@@ -110,7 +99,7 @@ def _build_converter(field: Field, new_type: FieldType, new_config: dict[str, An
 
         return parse
 
-    if old == FieldType.TEXT and new_type == FieldType.SINGLE_SELECT:
+    if old == FieldType.TEXT and new_type == FieldType.SELECT:
         by_name = {option["name"].lower(): option["id"] for option in new_config["options"]}
 
         def by_option_name(value: Any) -> Any:
@@ -119,14 +108,14 @@ def _build_converter(field: Field, new_type: FieldType, new_config: dict[str, An
                 return REMOVE
             if cleaned.lower() not in by_name:
                 raise ValueError("There is no option with this name.")
-            return by_name[cleaned.lower()]
+            return [by_name[cleaned.lower()]]
 
         return by_option_name
 
-    if new_type == FieldType.MULTI_SELECT:  # from single_select or status: the ids are kept
+    if old == FieldType.STATUS and new_type == FieldType.SELECT:  # the option ids are kept
         return lambda value: [value]
 
-    if old == FieldType.MULTI_SELECT and new_type == FieldType.SINGLE_SELECT:
+    if old == FieldType.SELECT and new_type == FieldType.STATUS:
 
         def single(value: Any) -> Any:
             if len(value) > 1:
@@ -135,7 +124,7 @@ def _build_converter(field: Field, new_type: FieldType, new_config: dict[str, An
 
         return single
 
-    return lambda value: value  # single_select <-> status keep the option ids
+    return lambda value: value  # pragma: no cover
 
 
 def _target_config(
@@ -144,15 +133,15 @@ def _target_config(
     """The config of the new type. Select options keep their ids when the old type had options."""
     requested = requested or {}
     try:
-        if field.type in SELECTS and new_type in SELECTS:
+        if field.type in SELECT_TYPES and new_type in SELECT_TYPES:
             if "options" in requested:
                 return normalize_config(new_type, requested, existing=field.config)
             kept = [
                 {k: v for k, v in option.items() if new_type == FieldType.STATUS or k != "kind"}
                 for option in field.config.get("options", [])
             ]
-            return normalize_config(new_type, {"options": kept}, existing=field.config)
-        if field.type == FieldType.TEXT and new_type == FieldType.SINGLE_SELECT:
+            return normalize_config(new_type, {**requested, "options": kept}, existing=field.config)
+        if field.type == FieldType.TEXT and new_type == FieldType.SELECT:
             if not requested.get("options"):
                 raise FieldConfigError(
                     "Give the options (config.options) that the existing texts should become."
@@ -257,11 +246,11 @@ async def check_removed_options(
 ) -> None:
     """Refuse config changes that would contradict the values the records already hold."""
     key = str(field.id)
-    if field.type in SELECTS:
+    if field.type in SELECT_TYPES:
         old_ids = {option["id"] for option in field.config.get("options", [])}
         removed = sorted(old_ids - {option["id"] for option in new_config["options"]})
         if removed:
-            if field.type == FieldType.MULTI_SELECT:
+            if field.type == FieldType.SELECT:
                 condition = Record.data[key].has_any(array(removed))
             else:
                 condition = Record.data[key].as_string().in_(removed)

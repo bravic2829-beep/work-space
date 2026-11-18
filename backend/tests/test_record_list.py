@@ -56,7 +56,10 @@ async def grid(work: Work) -> Grid:
     # The tasks template already has a Priority column: High, Medium, Low.
     priority = next(f for f in table["fields"] if f["name"] == "Priority")
     tags = await work.make_field(
-        t, "Tags", "multi_select", config={"options": [{"name": "x"}, {"name": "y"}]}
+        t,
+        "Tags",
+        "select",
+        config={"options": [{"name": "x"}, {"name": "y"}], "multiple": True},
     )
     board.f.update(
         {"Points": points["id"], "Done": done["id"], "Priority": priority["id"], "Tags": tags["id"]}
@@ -70,7 +73,7 @@ async def grid(work: Work) -> Grid:
             "Name": "Alpha",
             "Points": 10,
             "Done": True,
-            "Priority": pri["High"],
+            "Priority": [pri["High"]],
             "Tags": [tag["x"]],
             "Due date": "2026-01-10",
             "Assignee": [m],
@@ -79,14 +82,14 @@ async def grid(work: Work) -> Grid:
             "Name": "Beta",
             "Points": 5,
             "Done": False,
-            "Priority": pri["Low"],
+            "Priority": [pri["Low"]],
             "Tags": [tag["y"]],
             "Due date": "2026-02-10",
         },
         {
             "Name": "gamma 100%",
             "Points": 20,
-            "Priority": pri["Medium"],
+            "Priority": [pri["Medium"]],
             "Tags": [tag["x"], tag["y"]],
             "Due date": "2026-03-10",
             "Assignee": [m2],
@@ -95,12 +98,12 @@ async def grid(work: Work) -> Grid:
         {
             "Name": "alpha two",
             "Points": 5,
-            "Priority": pri["High"],
+            "Priority": [pri["High"]],
             "Due date": "2026-01-10",
             "Follower": [m],
         },
         {"Name": "Epsilon", "Points": 7.5, "Done": False},
-        {"Name": "Zeta", "Points": 10, "Done": False, "Priority": pri["Medium"]},
+        {"Name": "Zeta", "Points": 10, "Done": False, "Priority": [pri["Medium"]]},
         {"Name": "Eta", "Tags": [tag["y"]], "Due date": "2026-04-01"},
     ]
     for row in rows:
@@ -252,6 +255,13 @@ async def test_numbers_sort_as_numbers_with_empty_cells_last(grid: Grid) -> None
     assert desc == ["gamma 100%", "Alpha", "Zeta", "Epsilon", "Beta", "alpha two", "Delta", "Eta"]
 
 
+async def test_a_multiple_select_sorts_by_its_first_option(grid: Grid) -> None:
+    asc = await grid.names(sort=[f"{grid.f['Tags']}:asc"])
+    # x comes before y in the settings; "gamma 100%" starts with x, records without tags are last.
+    assert asc.index("Alpha") < asc.index("Beta")
+    assert asc[-1] in {"Delta", "Epsilon", "Zeta", "alpha two"}
+
+
 async def test_select_columns_sort_by_the_order_of_their_options(grid: Grid) -> None:
     asc = await grid.names(sort=[f"{grid.f['Priority']}:asc"])
     assert asc[:5] == ["Alpha", "alpha two", "gamma 100%", "Zeta", "Beta"]  # High, Medium, Low
@@ -273,7 +283,6 @@ async def test_invalid_sorts_are_rejected(grid: Grid) -> None:
         f"{grid.f['Points']}:sideways",
         "nonsense:asc",
         str(uuid.uuid4()),
-        f"{grid.f['Tags']}:asc",  # a multi select has no order
         f"{grid.f['Assignee']}:asc",
         f"{grid.f['Parent task']}:asc",
     ]
